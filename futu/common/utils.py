@@ -141,10 +141,9 @@ def split_stock_str(stock_str_param):
     '''do not use the built-in split function in python.
     The built-in function cannot handle some stock strings correctly.
     for instance, US..DJI, where the dot . itself is a part of original code'''
-    if 0 <= split_loc < len(
-            stock_str) - 1 and stock_str[0:split_loc] in MKT_MAP:
+    if 0 <= split_loc < len(stock_str) - 1 and Market.if_has_key(stock_str[0:split_loc]):
         market_str = stock_str[0:split_loc]
-        market_code = MKT_MAP[market_str]
+        _, market_code = Market.to_number(market_str)
         partial_stock_str = stock_str[split_loc + 1:]
         return RET_OK, (market_code, partial_stock_str)
 
@@ -161,7 +160,7 @@ def merge_qot_mkt_stock_str(qot_mkt, partial_stock_str):
     :return: unified representation of a stock code. i.e. "US.AAPL", "HK.00700", "SZ.000001"
 
     """
-    market_str = QUOTE.REV_MKT_MAP[qot_mkt]
+    market_str = Market.to_string2(qot_mkt)
     stock_str = '.'.join([market_str, partial_stock_str])
     return stock_str
 
@@ -183,10 +182,12 @@ def merge_trd_mkt_stock_str(trd_sec_mkt, partial_stock_str):
         mkt_qot = Market.SZ
     elif trd_sec_mkt == Trd_Common_pb2.TrdSecMarket_US:
         mkt_qot = Market.US
-    else:
-        raise Exception("merge_trd_mkt_stock_str: unknown trd_mkt.")
-
-    return merge_qot_mkt_stock_str(MKT_MAP[mkt_qot], partial_stock_str)
+    elif trd_sec_mkt == Trd_Common_pb2.TrdSecMarket_SG:
+        mkt_qot = Market.SG
+    elif trd_sec_mkt == Trd_Common_pb2.TrdSecMarket_JP:
+        mkt_qot = Market.JP
+    _, mkt = Market.to_number(mkt_qot)
+    return merge_qot_mkt_stock_str(mkt, partial_stock_str)
 
 
 def str2binary(s):
@@ -207,19 +208,19 @@ def is_str(obj):
 
 def price_to_str_int1000(price):
     return str(int(round(float(price) * 1000,
-                         0))) if str(price) is not '' else ''
+                         0))) if str(price) != '' else ''
 
 
 # 1000*int price to float val
 def int1000_price_to_float(price):
     return round(float(price) / 1000.0,
-                 3) if str(price) is not '' else float(0)
+                 3) if str(price) != '' else float(0)
 
 
 # 10^9 int price to float val
 def int10_9_price_to_float(price):
     return round(float(price) / float(10**9),
-                 3) if str(price) is not '' else float(0)
+                 3) if str(price) != '' else float(0)
 
 
 # list 参数除重及规整
@@ -339,6 +340,10 @@ class ProtobufMap(dict):
         from futu.common.pb.Trd_GetHistoryOrderFillList_pb2 import Response
         ProtobufMap.created_protobuf_map[ProtoId.Trd_GetHistoryOrderFillList] = Response()
 
+        """ Qot_GetReference = 2223  获取正股相关股票，暂时只有窝轮"""
+        from futu.common.pb.Trd_GetMarginRatio_pb2 import Response
+        ProtobufMap.created_protobuf_map[ProtoId.Trd_GetMarginRatio] = Response()
+
         """ Qot_Sub = 3001  # 订阅或者反订阅 """
         from futu.common.pb.Qot_Sub_pb2 import Response
         ProtobufMap.created_protobuf_map[ProtoId.Qot_Sub] = Response()
@@ -403,22 +408,6 @@ class ProtobufMap(dict):
         from futu.common.pb.Qot_UpdatePriceReminder_pb2 import Response
         ProtobufMap.created_protobuf_map[ProtoId.Qot_UpdatePriceReminder] = Response()
 
-        """ Qot_GetHistoryKL = 3100  # 获取历史K线 """
-        from futu.common.pb.Qot_GetHistoryKL_pb2 import Response
-        ProtobufMap.created_protobuf_map[ProtoId.Qot_GetHistoryKL] = Response()
-
-        """ Qot_GetHistoryKLPoints = 3101  # 获取多只股票历史单点K线 """
-        from futu.common.pb.Qot_GetHistoryKLPoints_pb2 import Response
-        ProtobufMap.created_protobuf_map[ProtoId.Qot_GetHistoryKLPoints] = Response()
-
-        """ Qot_GetRehab = 3102  # 获取复权信息 """
-        from futu.common.pb.Qot_GetRehab_pb2 import Response
-        ProtobufMap.created_protobuf_map[ProtoId.Qot_GetRehab] = Response()
-
-        """ Qot_GetTradeDate = 3200  # 获取市场交易日 """
-        from futu.common.pb.Qot_GetTradeDate_pb2 import Response
-        ProtobufMap.created_protobuf_map[ProtoId.Qot_GetTradeDate] = Response()
-
         """ Qot_GetSuspend = 3201  # 获取股票停牌信息 """
         from futu.common.pb.Qot_GetSuspend_pb2 import Response
         ProtobufMap.created_protobuf_map[ProtoId.Qot_GetSuspend] = Response()
@@ -441,7 +430,7 @@ class ProtobufMap(dict):
 
         """ Trd_GetMaxTrdQtys = 2111 查询最大买卖数量 """
         from futu.common.pb.Trd_GetMaxTrdQtys_pb2 import Response
-        ProtobufMap.created_protobuf_map[ProtoId.Trd_GetAccTradingInfo] = Response()
+        ProtobufMap.created_protobuf_map[ProtoId.Trd_GetMaxTrdQtys] = Response()
 
         """ Qot_GetReference = 3206  获取正股相关股票，暂时只有窝轮"""
         from futu.common.pb.Qot_GetReference_pb2 import Response
@@ -461,17 +450,9 @@ class ProtobufMap(dict):
         from futu.common.pb.Qot_GetOptionChain_pb2 import Response
         ProtobufMap.created_protobuf_map[ProtoId.Qot_GetOptionChain] = Response()
 
-        """ Qot_GetOrderDetail = 3016 获取委托明细 """
-        from futu.common.pb.Qot_GetOrderDetail_pb2 import Response
-        ProtobufMap.created_protobuf_map[ProtoId.Qot_GetOrderDetail] = Response()
-
-        """ Qot_UpdateOrderDetail = 3017 推送委托明细 """
-        from futu.common.pb.Qot_UpdateOrderDetail_pb2 import Response
-        ProtobufMap.created_protobuf_map[ProtoId.Qot_UpdateOrderDetail] = Response()
-
-        """ Qot_GetWarrantData = 3210 获取涡轮 """
+        """ Qot_GetWarrantData = 3210 获取窝轮 """
         from futu.common.pb.Qot_GetWarrant_pb2 import Response as GetWarrantPBResponse
-        ProtobufMap.created_protobuf_map[ProtoId.Qot_GetWarrantData] = GetWarrantPBResponse()
+        ProtobufMap.created_protobuf_map[ProtoId.Qot_GetWarrant] = GetWarrantPBResponse()
 
         """ Qot_GetOrderDetail = 3104 已使用过的额度 """
         from futu.common.pb.Qot_RequestHistoryKLQuota_pb2 import Response
@@ -504,7 +485,7 @@ class ProtobufMap(dict):
         
         from futu.common.pb.Qot_GetFutureInfo_pb2 import Response
         ProtobufMap.created_protobuf_map[ProtoId.Qot_GetFutureInfo] = Response()
-		
+
         from futu.common.pb.Qot_RequestTradeDate_pb2 import Response
         ProtobufMap.created_protobuf_map[ProtoId.Qot_RequestTradeDate] = Response()
 
@@ -513,6 +494,15 @@ class ProtobufMap(dict):
 
         from futu.common.pb.Qot_GetPriceReminder_pb2 import Response
         ProtobufMap.created_protobuf_map[ProtoId.Qot_GetPriceReminder] = Response()
+
+        from futu.common.pb.Qot_GetUserSecurityGroup_pb2 import Response
+        ProtobufMap.created_protobuf_map[ProtoId.Qot_GetUserSecurityGroup] = Response()
+
+        from futu.common.pb.Qot_GetMarketState_pb2 import Response
+        ProtobufMap.created_protobuf_map[ProtoId.Qot_GetMarketState] = Response()
+
+        from futu.common.pb.Qot_GetOptionExpirationDate_pb2 import Response
+        ProtobufMap.created_protobuf_map[ProtoId.Qot_GetOptionExpirationDate] = Response()
 
     def __getitem__(self, key):
         return ProtobufMap.created_protobuf_map[key] if key in ProtobufMap.created_protobuf_map else None
@@ -656,7 +646,7 @@ def decrypt_rsp_body(rsp_body, head_dict, conn_id, is_encrypt):
         sha20_check = hashlib.sha1(rsp_body).digest()
         if sha20_check != sha20:
             ret_code = RET_ERROR
-            msg = "proto id:{} conn_id:{} check sha error!".format(proto_id, conn_id)
+            msg = "proto_id:{} conn_id:{} check sha error!".format(proto_id, conn_id)
 
     return ret_code, msg, rsp_body
 
@@ -672,3 +662,15 @@ def make_from_namedtuple(t, **kwargs):
     d.update(kwargs)
     cls = type(t)
     return cls(**d)
+
+
+def get_pb_value(pb, field):
+    if pb.HasField(field):
+        return getattr(pb, field)
+    return 'N/A'
+
+
+def get_pb_enum(pb, field, enum_cls, enum_default):
+    if pb.HasField(field):
+        return enum_cls.to_string2(getattr(pb, field))
+    return enum_default

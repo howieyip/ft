@@ -51,7 +51,7 @@ class StockQuoteHandlerBase(RspHandlerBase):
                 'premium', 'delta', 'gamma', 'vega', 'theta', 'rho',
                 'net_open_interest', 'expiry_date_distance', 'contract_nominal_value', 
                 'owner_lot_multiplier', 'option_area_type', 'contract_multiplier',
-                'last_settle_price','position','position_change'
+                'last_settle_price', 'position', 'position_change', 'index_option_type'
             ]
 
             col_list.extend(row[0] for row in pb_field_map_PreAfterMarketData_pre)
@@ -290,10 +290,10 @@ class BrokerHandlerBase(RspHandlerBase):
             self.on_recv_log(content)
             stock_code, bid_content, ask_content = content
             bid_list = [
-                'code', 'bid_broker_id', 'bid_broker_name', 'bid_broker_pos'
+                'code', 'bid_broker_id', 'bid_broker_name', 'bid_broker_pos', 'order_id', 'order_volume'
             ]
             ask_list = [
-                'code', 'ask_broker_id', 'ask_broker_name', 'ask_broker_pos'
+                'code', 'ask_broker_id', 'ask_broker_name', 'ask_broker_pos', 'order_id', 'order_volume'
             ]
             bid_frame_table = pd.DataFrame(bid_content, columns=bid_list)
             ask_frame_table = pd.DataFrame(ask_content, columns=ask_list)
@@ -334,37 +334,6 @@ class SysNotifyHandlerBase(RspHandlerBase):
 
         return ret_code, content
 
-
-class AsyncHandler_InitConnect(RspHandlerBase):
-    """ AsyncHandler_TrdSubAccPush"""
-
-    def __init__(self, notify_obj=None):
-        self._notify_obj = notify_obj
-        super(AsyncHandler_InitConnect, self).__init__()
-
-    def on_recv_rsp(self, rsp_pb):
-        """receive response callback function"""
-        ret_code, msg, conn_info_map = InitConnect.unpack_rsp(rsp_pb)
-
-        if self._notify_obj is not None:
-            self._notify_obj.on_async_init_connect(
-                ret_code, msg, conn_info_map)
-
-        return ret_code, msg
-
-#
-# class OrderDetailHandlerBase(RspHandlerBase):
-#     def __init__(self):
-#         super(OrderDetailHandlerBase, self).__init__()
-#
-#     def on_recv_rsp(self, rsp_pb):
-#         """receive response callback function"""
-#         ret_code, msg, data = OrderDetail.unpack_rsp(rsp_pb)
-#
-#         if ret_code != RET_OK:
-#             return ret_code, msg
-#         else:
-#             return ret_code, data
 
 class PriceReminderHandlerBase(RspHandlerBase):
     """

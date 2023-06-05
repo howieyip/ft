@@ -21,7 +21,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='GetUserInfo.proto',
   package='GetUserInfo',
   syntax='proto2',
-  serialized_pb=_b('\n\x11GetUserInfo.proto\x12\x0bGetUserInfo\x1a\x0c\x43ommon.proto\"\x13\n\x03\x43\x32S\x12\x0c\n\x04\x66lag\x18\x02 \x01(\x05\"\xc6\x02\n\x03S2C\x12\x10\n\x08nickName\x18\x01 \x01(\t\x12\x11\n\tavatarUrl\x18\x02 \x01(\t\x12\x10\n\x08\x61piLevel\x18\x03 \x01(\t\x12\x12\n\nhkQotRight\x18\x04 \x01(\x05\x12\x12\n\nusQotRight\x18\x05 \x01(\x05\x12\x12\n\ncnQotRight\x18\x06 \x01(\x05\x12\x1d\n\x15isNeedAgreeDisclaimer\x18\x07 \x01(\x08\x12\x0e\n\x06userID\x18\x08 \x01(\x03\x12\x12\n\nupdateType\x18\t \x01(\x05\x12\x0e\n\x06webKey\x18\n \x01(\t\x12\x18\n\x10hkOptionQotRight\x18\x0b \x01(\x05\x12\x1b\n\x13hasUSOptionQotRight\x18\x0c \x01(\x08\x12\x18\n\x10hkFutureQotRight\x18\r \x01(\x05\x12\x10\n\x08subQuota\x18\x0e \x01(\x05\x12\x16\n\x0ehistoryKLQuota\x18\x0f \x01(\x05\"(\n\x07Request\x12\x1d\n\x03\x63\x32s\x18\x01 \x02(\x0b\x32\x10.GetUserInfo.C2S\"a\n\x08Response\x12\x15\n\x07retType\x18\x01 \x02(\x05:\x04-400\x12\x0e\n\x06retMsg\x18\x02 \x01(\t\x12\x0f\n\x07\x65rrCode\x18\x03 \x01(\x05\x12\x1d\n\x03s2c\x18\x04 \x01(\x0b\x32\x10.GetUserInfo.S2C*N\n\nUpdateType\x12\x13\n\x0fUpdateType_None\x10\x00\x12\x15\n\x11UpdateType_Advice\x10\x01\x12\x14\n\x10UpdateType_Force\x10\x02*\xae\x01\n\rUserInfoField\x12\x17\n\x13UserInfoField_Basic\x10\x01\x12\x15\n\x11UserInfoField_API\x10\x02\x12\x1a\n\x16UserInfoField_QotRight\x10\x04\x12\x1c\n\x18UserInfoField_Disclaimer\x10\x08\x12\x18\n\x14UserInfoField_Update\x10\x10\x12\x19\n\x14UserInfoField_WebKey\x10\x80\x10\x42\x15\n\x13\x63om.futu.openapi.pb')
+  serialized_pb=_b('\n\x11GetUserInfo.proto\x12\x0bGetUserInfo\x1a\x0c\x43ommon.proto\"\x13\n\x03\x43\x32S\x12\x0c\n\x04\x66lag\x18\x02 \x01(\x05\"\xbe\x05\n\x03S2C\x12\x10\n\x08nickName\x18\x01 \x01(\t\x12\x11\n\tavatarUrl\x18\x02 \x01(\t\x12\x10\n\x08\x61piLevel\x18\x03 \x01(\t\x12\x12\n\nhkQotRight\x18\x04 \x01(\x05\x12\x12\n\nusQotRight\x18\x05 \x01(\x05\x12\x12\n\ncnQotRight\x18\x06 \x01(\x05\x12\x1d\n\x15isNeedAgreeDisclaimer\x18\x07 \x01(\x08\x12\x0e\n\x06userID\x18\x08 \x01(\x03\x12\x12\n\nupdateType\x18\t \x01(\x05\x12\x0e\n\x06webKey\x18\n \x01(\t\x12\x16\n\x0ewebJumpUrlHead\x18\x12 \x01(\t\x12\x18\n\x10hkOptionQotRight\x18\x0b \x01(\x05\x12\x1b\n\x13hasUSOptionQotRight\x18\x0c \x01(\x08\x12\x18\n\x10hkFutureQotRight\x18\r \x01(\x05\x12\x10\n\x08subQuota\x18\x0e \x01(\x05\x12\x16\n\x0ehistoryKLQuota\x18\x0f \x01(\x05\x12\x18\n\x10usFutureQotRight\x18\x10 \x01(\x05\x12\x18\n\x10usOptionQotRight\x18\x11 \x01(\x05\x12\x17\n\x0fuserAttribution\x18\x13 \x01(\x05\x12\x16\n\x0eupdateWhatsNew\x18\x14 \x01(\t\x12\x17\n\x0fusIndexQotRight\x18\x15 \x01(\x05\x12\x15\n\rusOtcQotRight\x18\x16 \x01(\x05\x12\x1b\n\x13usCMEFutureQotRight\x18\x17 \x01(\x05\x12\x1c\n\x14usCBOTFutureQotRight\x18\x18 \x01(\x05\x12\x1d\n\x15usNYMEXFutureQotRight\x18\x19 \x01(\x05\x12\x1d\n\x15usCOMEXFutureQotRight\x18\x1a \x01(\x05\x12\x1c\n\x14usCBOEFutureQotRight\x18\x1b \x01(\x05\x12\x18\n\x10sgFutureQotRight\x18\x1c \x01(\x05\x12\x18\n\x10jpFutureQotRight\x18\x1d \x01(\x05\"(\n\x07Request\x12\x1d\n\x03\x63\x32s\x18\x01 \x02(\x0b\x32\x10.GetUserInfo.C2S\"a\n\x08Response\x12\x15\n\x07retType\x18\x01 \x02(\x05:\x04-400\x12\x0e\n\x06retMsg\x18\x02 \x01(\t\x12\x0f\n\x07\x65rrCode\x18\x03 \x01(\x05\x12\x1d\n\x03s2c\x18\x04 \x01(\x0b\x32\x10.GetUserInfo.S2C*N\n\nUpdateType\x12\x13\n\x0fUpdateType_None\x10\x00\x12\x15\n\x11UpdateType_Advice\x10\x01\x12\x14\n\x10UpdateType_Force\x10\x02*\xae\x01\n\rUserInfoField\x12\x17\n\x13UserInfoField_Basic\x10\x01\x12\x15\n\x11UserInfoField_API\x10\x02\x12\x1a\n\x16UserInfoField_QotRight\x10\x04\x12\x1c\n\x18UserInfoField_Disclaimer\x10\x08\x12\x18\n\x14UserInfoField_Update\x10\x10\x12\x19\n\x14UserInfoField_WebKey\x10\x80\x10\x42\x42\n\x13\x63om.futu.openapi.pbZ+github.com/futuopen/ftapi4go/pb/getuserinfo')
   ,
   dependencies=[Common__pb2.DESCRIPTOR,])
 
@@ -46,8 +46,8 @@ _UPDATETYPE = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   options=None,
-  serialized_start=539,
-  serialized_end=617,
+  serialized_start=915,
+  serialized_end=993,
 )
 _sym_db.RegisterEnumDescriptor(_UPDATETYPE)
 
@@ -85,8 +85,8 @@ _USERINFOFIELD = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   options=None,
-  serialized_start=620,
-  serialized_end=794,
+  serialized_start=996,
+  serialized_end=1170,
 )
 _sym_db.RegisterEnumDescriptor(_USERINFOFIELD)
 
@@ -212,36 +212,134 @@ _S2C = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='hkOptionQotRight', full_name='GetUserInfo.S2C.hkOptionQotRight', index=10,
+      name='webJumpUrlHead', full_name='GetUserInfo.S2C.webJumpUrlHead', index=10,
+      number=18, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='hkOptionQotRight', full_name='GetUserInfo.S2C.hkOptionQotRight', index=11,
       number=11, type=5, cpp_type=1, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='hasUSOptionQotRight', full_name='GetUserInfo.S2C.hasUSOptionQotRight', index=11,
+      name='hasUSOptionQotRight', full_name='GetUserInfo.S2C.hasUSOptionQotRight', index=12,
       number=12, type=8, cpp_type=7, label=1,
       has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='hkFutureQotRight', full_name='GetUserInfo.S2C.hkFutureQotRight', index=12,
+      name='hkFutureQotRight', full_name='GetUserInfo.S2C.hkFutureQotRight', index=13,
       number=13, type=5, cpp_type=1, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='subQuota', full_name='GetUserInfo.S2C.subQuota', index=13,
+      name='subQuota', full_name='GetUserInfo.S2C.subQuota', index=14,
       number=14, type=5, cpp_type=1, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='historyKLQuota', full_name='GetUserInfo.S2C.historyKLQuota', index=14,
+      name='historyKLQuota', full_name='GetUserInfo.S2C.historyKLQuota', index=15,
       number=15, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='usFutureQotRight', full_name='GetUserInfo.S2C.usFutureQotRight', index=16,
+      number=16, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='usOptionQotRight', full_name='GetUserInfo.S2C.usOptionQotRight', index=17,
+      number=17, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='userAttribution', full_name='GetUserInfo.S2C.userAttribution', index=18,
+      number=19, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='updateWhatsNew', full_name='GetUserInfo.S2C.updateWhatsNew', index=19,
+      number=20, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='usIndexQotRight', full_name='GetUserInfo.S2C.usIndexQotRight', index=20,
+      number=21, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='usOtcQotRight', full_name='GetUserInfo.S2C.usOtcQotRight', index=21,
+      number=22, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='usCMEFutureQotRight', full_name='GetUserInfo.S2C.usCMEFutureQotRight', index=22,
+      number=23, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='usCBOTFutureQotRight', full_name='GetUserInfo.S2C.usCBOTFutureQotRight', index=23,
+      number=24, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='usNYMEXFutureQotRight', full_name='GetUserInfo.S2C.usNYMEXFutureQotRight', index=24,
+      number=25, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='usCOMEXFutureQotRight', full_name='GetUserInfo.S2C.usCOMEXFutureQotRight', index=25,
+      number=26, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='usCBOEFutureQotRight', full_name='GetUserInfo.S2C.usCBOEFutureQotRight', index=26,
+      number=27, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='sgFutureQotRight', full_name='GetUserInfo.S2C.sgFutureQotRight', index=27,
+      number=28, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='jpFutureQotRight', full_name='GetUserInfo.S2C.jpFutureQotRight', index=28,
+      number=29, type=5, cpp_type=1, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
@@ -259,7 +357,7 @@ _S2C = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=70,
-  serialized_end=396,
+  serialized_end=772,
 )
 
 
@@ -289,8 +387,8 @@ _REQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=398,
-  serialized_end=438,
+  serialized_start=774,
+  serialized_end=814,
 )
 
 
@@ -341,8 +439,8 @@ _RESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=440,
-  serialized_end=537,
+  serialized_start=816,
+  serialized_end=913,
 )
 
 _REQUEST.fields_by_name['c2s'].message_type = _C2S
@@ -385,5 +483,5 @@ _sym_db.RegisterMessage(Response)
 
 
 DESCRIPTOR.has_options = True
-DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), _b('\n\023com.futu.openapi.pb'))
+DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), _b('\n\023com.futu.openapi.pbZ+github.com/futuopen/ftapi4go/pb/getuserinfo'))
 # @@protoc_insertion_point(module_scope)

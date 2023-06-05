@@ -92,15 +92,15 @@ def _check_package(package_name, version=None):
 _check_module('pandas')
 _check_module('simplejson')
 _check_module('Crypto', 'pycryptodome')
-_check_module('google.protobuf', package_name='protobuf', version='3.5.1', version_getter=lambda mod: mod.__version__)
+# _check_module('google.protobuf', package_name='protobuf', version='3.5.1', version_getter=lambda mod: mod.__version__)
 _check_module('selectors2', py_version=2)
-_check_package('pycryptodome')
 
 
 #import data querying APIs and response handle base class
 from futu.quote.open_quote_context import OpenQuoteContext
 from futu.quote.quote_response_handler import *
 from futu.trade.trade_response_handler import *
+from futu.quote.quote_get_warrant import Request as WarrantRequest
 
 #import HK and US trade context
 from futu.trade.open_trade_context import OpenHKTradeContext
@@ -108,6 +108,7 @@ from futu.trade.open_trade_context import OpenUSTradeContext
 from futu.trade.open_trade_context import OpenHKCCTradeContext
 from futu.trade.open_trade_context import OpenCNTradeContext
 from futu.trade.open_trade_context import OpenFutureTradeContext
+from futu.trade.open_trade_context import OpenSecTradeContext
 
 #import constant values
 from futu.common import *

@@ -1,6 +1,7 @@
 syntax = "proto2";
 package Common;
 option java_package = "com.futu.openapi.pb";
+option go_package = "github.com/futuopen/ftapi4go/pb/common";
 
 
 //返回结果
@@ -37,6 +38,15 @@ enum ProtoFmt
 	ProtoFmt_Json = 1; //Json格式
 }
 
+//用户注册归属地
+enum UserAttribution
+{
+	UserAttribution_Unknown = 0; //
+	UserAttribution_NN = 1; //牛牛
+	UserAttribution_MM = 2; //MooMoo
+	UserAttribution_SG = 3; //新加坡
+}
+
 enum ProgramStatusType
 {
 	ProgramStatusType_None = 0;
@@ -55,6 +65,8 @@ enum ProgramStatusType
 	
 	//OpenD登录后被强制退出登录，会导致连接全部断开,需要重连后才能得到以下该状态（并且需要在ui模式下）
 	ProgramStatusType_ForceLogout = 11; //被强制退出登录,例如修改了登录密码,中途打开设备锁等,详细原因在描述返回
+
+	ProgramStatusType_DisclaimerPullFailed = 12; //拉取免责声明标志失败
 }
 
 message ProgramStatus

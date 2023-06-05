@@ -2,32 +2,15 @@
 """
 Examples for use the python functions: get push data
 """
+from time import sleep
 from futu import *
-from logger import Logger
-import pandas as pd
-pd.set_option('display.width', 1000)
-pd.set_option('display.max_rows', 1000)
-pd.set_option('display.max_columns', 1000)
 
-# 全局参数配置
-TRADE_ENV = TrdEnv.SIMULATE              # REAL是真实交易，SIMULATE是仿真
-UNLOCK_PASSWORD = '822130'                  # 解锁交易密码
-STOCK_CODE = 'HK.800000'                    # 牛熊证参考的股票代码
-
-
-# 将10位时间戳转换为时间字符串，默认为2017-10-01 13:37:04格式
-def timestamp_to_datestr(time_stamp, format_string="%Y-%m-%d %H:%M:%S"):
-    time_array = time.localtime(time_stamp)
-    str_date = time.strftime(format_string, time_array)
-    return str_date
-
-
-# 将时间字符串转换为10位时间戳，时间字符串默认为2017-10-01 13:37:04格式
-def datestr_to_timestamp(date_str, format_string="%Y-%m-%d %H:%M:%S"):
-    time_array = time.strptime(date_str, format_string)
-    time_stamp = int(time.mktime(time_array))
-    return time_stamp
-
+#打印数据不全请把以下注释打开
+#import pandas as pd
+#pd.set_option('display.height', 10000)
+#pd.set_option('display.max_rows', 500)
+#pd.set_option('display.max_columns', 500)
+#pd.set_option('display.width', 1000)
 
 class StockQuoteTest(StockQuoteHandlerBase):
     """
@@ -37,9 +20,11 @@ class StockQuoteTest(StockQuoteHandlerBase):
         """数据响应回调函数"""
         ret_code, content = super(StockQuoteTest, self).on_recv_rsp(rsp_pb)
         if ret_code != RET_OK:
-            log.info("StockQuoteTest: error, msg: %s" % content)
+            logger.debug("StockQuoteTest: error, msg: %s" % content)
             return RET_ERROR, content
-        log.info(content)
+        #需要打印数据把以下注释打开，其他回调数据同样处理即可
+        #else:
+        #    print(content)
         return RET_OK, content
 
 
@@ -49,9 +34,8 @@ class TickerTest(TickerHandlerBase):
         """数据响应回调函数"""
         ret_code, content = super(TickerTest, self).on_recv_rsp(rsp_pb)
         if ret_code != RET_OK:
-            log.info("* TickerTest: error, msg: %s" % content)
+            print("* TickerTest: error, msg: %s" % content)
             return RET_ERROR, content
-        log.info(content)
         return RET_OK, content
 
 
@@ -61,48 +45,46 @@ class OrderBookTest(OrderBookHandlerBase):
         """数据响应回调函数"""
         ret_code, content = super(OrderBookTest, self).on_recv_rsp(rsp_pb)
         if ret_code != RET_OK:
-            log.info("* OrderBookTest: error, msg: %s" % content)
+            print("* OrderBookTest: error, msg: %s" % content)
             return RET_ERROR, content
-        log.info(content)
         return RET_OK, content
 
 
-class CurKlineTest(CurKlineHandlerBase):
-    def on_recv_rsp(self, rsp_str):
-        ret_code, data = super(CurKlineTest, self).on_recv_rsp(rsp_str)
+class BrokerTest(BrokerHandlerBase):
+    """ 获取经纪队列推送数据 """
+    def on_recv_rsp(self, rsp_pb):
+        """数据响应回调函数"""
+        ret_code, stock_code, contents = super(BrokerTest, self).on_recv_rsp(rsp_pb)
         if ret_code != RET_OK:
-            print("CurKlineTest: error, msg: %s" % data)
-            return RET_ERROR, data
-        log.info(data)
-        return RET_OK, data
+            print("* BrokerTest: error, msg: %s" % contents)
+            return RET_ERROR, contents
+        return ret_code
 
 
-class RTDataTest(RTDataHandlerBase):
-    def on_recv_rsp(self, rsp_str):
-        ret_code, data = super(RTDataTest, self).on_recv_rsp(rsp_str)
-        if ret_code != RET_OK:
-            print("RTDataTest: error, msg: %s" % data)
-            return RET_ERROR, data
-        log.info(data)
-        return RET_OK, data
+def quote_test():
+    '''
+    行情接口调用测试
+    :return:
+    '''
+    quote_ctx = OpenQuoteContext(host='127.0.0.1', port=11111)
+
+    # 设置异步回调接口
+    quote_ctx.set_handler(StockQuoteTest())
+    quote_ctx.set_handler(TickerTest())
+    quote_ctx.set_handler(OrderBookTest())
+    quote_ctx.set_handler(BrokerTest())
+    quote_ctx.start()
+
+    # 获取推送数据
+    subtype_list = [SubType.QUOTE, SubType.ORDER_BOOK, SubType.TICKER, SubType.BROKER]
+    sub_codes = ['HK.00700', 'HK.999010']
+    print("* subscribe : {}\n".format(quote_ctx.subscribe(sub_codes, subtype_list)))
 
 
 if __name__ =="__main__":
-    set_futu_debug_model(False)
-    log = Logger(timestamp_to_datestr(time.time(), '%Y-%m-%d') + '_test.txt').get_logger()
-    quote_ctx = OpenQuoteContext(host='127.0.0.1', port=11111)
-    trade_ctx = OpenHKTradeContext(host='127.0.0.1', port=11111)
-    if TRADE_ENV == TrdEnv.REAL:
-        ret, data = trade_ctx.unlock_trade(UNLOCK_PASSWORD)
-        if ret != RET_OK:
-            raise Exception('解锁交易失败')
-    # 订阅推送数据
-    quote_ctx.subscribe([STOCK_CODE], [SubType.QUOTE, SubType.ORDER_BOOK, SubType.TICKER, SubType.K_1M, SubType.RT_DATA])
+    set_futu_debug_model(True)
+    ''' 行情api测试 '''
+    quote_test()
 
-    # quote_ctx.set_handler(StockQuoteTest())
-    # quote_ctx.set_handler(TickerTest())
-    # quote_ctx.set_handler(OrderBookTest())
-    # quote_ctx.set_handler(CurKlineTest())
-    quote_ctx.set_handler(RTDataTest())
-    quote_ctx.start()
+
 

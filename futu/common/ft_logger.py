@@ -88,7 +88,7 @@ class FTLog(object):
         self.console_logger.setLevel(self._console_level)
         self.console_logger.propagate = False
         
-        self.formatter = logging.Formatter('%(asctime)s %(message)s')
+        self.formatter = logging.Formatter('%(asctime)s | %(process)d | %(message)s')
 
         if not hasattr(self, 'fileHandler'):
             file_name = 'py_' + datetime.now().strftime('%Y_%m_%d') + '.log'
@@ -99,7 +99,7 @@ class FTLog(object):
             self.file_logger.addHandler(self.fileHandler)
 
         if not hasattr(self, 'consoleHandler'):
-            self.consoleHandler = logging.StreamHandler()
+            self.consoleHandler = logging.StreamHandler(sys.stdout)
             self.consoleHandler.setLevel(self._console_level)
             self.consoleHandler.setFormatter(self.formatter)
             self.console_logger.addHandler(self.consoleHandler)
@@ -160,16 +160,30 @@ class FTLog(object):
         if (self._console_level <= logging.INFO) and ((flag & self.ONLY_CONSOLE) != 0):
             self.console_logger.info(msg, *args, **kwargs)
 
+    def fontColor(self, color):
+        # 设置日志的输出颜色
+        formatter = logging.Formatter(color % '%(asctime)s | %(process)d | %(message)s')
+        self.consoleHandler.setFormatter(formatter)
+        self.console_logger.addHandler(self.consoleHandler)
+
     def warning(self, msg, *args, **kwargs):
+        # 设置黄色日志
+        self.fontColor('\033[0;33m%s\033[0m')
         self.warning2(self.BOTH_FILE_CONSOLE, msg, *args, **kwargs)
 
     def error(self, msg, *args, **kwargs):
+        # 设置黄色日志
+        self.fontColor('\033[0;33m%s\033[0m')
         self.error2(self.BOTH_FILE_CONSOLE, msg, *args, **kwargs)
 
     def debug(self, msg, *args, **kwargs):
+        # 设置黑色日志
+        self.fontColor('\033[0;30m%s\033[0m')
         self.debug2(self.BOTH_FILE_CONSOLE, msg, *args, **kwargs)
 
     def info(self, msg, *args, **kwargs):
+        # 设置黑色日志
+        self.fontColor('\033[0;30m%s\033[0m')
         self.info2(self.BOTH_FILE_CONSOLE, msg, *args, **kwargs)
 
     @property
