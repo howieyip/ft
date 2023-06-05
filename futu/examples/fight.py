@@ -36,11 +36,11 @@ ADJUST_SELL_DICT = {
 }
 
 AUTO_BUY = True                                    # 是否自动买入，若是则下面的配置有效
-BULL_CODE = ''                                      # 自动买入牛证的股票代码，格式HK.00700，不填则会自动选股
-BEAR_CODE = 'HK.64156'                                      # 自动买入熊证的股票代码，格式HK.00700，不填则会自动选股
+BULL_CODE = ''                                      # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
+BEAR_CODE = 'HK.64156'                              # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
 CHECK_GOLDEN_LINE = False                           # 是否检查黄金分割线
-BUY_LIST = [[60, 15, 200*1000]]					    # 固定多少秒，波动多少点，下单多少股
-MAX_VOLUME = 800*1000                               # 最大持仓股数，若超过则不会再买入
+BUY_LIST = [[60, 15, 200*1000]]                     # 固定多少秒，波动多少点，下单多少股
+MAX_VOLUME = 600*1000                               # 最大持仓股数，若超过则不会再买入
 ALLOW_ADD = True                                    # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
 ADD_PRICE_DIFF = 0.004                              # 现价低于等于成本价多少元才允许补仓
 
@@ -77,6 +77,7 @@ glb = {
     'price_list': [],
     'cur_price': 0,
     'last_price': 0,
+    'last_buy_price': 0,
     'adjust_ticker_list': [],
     'adjust_price_list': [],
     'submitted_buy_bull': None,
@@ -271,6 +272,7 @@ class TradeOrderTest(ft.TradeOrderHandlerBase):
         if data.order_status == ft.OrderStatus.FILLED_ALL:
             if data.trd_side == ft.TrdSide.BUY:
                 log.info('订单买入全部成交')
+                glb['last_buy_price'] = data.price
                 reset_submitted_buy(data.code, data.stock_name)
                 set_has(data.code, data.stock_name)
                 if AUTO_PLACE_ORDER:
@@ -355,8 +357,9 @@ class TickerTest(ft.TickerHandlerBase):
         if (glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15) and m == 55:
             # log.info(data)
             if not glb['over']:
-                log.info('收盘清仓')
-                sell_all()
+                log.info('收盘前取消所有订单并清仓熊')
+                cancel_all()
+                sell_all('熊')
                 glb['over'] = True
             return ret, data
 
@@ -544,6 +547,7 @@ def smart_buy(code, volume, price=None):
         return data
 
 
+# 每 30 秒内最多请求 15 次下单接口，且连续两次请求的间隔不可小于 0.02 秒
 def smart_sell(code, volume, price=None):
     if price is None:
         ret, data = quote_ctx.get_order_book(code)
@@ -634,7 +638,7 @@ def to_buy(stock_type, volume):
     #     BEAR_CODE = code
     #     cancel_all(stock_type='牛', trd_side=ft.TrdSide.BUY)
     data = position_list_query(stock_type)
-    if data is False:
+    if data is False or data is None:
         return False
     if len(data) > 0:
         data0 = data.iloc[0]
@@ -646,8 +650,8 @@ def to_buy(stock_type, volume):
             if not ALLOW_ADD:
                 log.info('不允许补仓')
                 return False
-            elif data0.nominal_price > data0.cost_price - ADD_PRICE_DIFF:
-                log.info('现价%s没有比成本价%s低于等于%s元，不允许补仓' % (data0.nominal_price, data0.cost_price, ADD_PRICE_DIFF))
+            elif data0.nominal_price > glb['last_buy_price'] - ADD_PRICE_DIFF:
+                log.info('现价%s没有比上次买的价格%s低于等于%s元，不允许补仓' % (data0.nominal_price, glb['last_buy_price'], ADD_PRICE_DIFF))
                 # if stock_type == '牛':
                 #     glb['pre_buy_bull_flag'] = False
                 # elif stock_type == '熊':
@@ -678,6 +682,7 @@ def cancel_order(order_id):
         return data
 
 
+# 每 30 秒内最多请求 20 次改单撤单接口，且连续两次请求的间隔不可小于 0.04 秒
 def modify_order(order_id, price, qty):
     ret, data = trade_ctx.modify_order(modify_order_op=ft.ModifyOrderOp.NORMAL, order_id=order_id, price=price, qty=qty, trd_env=TRADE_ENV)
     log.info('修改订单，ret: %s, data: %s, order_id: %s' % (ret, data, order_id))
@@ -689,6 +694,7 @@ def modify_order(order_id, price, qty):
         return data
 
 
+# 每 30 秒内最多请求 10 次查询今日订单接口
 def order_list_query(code=''):
     ret, data = trade_ctx.order_list_query(status_filter_list=[ft.OrderStatus.SUBMITTED, ft.OrderStatus.FILLED_PART], code=code, trd_env=TRADE_ENV, refresh_cache=True)
     log.info('查询全部订单，ret: %s, data: %s' % (ret, data))
@@ -730,7 +736,9 @@ def cancel_all(code='', stock_type='', trd_side=''):
 def sell_all(stock_type=''):
     cancel_all(stock_type=stock_type)
     data = position_list_query(stock_type=stock_type, check=False)
-    if data is not False and len(data) > 0:
+    if data is False or data is None:
+        return False
+    if len(data) > 0:
         for i in range(0, len(data)):
             data2 = data.iloc[i]
             log.info('准备清仓')
@@ -868,6 +876,7 @@ def reset_submitted_sell(code, stock_name='', data=None):
         log.info('已重置卖单数据，熊证code: %s' % code)
 
 
+# 每 30 秒内最多请求 10 次查询持仓接口
 def _position_list_query(stock_type='', check=True, logging=True, reset=False):
     ret, data = trade_ctx.position_list_query(trd_env=TRADE_ENV, refresh_cache=True)
     if logging:
@@ -912,7 +921,7 @@ def _position_list_query(stock_type='', check=True, logging=True, reset=False):
         return []
 
 
-# 30秒只能调用10次，所以3秒1次
+# 节流3秒
 position_list_query = throttle(_position_list_query, 3)
 
 
