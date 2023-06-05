@@ -109,6 +109,28 @@ glb = {
 }
 
 
+# 节流函数
+def throttle(fn, wait):
+    last_call_time = None
+
+    def throttled(*args, **kwargs):
+        nonlocal last_call_time
+        current_time = time.time()
+
+        if last_call_time is not None:
+            countdown = wait - (current_time - last_call_time)
+        else:
+            countdown = 0
+
+        if countdown <= 0:
+            last_call_time = current_time
+            return fn(*args, **kwargs)
+        else:
+            print(f'{fn.__name__}调用限频节流中，{countdown}秒后再调用')
+
+    return throttled
+
+
 # 将10位时间戳转换为时间字符串，默认为2017-10-01 13:37:04格式
 def timestamp_to_datestr(time_stamp, format_string="%Y-%m-%d %H:%M:%S"):
     time_array = time.localtime(time_stamp)
@@ -330,7 +352,7 @@ class TickerTest(ft.TickerHandlerBase):
             elif h == 16 and m == 0:
                 glb['over'] = False
             return ret, data
-        if (glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15) and m == 59 and s >= 55:
+        if (glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15) and m == 55:
             # log.info(data)
             if not glb['over']:
                 log.info('收盘清仓')
@@ -846,7 +868,7 @@ def reset_submitted_sell(code, stock_name='', data=None):
         log.info('已重置卖单数据，熊证code: %s' % code)
 
 
-def position_list_query(stock_type='', check=True, logging=True, reset=False):
+def _position_list_query(stock_type='', check=True, logging=True, reset=False):
     ret, data = trade_ctx.position_list_query(trd_env=TRADE_ENV, refresh_cache=True)
     if logging:
         log.info('查询持仓列表，ret: %s, data: %s' % (ret, data))
@@ -888,6 +910,10 @@ def position_list_query(stock_type='', check=True, logging=True, reset=False):
         log.info('没有持仓今天买入的恒指牛熊')
         reset_has(real=True)
         return []
+
+
+# 30秒只能调用10次，所以3秒1次
+position_list_query = throttle(_position_list_query, 3)
 
 
 def check_pl():
