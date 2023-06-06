@@ -49,8 +49,7 @@ if TRADE_ENV == ft.TrdEnv.SIMULATE:
     # AUTO_SELL_WHEN_DROP_PRICE = True                # 模拟盘强制开启按价格跟踪止损
 
 HSI_CODE = 'HK.800000'                              # 恒指代码
-HSI_CMF_CODE = 'HK.999010'                          # 恒指当月期货代码
-HSI_NMF_CODE = 'HK.999011'                          # 恒指下月期货代码
+MHI_CODE = 'HK.MHImain'                             # 小恒指代码
 MAX_ADJUST_DELTA_SECONDS = max(ADJUST_BUY_DICT['rise'][0], ADJUST_BUY_DICT['fall'][0], ADJUST_SELL_DICT['rise'][0], ADJUST_SELL_DICT['fall'][0])
 MAX_ADJUST_DELTA_PRICE = max(ADJUST_BUY_DICT['rise'][1], ADJUST_BUY_DICT['fall'][1], ADJUST_SELL_DICT['rise'][1], ADJUST_SELL_DICT['fall'][1])
 MAX_DELTA_SECONDS = BUY_LIST[-1][0]
@@ -68,7 +67,6 @@ glb = {
     'golden_line': [0, 0],
     'today_pl_val': 0,
     'trade_date': None,
-    'code': '',
     'restarted': False,
     'almost_over': False,
     'ticker_list': [],
@@ -964,11 +962,6 @@ def start():
         log.info('今天不是交易日')
         return False
     glb['trade_date'] = data[0]
-    if len(data) >= 2 and data[-2]['time'] == today.strftime('%Y-%m-%d'):
-        glb['code'] = HSI_NMF_CODE
-    else:
-        glb['code'] = HSI_CMF_CODE
-    log.info('今日参考股票为%s' % glb['code'])
     if TRADE_ENV == ft.TrdEnv.REAL:
         ret, data = trade_ctx.unlock_trade(UNLOCK_PASSWORD)
         log.info('解锁交易，ret: %s, data: %s' % (ret, data))
@@ -976,7 +969,7 @@ def start():
             glb['restarted'] = False
             log.info('解锁交易失败')
             return False
-    data = subscribe(glb['code'], ft.SubType.TICKER)
+    data = subscribe(MHI_CODE, ft.SubType.TICKER)
     if data is False:
         glb['restarted'] = False
         return False
