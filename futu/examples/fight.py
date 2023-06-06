@@ -13,7 +13,6 @@ pd.set_option('display.max_columns', 1000)
 # 运行前需检查并改变下面的值
 TRADE_ENV = ft.TrdEnv.REAL                          # 实盘交易：REAL，模拟交易：SIMULATE
 UNLOCK_PASSWORD = '822130'                          # 解锁交易密码，实盘交易必须设置
-# ALLOW_RETRACE_VAL = 2000                            # 今日盈亏允许回撤多少元，一旦超过就会自动清仓
 
 # AUTO_SELL_WHEN_DROP_PRICE = False                   # 是否设置按价格跟踪止损，若是则下面的DROP_PRICE有效
 # DROP_PRICE = 100                                    # 下单后损失多少点自动卖出
@@ -37,7 +36,7 @@ ADJUST_SELL_DICT = {
 
 AUTO_BUY = True                                    # 是否自动买入，若是则下面的配置有效
 BULL_CODE = ''                                      # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
-BEAR_CODE = 'HK.64156'                              # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
+BEAR_CODE = 'HK.64493'                              # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
 CHECK_GOLDEN_LINE = False                           # 是否检查黄金分割线
 BUY_LIST = [[60, 15, 200*1000]]                     # 固定多少秒，波动多少点，下单多少股
 MAX_VOLUME = 600*1000                               # 最大持仓股数，若超过则不会再买入
@@ -67,12 +66,11 @@ quote_ctx = None
 trade_ctx = None
 glb = {
     'golden_line': [0, 0],
-    'today_pl_max_val': 0,
     'today_pl_val': 0,
     'trade_date': None,
     'code': '',
     'restarted': False,
-    'over': False,
+    'almost_over': False,
     'ticker_list': [],
     'price_list': [],
     'cur_price': 0,
@@ -127,7 +125,7 @@ def throttle(fn, wait):
             last_call_time = current_time
             return fn(*args, **kwargs)
         else:
-            print(f'{fn.__name__}调用限频节流中，{countdown}秒后再调用')
+            log.info(f'{fn.__name__}调用限频节流中，{countdown}秒后再调用')
 
     return throttled
 
@@ -271,45 +269,45 @@ class TradeOrderTest(ft.TradeOrderHandlerBase):
             return ret, data
         if data.order_status == ft.OrderStatus.FILLED_ALL:
             if data.trd_side == ft.TrdSide.BUY:
-                log.info('订单买入全部成交')
+                log.info('订单状态推送：订单买入全部成交')
                 glb['last_buy_price'] = data.price
                 reset_submitted_buy(data.code, data.stock_name)
                 set_has(data.code, data.stock_name)
                 if AUTO_PLACE_ORDER:
                     auto_place_order(data.code, data.dealt_qty, data.price)
             elif data.trd_side == ft.TrdSide.SELL:
-                log.info('订单卖出全部成交')
+                log.info('订单状态推送：订单卖出全部成交')
                 reset_submitted_sell(data.code, data.stock_name, data)
                 data = position_list_query()
-                if data is False or len(data) > 0:
-                    log.info('2秒后重试')
-                    time.sleep(2)
+                if data is False or data is None or len(data) > 0:
+                    log.info('查询持仓失败，3秒后重试')
+                    time.sleep(3)
                     position_list_query()
         elif data.order_status == ft.OrderStatus.FILLED_PART:
             if data.trd_side == ft.TrdSide.BUY:
-                log.info('订单买入部分成交')
+                log.info('订单状态推送：订单买入部分成交')
                 set_has(data.code, data.stock_name)
                 # if AUTO_PLACE_ORDER:
                 #     auto_place_order(data.code, data.dealt_qty, data.price)
             elif data.trd_side == ft.TrdSide.SELL:
-                log.info('订单卖出部分成交')
+                log.info('订单状态推送：订单卖出部分成交')
         elif data.order_status == ft.OrderStatus.SUBMIT_FAILED or data.order_status == ft.OrderStatus.FAILED:
-            log.info('订单提交失败')
+            log.info('订单状态推送：订单提交失败')
             position_list_query()
         elif data.order_status == ft.OrderStatus.CANCELLED_ALL or data.order_status == ft.OrderStatus.CANCELLED_PART:
-            log.info('订单已撤销')
+            log.info('订单状态推送：订单已撤销')
             if data.trd_side == ft.TrdSide.BUY:
                 reset_submitted_buy(data.code, data.stock_name)
             elif data.trd_side == ft.TrdSide.SELL:
                 reset_submitted_sell(data.code, data.stock_name, data)
         elif data.order_status == ft.OrderStatus.SUBMITTED:
-            log.info('订单已提交，等待成交')
+            log.info('订单状态推送：%s订单已提交，等待成交' % data.trd_side)
             if data.trd_side == ft.TrdSide.BUY:
                 set_submitted_buy(data.code, data.stock_name, data)
             elif data.trd_side == ft.TrdSide.SELL:
                 set_submitted_sell(data.code, data.stock_name, data)
         else:
-            log.info('订单状态为%s' % data.order_status)
+            log.info('订单状态推送：订单状态为%s' % data.order_status)
 
         return ret, data
 
@@ -352,17 +350,19 @@ class TickerTest(ft.TickerHandlerBase):
             elif h == 9 and m == 16:
                 glb['restarted'] = False
             elif h == 16 and m == 0:
-                glb['over'] = False
+                glb['almost_over'] = False
             return ret, data
         if (glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15) and m == 55:
             # log.info(data)
-            if not glb['over']:
-                log.info('收盘前取消所有订单并清仓熊')
-                cancel_all()
-                sell_all('熊')
-                glb['over'] = True
+            glb['almost_over'] = True
+            log.info('收盘前清仓熊')
+            sell_all('熊')
             return ret, data
 
+        if glb['almost_over']:
+            return ret, data
+
+        # 有持仓的时候，每波动10格查询持仓列表
         glb['cur_price'] = data0.price
         if (len(glb['has_bull_list']) > 0 or len(glb['has_bear_list']) > 0) and abs(glb['cur_price'] - glb['last_price']) >= 10:
             glb['last_price'] = glb['cur_price']
@@ -371,20 +371,22 @@ class TickerTest(ft.TickerHandlerBase):
         # if AUTO_SELL_WHEN_DROP_PRICE:
         #     auto_sell(glb['cur_price'])
 
-        if not glb['over'] and (h < 11 or h == 11 and m < 55 or 13 <= h < 15 or h == 15 and m < 30):
-            if AUTO_BUY or AUTO_ADJUST_BUY or AUTO_ADJUST_SELL:
-                data_list = data.values.tolist()
-                for i in range(0, len(data_list)):
-                    if AUTO_BUY:
-                        glb['ticker_list'].append(data_list[i])
-                        glb['price_list'].append(data_list[i][2])
-                    if AUTO_ADJUST_BUY or AUTO_ADJUST_SELL:
-                        glb['adjust_ticker_list'].append(data_list[i])
-                        glb['adjust_price_list'].append(data_list[i][2])
+        if (glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15) and m >= 30:
+            return ret, data
+
+        if AUTO_BUY or AUTO_ADJUST_BUY or AUTO_ADJUST_SELL:
+            data_list = data.values.tolist()
+            for i in range(0, len(data_list)):
                 if AUTO_BUY:
-                    pre_buy()
+                    glb['ticker_list'].append(data_list[i])
+                    glb['price_list'].append(data_list[i][2])
                 if AUTO_ADJUST_BUY or AUTO_ADJUST_SELL:
-                    pre_adjust()
+                    glb['adjust_ticker_list'].append(data_list[i])
+                    glb['adjust_price_list'].append(data_list[i][2])
+            if AUTO_BUY:
+                pre_buy()
+            if AUTO_ADJUST_BUY or AUTO_ADJUST_SELL:
+                pre_adjust()
 
         return ret, data
 
@@ -493,6 +495,7 @@ def auto_buy(buy_type, volume):
     #     if not CHECK_GOLDEN_LINE or check_golden_line() == '牛':
     #         log.info('触发买牛')
     #         to_buy('牛', volume)
+    log.info('auto_buy，submitted_buy_bear_flag：%s' % glb['submitted_buy_bear_flag'])
     if buy_type == '熊' and not glb['submitted_buy_bear_flag'] and (ALLOW_ADD or len(glb['has_bear_list']) == 0):
         # glb['pre_buy_bull_flag'] = True
         # if not glb['pre_buy_bear_flag']:
@@ -518,12 +521,12 @@ def auto_place_order(code, volume, price):
     for i in range(0, len(item) - 2):
         data = smart_sell(code, item[1], price + 0.001 * item[2 + i])
         if data is False:
-            log.info('2秒后重试')
+            log.info('自动挂卖单失败，2秒后重试')
             time.sleep(2)
             smart_sell(code, item[1], price + 0.001 * item[2 + i])
 
 
-def smart_buy(code, volume, price=None):
+def _smart_buy(code, volume, price=None):
     if price is None:
         ret, data = quote_ctx.get_order_book(code)
         log.info('获取摆盘数据，ret: %s, data: %s' % (ret, data))
@@ -547,8 +550,7 @@ def smart_buy(code, volume, price=None):
         return data
 
 
-# 每 30 秒内最多请求 15 次下单接口，且连续两次请求的间隔不可小于 0.02 秒
-def smart_sell(code, volume, price=None):
+def _smart_sell(code, volume, price=None):
     if price is None:
         ret, data = quote_ctx.get_order_book(code)
         log.info('获取摆盘数据，ret: %s, data: %s' % (ret, data))
@@ -650,8 +652,8 @@ def to_buy(stock_type, volume):
             if not ALLOW_ADD:
                 log.info('不允许补仓')
                 return False
-            elif data0.nominal_price > glb['last_buy_price'] - ADD_PRICE_DIFF:
-                log.info('现价%s没有比上次买的价格%s低于等于%s元，不允许补仓' % (data0.nominal_price, glb['last_buy_price'], ADD_PRICE_DIFF))
+            elif data0.nominal_price > max(glb['last_buy_price'], data0.cost_price) - ADD_PRICE_DIFF:
+                log.info('现价%s没有比上次买的价格%s低于等于%s元，不允许补仓' % (data0.nominal_price, max(glb['last_buy_price'], data0.cost_price), ADD_PRICE_DIFF))
                 # if stock_type == '牛':
                 #     glb['pre_buy_bull_flag'] = False
                 # elif stock_type == '熊':
@@ -671,7 +673,7 @@ def to_buy(stock_type, volume):
     return data
 
 
-def cancel_order(order_id):
+def _cancel_order(order_id):
     ret, data = trade_ctx.modify_order(modify_order_op=ft.ModifyOrderOp.CANCEL, order_id=order_id, price=0, qty=0, trd_env=TRADE_ENV)
     log.info('撤单，ret: %s, data: %s' % (ret, data))
     if ret != ft.RET_OK:
@@ -682,10 +684,9 @@ def cancel_order(order_id):
         return data
 
 
-# 每 30 秒内最多请求 20 次改单撤单接口，且连续两次请求的间隔不可小于 0.04 秒
-def modify_order(order_id, price, qty):
+def _modify_order(order_id, price, qty):
     ret, data = trade_ctx.modify_order(modify_order_op=ft.ModifyOrderOp.NORMAL, order_id=order_id, price=price, qty=qty, trd_env=TRADE_ENV)
-    log.info('修改订单，ret: %s, data: %s, order_id: %s' % (ret, data, order_id))
+    log.info('修改订单，ret: %s, data: %s, order_id: %s, price: %s, qty: %s' % (ret, data, order_id, price, qty))
     if ret != ft.RET_OK:
         log.info('修改订单失败')
         return False
@@ -694,8 +695,7 @@ def modify_order(order_id, price, qty):
         return data
 
 
-# 每 30 秒内最多请求 10 次查询今日订单接口
-def order_list_query(code=''):
+def _order_list_query(code=''):
     ret, data = trade_ctx.order_list_query(status_filter_list=[ft.OrderStatus.SUBMITTED, ft.OrderStatus.FILLED_PART], code=code, trd_env=TRADE_ENV, refresh_cache=True)
     log.info('查询全部订单，ret: %s, data: %s' % (ret, data))
     if ret != ft.RET_OK:
@@ -711,12 +711,12 @@ def order_list_query(code=''):
     return data
 
 
-def cancel_all(code='', stock_type='', trd_side=''):
+def _cancel_all(code='', stock_type='', trd_side=''):
     if code == '' and stock_type == '' and trd_side == '':
         ret, data = trade_ctx.cancel_all_order(trd_env=TRADE_ENV)
-        log.info('撤消全部订单，ret: %s, data: %s' % (ret, data))
+        log.info('撤销全部订单，ret: %s, data: %s' % (ret, data))
         if ret != ft.RET_OK:
-            log.info('撤消全部订单失败')
+            log.info('撤销全部订单失败')
     data = order_list_query(code)
     if data is not False and len(data) > 0:
         for i in range(0, len(data)):
@@ -733,8 +733,9 @@ def cancel_all(code='', stock_type='', trd_side=''):
                 cancel_order(data2.order_id)
 
 
+# 清仓今天买的股票
 def sell_all(stock_type=''):
-    cancel_all(stock_type=stock_type)
+    cancel_all() # 全部取消比较快
     data = position_list_query(stock_type=stock_type, check=False)
     if data is False or data is None:
         return False
@@ -746,14 +747,15 @@ def sell_all(stock_type=''):
                 cancel_all(data2.code)
             data3 = smart_sell(data2.code, data2.qty)
             if data3 is False:
-                log.info('1秒后重试')
-                time.sleep(1)
-                data3 = smart_sell(data2.code, data2.qty)
-            if data3 is not False and len(data3) > 0:
+                log.info('清仓失败')
+                return False
+            if len(data3) > 0:
                 data3 = data3.iloc[0]
                 if data3.order_status == ft.OrderStatus.FILLED_PART:
                     log.info('订单部分成交，改单降低一格')
                     modify_order(data3.order_id, data3.price - 0.001, data3.qty)
+                else:
+                    log.info('清仓成功')
 
 
 def subscribe(code_list, subtype_list):
@@ -876,11 +878,10 @@ def reset_submitted_sell(code, stock_name='', data=None):
         log.info('已重置卖单数据，熊证code: %s' % code)
 
 
-# 每 30 秒内最多请求 10 次查询持仓接口
-def _position_list_query(stock_type='', check=True, logging=True, reset=False):
+def _position_list_query(stock_type='', check=True, logging=True):
     ret, data = trade_ctx.position_list_query(trd_env=TRADE_ENV, refresh_cache=True)
-    if logging:
-        log.info('查询持仓列表，ret: %s, data: %s' % (ret, data))
+    # if logging:
+    #     log.info('查询持仓列表，ret: %s, data: %s' % (ret, data))
     if ret != ft.RET_OK:
         log.info('查询持仓列表失败，ret: %s, data: %s' % (ret, data))
         return False
@@ -894,14 +895,17 @@ def _position_list_query(stock_type='', check=True, logging=True, reset=False):
             if data2.qty > 0 and data2.qty != data2.today_buy_qty - data2.today_sell_qty and data2.today_buy_qty > data2.today_sell_qty:
                 check = False
                 log.info('持仓股数有问题，ret: %s, data: %s' % (ret, data))
-    if reset:
-        glb['today_pl_max_val'] = glb['today_pl_val']
-    if check:
-        check_pl()
+        log.info('当前股价：%s，今日短炒盈亏：%s元' % (glb['cur_price'], glb['today_pl_val']))
     data = data[data.qty > 0]
     if len(data) > 0:
         for i in range(0, len(data)):
-            set_has(data.iloc[i].code, data.iloc[i].stock_name)
+            data2 = data.iloc[i]
+            set_has(data2.code, data2.stock_name)
+            if data2.qty == data2.can_sell_qty and data2.stock_name.find('熊') > -1:
+                reset_submitted_buy(data2.code, data2.stock_name)
+                if not glb['almost_over'] and AUTO_PLACE_ORDER:
+                    log.info('买入成交后没有收到订单状态推送，现在重新自动挂卖单')
+                    auto_place_order(data2.code, data2.qty, max(data2.nominal_price, data2.cost_price))
         bull_data = data[data.stock_name.str.contains('牛')]
         bear_data = data[data.stock_name.str.contains('熊')]
         if len(bull_data) == 0:
@@ -921,21 +925,17 @@ def _position_list_query(stock_type='', check=True, logging=True, reset=False):
         return []
 
 
-# 节流3秒
+# 每 30 秒内最多请求 10 次查询持仓接口
 position_list_query = throttle(_position_list_query, 3)
-
-
-def check_pl():
-    if TRADE_ENV == ft.TrdEnv.SIMULATE:
-        return False
-    if glb['today_pl_val'] > glb['today_pl_max_val']:
-        glb['today_pl_max_val'] = glb['today_pl_val']
-    retrace_val = glb['today_pl_max_val'] - glb['today_pl_val']
-    log.info('当前股价：%s，今日盈亏：%s元，最大盈亏：%s元，已回撤%s元' % (glb['cur_price'], glb['today_pl_val'], glb['today_pl_max_val'], retrace_val))
-    # if retrace_val > ALLOW_RETRACE_VAL:
-    #     sell_all()
-    #     glb['today_pl_max_val'] = glb['today_pl_val']
-    #     glb['over'] = True
+# 每 30 秒内最多请求 15 次下单接口，且连续两次请求的间隔不可小于 0.02 秒
+smart_buy = throttle(_smart_buy, 2)
+smart_sell = throttle(_smart_sell, 2)
+# 每 30 秒内最多请求 10 次查询今日订单接口
+order_list_query = throttle(_order_list_query, 2)
+# 每 30 秒内最多请求 20 次改单撤单接口，且连续两次请求的间隔不可小于 0.04 秒
+modify_order = throttle(_modify_order, 2)
+cancel_order = throttle(_cancel_order, 2)
+cancel_all = throttle(_cancel_all, 2)
 
 
 def start():
@@ -980,22 +980,22 @@ def start():
     if data is False:
         glb['restarted'] = False
         return False
-    data = subscribe(HSI_CODE, ft.SubType.RT_DATA)
-    if data is False:
-        glb['restarted'] = False
-        return False
+    # data = subscribe(HSI_CODE, ft.SubType.RT_DATA)
+    # if data is False:
+    #     glb['restarted'] = False
+    #     return False
     quote_ctx.set_handler(SysNotifyTest())
     quote_ctx.set_handler(TickerTest())
     trade_ctx.set_handler(TradeOrderTest())
     if AUTO_ADJUST_BUY or AUTO_ADJUST_SELL:
         quote_ctx.set_handler(OrderBookTest())
-    position_list_query(reset=True)
+    position_list_query()
     order_list_query()
     if CHECK_GOLDEN_LINE:
         check_golden_line()
 
     ret, data = quote_ctx.query_subscription()
-    # log.info('查询订阅数据，ret: %s, data: %s' % (ret, data))
+    log.info('查询订阅数据，ret: %s, data: %s' % (ret, data))
     if ret != ft.RET_OK:
         log.info('查询订阅数据失败')
     quote_ctx.start()

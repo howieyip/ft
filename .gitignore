@@ -100,5 +100,3 @@ ENV/
 .idea/
 /dist/
 /futuquant.egg-info/
-
-FutuOpenD.xml

@@ -1,0 +1,18 @@
+# 官方规范：http://editorconfig.org
+# 用 Prettier 可开启配置 editorconfig: true，参考：https://prettier.io/docs/en/configuration.html#editorconfig
+
+# 停止编辑器在父目录中查找 .editorconfig 文件
+root = true
+
+[*]
+# 不可配置的 Prettier 行为
+charset = utf-8
+insert_final_newline = true
+# 警告：Prettier 不会移除模板字符串内的尾随空格，但你的编辑器可能会。
+trim_trailing_whitespace = true
+
+# 可配置的 Prettier 行为 (如果你的 Prettier 配置不同，请更改这些)
+end_of_line = lf
+indent_style = space
+indent_size = 2
+max_line_length = 120 # 非官方规范
