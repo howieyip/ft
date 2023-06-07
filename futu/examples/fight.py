@@ -22,7 +22,7 @@ ORDER_LIST = [[400*1000, 100*1000, 1, 2, 3, 4],
               [200*1000, 50*1000, 1, 2, 3, 4],
               [100*1000, 50*1000, 2, 3]]            # 下单多少股以上（大的写前面），每单挂多少股，一单挂高几格，下一单挂高几格
 
-AUTO_ADJUST_BUY = True                             # 是否自动调整挂的买单的价格，若是则下面的ADJUST_BUY_DICT有效
+AUTO_ADJUST_BUY = True                              # 是否自动调整挂的买单的价格，若是则下面的ADJUST_BUY_DICT有效
 ADJUST_BUY_DICT = {
     'rise': [2, 3, 1],                              # 最近多少秒内，往持仓股票方向波动多少点，调整买单为第几档
     'fall': [2, 3, 2]                               # 最近多少秒内，往持仓股票反向波动多少点，调整买单为第几档
@@ -34,7 +34,7 @@ ADJUST_SELL_DICT = {
     'fall': [2, 8, 1]                               # 最近多少秒内，往持仓股票反向波动多少点，调整卖单为第几档
 }
 
-AUTO_BUY = True                                    # 是否自动买入，若是则下面的配置有效
+AUTO_BUY = True                                     # 是否自动买入，若是则下面的配置有效
 BULL_CODE = ''                                      # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
 BEAR_CODE = 'HK.64493'                              # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
 CHECK_GOLDEN_LINE = False                           # 是否检查黄金分割线
@@ -51,7 +51,7 @@ if TRADE_ENV == ft.TrdEnv.SIMULATE:
 HSI_CODE = 'HK.800000'                              # 恒指代码
 MHI_CODE = 'HK.MHImain'                             # 小恒指代码
 MAX_ADJUST_DELTA_SECONDS = max(ADJUST_BUY_DICT['rise'][0], ADJUST_BUY_DICT['fall'][0], ADJUST_SELL_DICT['rise'][0], ADJUST_SELL_DICT['fall'][0])
-MAX_ADJUST_DELTA_PRICE = max(ADJUST_BUY_DICT['rise'][1], ADJUST_BUY_DICT['fall'][1], ADJUST_SELL_DICT['rise'][1], ADJUST_SELL_DICT['fall'][1])
+# MAX_ADJUST_DELTA_PRICE = max(ADJUST_BUY_DICT['rise'][1], ADJUST_BUY_DICT['fall'][1], ADJUST_SELL_DICT['rise'][1], ADJUST_SELL_DICT['fall'][1])
 MAX_DELTA_SECONDS = BUY_LIST[-1][0]
 # DELTA_PRICE_LIST = []
 # for x in range(0, len(BUY_LIST)):
@@ -276,11 +276,7 @@ class TradeOrderTest(ft.TradeOrderHandlerBase):
             elif data.trd_side == ft.TrdSide.SELL:
                 log.info('订单状态推送：订单卖出全部成交')
                 reset_submitted_sell(data.code, data.stock_name, data)
-                data = position_list_query()
-                if data is False or data is None or len(data) > 0:
-                    log.info('查询持仓失败，3秒后重试')
-                    time.sleep(3)
-                    position_list_query()
+                position_list_query()
         elif data.order_status == ft.OrderStatus.FILLED_PART:
             if data.trd_side == ft.TrdSide.BUY:
                 log.info('订单状态推送：订单买入部分成交')
@@ -405,22 +401,31 @@ class TickerTest(ft.TickerHandlerBase):
 
 
 def pre_adjust():
+    # ADJUST_BUY_DICT = {
+    #     'rise': [2, 3, 1],                              # 最近多少秒内，往持仓股票方向波动多少点，调整买单为第几档
+    #     'fall': [2, 3, 2]                               # 最近多少秒内，往持仓股票反向波动多少点，调整买单为第几档
+    # }
     while datestr_to_timestamp(glb['adjust_ticker_list'][-1][1]) - datestr_to_timestamp(glb['adjust_ticker_list'][0][1]) > MAX_ADJUST_DELTA_SECONDS:
         glb['adjust_ticker_list'].pop(0)
         glb['adjust_price_list'].pop(0)
-    for i in range(len(glb['adjust_ticker_list']) - 2, -1, -1):
-        delta_price = glb['adjust_ticker_list'][-1][2] - glb['adjust_ticker_list'][i][2]
-        if delta_price > MAX_ADJUST_DELTA_PRICE:
-            break
-        if AUTO_ADJUST_BUY:
-            auto_adjust(delta_price, i, ADJUST_BUY_DICT, 'submitted_buy_bull')
-            auto_adjust(delta_price, i, ADJUST_BUY_DICT, 'submitted_buy_bear')
-        if AUTO_ADJUST_SELL:
-            auto_adjust(delta_price, i, ADJUST_SELL_DICT, 'submitted_sell_bull')
-            auto_adjust(delta_price, i, ADJUST_SELL_DICT, 'submitted_sell_bear')
+    # i 从逐笔列表的倒数第二项开始，依次递减1，直到0为止，要遍历的前提是预设的多少秒内是不统一的
+    # for i in range(len(glb['adjust_ticker_list']) - 2, -1, -1):
+    i = 0
+    delta_price = glb['adjust_ticker_list'][-1][2] - glb['adjust_ticker_list'][i][2]
+    # if delta_price > MAX_ADJUST_DELTA_PRICE:
+    #     break
+    if AUTO_ADJUST_BUY:
+        auto_adjust(delta_price, i, ADJUST_BUY_DICT, 'submitted_buy_bear')
+        auto_adjust(delta_price, i, ADJUST_BUY_DICT, 'submitted_buy_bull')
+    if AUTO_ADJUST_SELL:
+        auto_adjust(delta_price, i, ADJUST_SELL_DICT, 'submitted_sell_bear')
+        auto_adjust(delta_price, i, ADJUST_SELL_DICT, 'submitted_sell_bull')
 
 
 def pre_buy():
+    #       code              time                 price        volume  turnover    ticker_direction       sequence   type      push_data_type
+    # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
+    # BUY_LIST = [[60, 15, 200*1000]]
     while datestr_to_timestamp(glb['ticker_list'][-1][1]) - datestr_to_timestamp(glb['ticker_list'][0][1]) > MAX_DELTA_SECONDS:
         glb['ticker_list'].pop(0)
         glb['price_list'].pop(0)
@@ -428,17 +433,20 @@ def pre_buy():
     for j in range(0, len(BUY_LIST)):
         i = 0
         delta_price = glb['ticker_list'][-1][2] - glb['ticker_list'][i][2]
+        # 60秒内上涨点数比15还要大，且最后的价格是最高的价格
         # if delta_price >= BUY_LIST[j][1] and glb['ticker_list'][-1][2] >= max(glb['price_list']):
         #     delta_seconds = datestr_to_timestamp(glb['ticker_list'][-1][1]) - datestr_to_timestamp(glb['ticker_list'][i][1])
         #     if delta_seconds <= BUY_LIST[j][0] and len(BUY_LIST[j]) == 3:
         #         pre_buy_flag = True
         #         BUY_LIST[j].extend(['牛', i, delta_seconds, delta_price])
+        # 60秒内下跌点数比-15还要小，且最后的价格是最低的价格
         if delta_price <= -BUY_LIST[j][1] and glb['ticker_list'][-1][2] <= min(glb['price_list']):
             delta_seconds = datestr_to_timestamp(glb['ticker_list'][-1][1]) - datestr_to_timestamp(glb['ticker_list'][i][1])
             if delta_seconds <= BUY_LIST[j][0] and len(BUY_LIST[j]) == 3:
                 pre_buy_flag = True
                 BUY_LIST[j].extend(['熊', i, delta_seconds, delta_price])
     if pre_buy_flag:
+        # [[60, 15, 200000, '熊', 0, 60, -16.0]]
         log.info(BUY_LIST)
         for j in range(0, len(BUY_LIST)):
             if len(BUY_LIST[j]) > 3:
@@ -512,6 +520,9 @@ def auto_place_order(code, volume, price):
     # if glb['submitted_sell_bear'] is not None and glb['submitted_sell_bear'].code == code:
     #     return False
     item = []
+    # ORDER_LIST = [[400*1000, 100*1000, 1, 2, 3, 4],
+    #     [200*1000, 50*1000, 1, 2, 3, 4],
+    #     [100*1000, 50*1000, 2, 3]]            # 下单多少股以上（大的写前面），每单挂多少股，一单挂高几格，下一单挂高几格
     for i in range(0, len(ORDER_LIST)):
         if volume >= ORDER_LIST[i][0]:
             item = ORDER_LIST[i]
@@ -519,9 +530,8 @@ def auto_place_order(code, volume, price):
     for i in range(0, len(item) - 2):
         data = smart_sell(code, item[1], price + 0.001 * item[2 + i])
         if data is False:
-            log.info('自动挂卖单失败，2秒后重试')
-            time.sleep(2)
-            smart_sell(code, item[1], price + 0.001 * item[2 + i])
+            log.info('auto_place_order => smart_sell 自动挂卖单失败')
+            return False
 
 
 def _smart_buy(code, volume, price=None):
@@ -563,9 +573,11 @@ def _smart_sell(code, volume, price=None):
     log.info('下卖单，ret: %s, data: %s' % (ret, data))
     if ret != ft.RET_OK:
         log.info('下卖单失败')
+        time.sleep(0.02)
         return False
     else:
         log.info('下卖单成功')
+        time.sleep(0.02)
         return data
 
 
@@ -661,7 +673,7 @@ def to_buy(stock_type, volume):
                 log.info('准备补仓')
     set_submitted_buy(code, stock_type)
     data = smart_buy(code, volume)
-    if data is False:
+    if data is False or data is None:
         reset_submitted_buy(code, stock_type)
     # else:
     #     if stock_type == '牛':
@@ -676,9 +688,11 @@ def _cancel_order(order_id):
     log.info('撤单，ret: %s, data: %s' % (ret, data))
     if ret != ft.RET_OK:
         log.info('撤单失败')
+        time.sleep(0.04)
         return False
     else:
         log.info('撤单成功')
+        time.sleep(0.04)
         return data
 
 
@@ -687,9 +701,11 @@ def _modify_order(order_id, price, qty):
     log.info('修改订单，ret: %s, data: %s, order_id: %s, price: %s, qty: %s' % (ret, data, order_id, price, qty))
     if ret != ft.RET_OK:
         log.info('修改订单失败')
+        time.sleep(0.04)
         return False
     else:
         log.info('修改订单成功')
+        time.sleep(0.04)
         return data
 
 
@@ -716,10 +732,14 @@ def _cancel_all(code='', stock_type='', trd_side=''):
         if ret != ft.RET_OK:
             log.info('撤销全部订单失败')
     data = order_list_query(code)
-    if data is not False and len(data) > 0:
+    if data is False:
+        log.info('_cancel_all => order_list_query 撤销全部订单失败')
+        return False
+    if data is None:
+        log.info('_cancel_all => order_list_query 限频节流中')
+        return False
+    if len(data) > 0:
         for i in range(0, len(data)):
-            if i > 0 and i % 5 == 0:
-                time.sleep(1)
             data2 = data.iloc[i]
             if stock_type == '' and trd_side == '':
                 cancel_order(data2.order_id)
@@ -745,7 +765,10 @@ def sell_all(stock_type=''):
                 cancel_all(data2.code)
             data3 = smart_sell(data2.code, data2.qty)
             if data3 is False:
-                log.info('清仓失败')
+                log.info('sell_all => smart_sell 清仓失败')
+                return False
+            if data3 is None:
+                log.info('sell_all => smart_sell 限频节流中')
                 return False
             if len(data3) > 0:
                 data3 = data3.iloc[0]
@@ -927,13 +950,13 @@ def _position_list_query(stock_type='', check=True, logging=True):
 position_list_query = throttle(_position_list_query, 3)
 # 每 30 秒内最多请求 15 次下单接口，且连续两次请求的间隔不可小于 0.02 秒
 smart_buy = throttle(_smart_buy, 2)
-smart_sell = throttle(_smart_sell, 2)
+smart_sell = throttle(_smart_sell, 0) # 自动挂卖单是遍历的，所以不能节流，需要在函数里面做延时
 # 每 30 秒内最多请求 10 次查询今日订单接口
 order_list_query = throttle(_order_list_query, 2)
 # 每 30 秒内最多请求 20 次改单撤单接口，且连续两次请求的间隔不可小于 0.04 秒
-modify_order = throttle(_modify_order, 2)
-cancel_order = throttle(_cancel_order, 2)
-cancel_all = throttle(_cancel_all, 2)
+modify_order = throttle(_modify_order, 0) # 自动调价要连续执行，所以不能节流，需要在函数里面做延时
+cancel_order = throttle(_cancel_order, 0) # 撤销订单是遍历的，所以不能节流，需要在函数里面做延时
+cancel_all = throttle(_cancel_all, 1.5)
 
 
 def start():
