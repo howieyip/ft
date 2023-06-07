@@ -12,10 +12,10 @@
 		<login_account>303698</login_account>
 		<!-- 登录密码32位MD5加密16进制 -->
 		<!-- Login password, 32-bit MD5 encrypted hexadecimal -->
-		<!-- <login_pwd_md5>6e55f158a827b1a1c4321a245aaaad88</login_pwd_md5> -->
+		<login_pwd_md5>46a534ccad570fdfb6b82e88a65454c6</login_pwd_md5>
 		<!-- 登录密码明文，密码密文存在情况下只使用密文 -->
 		<!-- Plain text of login password. When cypher text exists, the cypher text will be used. -->
-		<login_pwd></login_pwd>
+		<!-- <login_pwd></login_pwd> -->
 		<!-- FutuOpenD语言，en：英文，chs：简体中文 -->
 		<!-- FutuOpenD language. en: English, chs: Simplified Chinese -->
 		<lang>chs</lang>

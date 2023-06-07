@@ -85,6 +85,7 @@ glb = {
     'order_book': {},
     'has_bull_list': [],
     'has_bear_list': [],
+    'auto_place_order_flag': False,
     'submitted_buy_bull_flag': False,
     'submitted_buy_bear_flag': False,
     # 'pre_buy_bull_flag': True,
@@ -349,8 +350,8 @@ class TickerTest(ft.TickerHandlerBase):
         if (glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15) and m == 55:
             # log.info(data)
             glb['almost_over'] = True
-            log.info('收盘前清仓熊')
             sell_all('熊')
+            log.info('--------------------end--------------------')
             return ret, data
 
         if glb['almost_over']:
@@ -519,6 +520,10 @@ def auto_place_order(code, volume, price):
     #     return False
     # if glb['submitted_sell_bear'] is not None and glb['submitted_sell_bear'].code == code:
     #     return False
+    if glb['auto_place_order_flag']:
+        log.info('已经开始自动挂单，不要重复了')
+        return False
+    glb['auto_place_order_flag'] = True
     item = []
     # ORDER_LIST = [[400*1000, 100*1000, 1, 2, 3, 4],
     #     [200*1000, 50*1000, 1, 2, 3, 4],
@@ -532,6 +537,7 @@ def auto_place_order(code, volume, price):
         if data is False:
             log.info('auto_place_order => smart_sell 自动挂卖单失败')
             return False
+    glb['auto_place_order_flag'] = False
 
 
 def _smart_buy(code, volume, price=None):
@@ -663,7 +669,7 @@ def to_buy(stock_type, volume):
                 log.info('不允许补仓')
                 return False
             elif data0.nominal_price > max(glb['last_buy_price'], data0.cost_price) - ADD_PRICE_DIFF:
-                log.info('现价%s没有比上次买的价格%s低于等于%s元，不允许补仓' % (data0.nominal_price, max(glb['last_buy_price'], data0.cost_price), ADD_PRICE_DIFF))
+                log.info('现价%s没有比上次买入的订单价格%s低于等于%s元，不允许补仓' % (data0.nominal_price, max(glb['last_buy_price'], data0.cost_price), ADD_PRICE_DIFF))
                 # if stock_type == '牛':
                 #     glb['pre_buy_bull_flag'] = False
                 # elif stock_type == '熊':
@@ -710,12 +716,20 @@ def _modify_order(order_id, price, qty):
 
 
 def _order_list_query(code=''):
-    ret, data = trade_ctx.order_list_query(status_filter_list=[ft.OrderStatus.SUBMITTED, ft.OrderStatus.FILLED_PART], code=code, trd_env=TRADE_ENV, refresh_cache=True)
-    log.info('查询全部订单，ret: %s, data: %s' % (ret, data))
+    ret, data = trade_ctx.order_list_query(status_filter_list=[ft.OrderStatus.SUBMITTED, ft.OrderStatus.FILLED_PART, ft.OrderStatus.FILLED_ALL], code=code, trd_env=TRADE_ENV, refresh_cache=True)
+    # log.info('查询订单，ret: %s, data: %s' % (ret, data))
     if ret != ft.RET_OK:
-        log.info('查询全部订单失败')
+        log.info('查询订单失败')
         return False
-    log.info('查询全部订单成功')
+    log.info('查询订单成功')
+    last_buy_data = data[(data.trd_side == 'BUY') & (data.order_status == 'FILLED_ALL')]
+    last_buy_data = last_buy_data[last_buy_data.create_time == last_buy_data.create_time.max()]
+    if not last_buy_data.empty:
+        glb['last_buy_price'] = last_buy_data.iloc[-1].price
+        log.info('上次买入的订单价格为%s' % glb['last_buy_price'])
+    else:
+        log.info('还没有已成交的买单')
+    data = data[(data.order_status == 'SUBMITTED') | (data.order_status == 'FILLED_PART')]
     for i in range(0, len(data)):
         data2 = data.iloc[i]
         if data2.trd_side == ft.TrdSide.BUY:
@@ -901,8 +915,8 @@ def reset_submitted_sell(code, stock_name='', data=None):
 
 def _position_list_query(stock_type='', check=True, logging=True):
     ret, data = trade_ctx.position_list_query(trd_env=TRADE_ENV, refresh_cache=True)
-    # if logging:
-    #     log.info('查询持仓列表，ret: %s, data: %s' % (ret, data))
+    if logging:
+        log.info('查询持仓列表，ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
         log.info('查询持仓列表失败，ret: %s, data: %s' % (ret, data))
         return False
@@ -938,7 +952,7 @@ def _position_list_query(stock_type='', check=True, logging=True):
         elif stock_type == '熊':
             data = bear_data
         if logging:
-            log.info('今天买入的恒指牛熊持仓列表: %s' % data)
+            log.info('今天买入的恒指牛熊持仓列表:\n%s' % data)
         return data
     else:
         log.info('没有持仓今天买入的恒指牛熊')
@@ -962,6 +976,7 @@ cancel_all = throttle(_cancel_all, 1.5)
 def start():
     global log, quote_ctx, trade_ctx
     log = Logger('futu/examples/logs/' + timestamp_to_datestr(time.time(), '%Y-%m-%d.log')).get_logger()
+    log.info('--------------------start--------------------')
     temp_quote_ctx = None
     temp_trade_ctx = None
     if quote_ctx is not None:
