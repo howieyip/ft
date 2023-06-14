@@ -70,6 +70,7 @@ glb = {
     'restarted': False,
     'almost_over': False,
     'to_over': False,
+    'over': False,
     'ticker_list': [],
     'price_list': [],
     'cur_price': 0,
@@ -348,6 +349,7 @@ class TickerTest(ft.TickerHandlerBase):
             if h == 16 and m == 0:
                 glb['almost_over'] = False
                 glb['to_over'] = False
+                glb['over'] = False
             return ret, data
         if (glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15) and m >= 55:
             # log.info(data)
@@ -357,7 +359,8 @@ class TickerTest(ft.TickerHandlerBase):
                 position_list_query()
             if m >= 59:
                 glb['to_over'] = True
-                sell_all('熊')
+                if not glb['over']:
+                    sell_all('熊')
                 log.info('--------------------end--------------------')
             return ret, data
 
@@ -527,7 +530,7 @@ def auto_place_order(code, volume, price, toSellAll=False):
         return False
     if toSellAll:
         glb['auto_place_order_flag'] = True
-        data = smart_sell(code, volume, price + 0.001)
+        data = smart_sell(code, volume, price)
         if data is False:
             log.info('auto_place_order => smart_sell 自动挂卖单失败')
         glb['auto_place_order_flag'] = False
@@ -782,7 +785,7 @@ def _cancel_all(code='', stock_type='', trd_side=''):
 # 清仓今天买的股票
 def sell_all(stock_type=''):
     cancel_all() # 全部取消比较快
-    data = position_list_query(stock_type=stock_type, check=False)
+    data = position_list_query(stock_type=stock_type)
     if data is False or data is None:
         return False
     if len(data) > 0:
@@ -927,7 +930,7 @@ def reset_submitted_sell(code, stock_name='', data=None):
         log.info('已重置卖单数据，熊证code: %s' % code)
 
 
-def _position_list_query(stock_type='', check=True, logging=True):
+def _position_list_query(stock_type='', logging=True):
     ret, data = trade_ctx.position_list_query(trd_env=TRADE_ENV, refresh_cache=True)
     if logging:
         log.info('查询持仓列表，ret: %s, data:\n%s' % (ret, data))
@@ -936,15 +939,16 @@ def _position_list_query(stock_type='', check=True, logging=True):
         return False
     reset_has()
     data = data[(data.today_buy_qty > 0) & data.stock_name.str.contains('恒指')]
-    if check:
-        glb['today_pl_val'] = 0
-        for i in range(0, len(data)):
-            data2 = data.iloc[i]
-            glb['today_pl_val'] += data2.today_pl_val
-            if data2.qty > 0 and data2.qty != data2.today_buy_qty - data2.today_sell_qty and data2.today_buy_qty > data2.today_sell_qty:
-                check = False
-                log.info('持仓股数有问题，ret: %s, data:\n%s' % (ret, data))
-        log.info('当前股价：%s，今日短炒盈亏：%s元' % (glb['cur_price'], glb['today_pl_val']))
+
+    # 统计今日盈亏
+    glb['today_pl_val'] = 0
+    for i in range(0, len(data)):
+        data2 = data.iloc[i]
+        glb['today_pl_val'] += data2.today_pl_val
+        if data2.qty > 0 and data2.qty != data2.today_buy_qty - data2.today_sell_qty and data2.today_buy_qty > data2.today_sell_qty:
+            log.info('持仓股数有问题，ret: %s, data:\n%s' % (ret, data))
+    log.info('当前股价：%s，今日短炒盈亏：%s元' % (glb['cur_price'], glb['today_pl_val']))
+
     data = data[data.qty > 0]
     if len(data) > 0:
         for i in range(0, len(data)):
@@ -975,6 +979,8 @@ def _position_list_query(stock_type='', check=True, logging=True):
     else:
         log.info('没有持仓今天买入的恒指牛熊')
         reset_has(real=True)
+        if glb['almost_over']:
+            glb['over'] = True
         return []
 
 
