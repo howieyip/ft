@@ -36,7 +36,7 @@ ADJUST_SELL_DICT = {
 
 AUTO_BUY = True                                     # 是否自动买入，若是则下面的配置有效
 BULL_CODE = ''                                      # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
-BEAR_CODE = 'HK.64493'                              # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
+BEAR_CODE = 'HK.66078'                              # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
 CHECK_GOLDEN_LINE = False                           # 是否检查黄金分割线
 BUY_LIST = [[60, 15, 200*1000]]                     # 固定多少秒，波动多少点，下单多少股
 MAX_VOLUME = 600*1000                               # 最大持仓股数，若超过则不会再买入
@@ -69,6 +69,7 @@ glb = {
     'trade_date': None,
     'restarted': False,
     'almost_over': False,
+    'to_over': False,
     'ticker_list': [],
     'price_list': [],
     'cur_price': 0,
@@ -338,23 +339,29 @@ class TickerTest(ft.TickerHandlerBase):
         s = int(t[17:19])
         if h < 9 or h == 9 and m < 30 or h >= 16:
             # print(data)
-            if h == 9 and m == 15 and not glb['restarted']:
-                log.info('准备开盘，需要重启程序获取参考股票')
-                glb['restarted'] = True
-                start()
-            elif h == 9 and m == 16:
-                glb['restarted'] = False
-            elif h == 16 and m == 0:
+            # if h == 9 and m == 15 and not glb['restarted']:
+            #     log.info('准备开盘，需要重启程序获取参考股票')
+            #     glb['restarted'] = True
+            #     start()
+            # elif h == 9 and m == 16:
+            #     glb['restarted'] = False
+            if h == 16 and m == 0:
                 glb['almost_over'] = False
+                glb['to_over'] = False
             return ret, data
-        if (glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15) and m == 55:
+        if (glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15) and m >= 55:
             # log.info(data)
-            glb['almost_over'] = True
-            sell_all('熊')
-            log.info('--------------------end--------------------')
+            if not glb['almost_over']:
+                glb['almost_over'] = True
+                cancel_all()
+                position_list_query()
+            if m >= 59:
+                glb['to_over'] = True
+                sell_all('熊')
+                log.info('--------------------end--------------------')
             return ret, data
 
-        if glb['almost_over']:
+        if glb['to_over']:
             return ret, data
 
         # 有持仓的时候，每波动10格查询持仓列表
@@ -366,6 +373,7 @@ class TickerTest(ft.TickerHandlerBase):
         # if AUTO_SELL_WHEN_DROP_PRICE:
         #     auto_sell(glb['cur_price'])
 
+        # 尾盘30分钟不要买入了
         if (glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15) and m >= 30:
             return ret, data
 
@@ -513,16 +521,23 @@ def auto_buy(buy_type, volume):
             to_buy('熊', volume)
 
 
-def auto_place_order(code, volume, price):
+def auto_place_order(code, volume, price, toSellAll=False):
+    if glb['auto_place_order_flag']:
+        log.info('已经开始自动挂单，不要重复了')
+        return False
+    if toSellAll:
+        glb['auto_place_order_flag'] = True
+        data = smart_sell(code, volume, price + 0.001)
+        if data is False:
+            log.info('auto_place_order => smart_sell 自动挂卖单失败')
+        glb['auto_place_order_flag'] = False
+        return
     if volume < 100*1000:
         return False
     # if glb['submitted_sell_bull'] is not None and glb['submitted_sell_bull'].code == code:
     #     return False
     # if glb['submitted_sell_bear'] is not None and glb['submitted_sell_bear'].code == code:
     #     return False
-    if glb['auto_place_order_flag']:
-        log.info('已经开始自动挂单，不要重复了')
-        return False
     glb['auto_place_order_flag'] = True
     item = []
     # ORDER_LIST = [[400*1000, 100*1000, 1, 2, 3, 4],
@@ -775,7 +790,7 @@ def sell_all(stock_type=''):
             data2 = data.iloc[i]
             log.info('准备清仓')
             if data2.qty > data2.can_sell_qty:
-                cancel_all(data2.code)
+                cancel_all(data2.code) # todo 遍历的要取消限频
             data3 = smart_sell(data2.code, data2.qty)
             if data3 is False:
                 log.info('sell_all => smart_sell 清仓失败')
@@ -937,9 +952,13 @@ def _position_list_query(stock_type='', check=True, logging=True):
             set_has(data2.code, data2.stock_name)
             if data2.qty == data2.can_sell_qty and data2.stock_name.find('熊') > -1:
                 reset_submitted_buy(data2.code, data2.stock_name)
-                if not glb['almost_over'] and AUTO_PLACE_ORDER:
-                    log.info('%s\n买入成交后没有收到订单状态推送，现在重新自动挂卖单' % data2)
-                    auto_place_order(data2.code, data2.qty, max(data2.nominal_price, data2.cost_price))
+                if AUTO_PLACE_ORDER:
+                    if not glb['to_over']:
+                        log.info('%s\n存在买入的股票没自动挂卖单，现在重新自动挂卖单' % data2)
+                        if glb['almost_over']:
+                            auto_place_order(data2.code, data2.qty, data2.nominal_price, True)
+                        else:
+                            auto_place_order(data2.code, data2.qty, max(data2.nominal_price, data2.cost_price))
         bull_data = data[data.stock_name.str.contains('牛')]
         bear_data = data[data.stock_name.str.contains('熊')]
         if len(bull_data) == 0:
