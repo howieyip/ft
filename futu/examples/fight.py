@@ -36,7 +36,7 @@ ADJUST_SELL_DICT = {
 
 AUTO_BUY = True                                     # 是否自动买入，若是则下面的配置有效
 BULL_CODE = ''                                      # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
-BEAR_CODE = 'HK.66078'                              # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
+BEAR_CODE = 'auto'                                  # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
 CHECK_GOLDEN_LINE = False                           # 是否检查黄金分割线
 BUY_LIST = [[60, 15, 200*1000]]                     # 固定多少秒，波动多少点，下单多少股
 MAX_VOLUME = 600*1000                               # 最大持仓股数，若超过则不会再买入
@@ -604,13 +604,14 @@ def _smart_sell(code, volume, price=None):
         return data
 
 
-def get_stock_code(stock_type='all', cache_first=False):
+def _get_stock_code(stock_type='all', cache_first=False):
     cache = glb['cache_get_stock_code'].get(stock_type)
     if cache_first and cache['data'] is not None and time.time() - cache['last_time'] < cache['duration']:
         log.info('读取缓存数据：%s' % cache)
         return cache['data']
-    from futu.quote.quote_get_warrant import Request
-    req = Request()
+    cache['data'] = False
+
+    req = ft.WarrantRequest()
     req.stock_owner = HSI_CODE  # 所属正股
     if stock_type == '牛':
         req.type_list = [ft.WrtType.BULL]  # Qot_Common.WarrantType, 窝轮类型过滤列表 WrtType
@@ -618,20 +619,19 @@ def get_stock_code(stock_type='all', cache_first=False):
         req.type_list = [ft.WrtType.BEAR]  # Qot_Common.WarrantType, 窝轮类型过滤列表 WrtType
     req.issuer_list = [ft.Issuer.JP]  # Qot_Common.Issuer, 发行人过滤列表
     req.status = ft.WarrantStatus.NORMAL  # Qot_Common.WarrantStatus, 窝轮状态
-    req.cur_price_min = 0.05  # 最新价过滤起点
-    req.cur_price_max = 0.15  # 最新价过滤终点
+    req.cur_price_min = 0.04  # 最新价过滤起点
+    req.cur_price_max = 0.07  # 最新价过滤终点
     req.conversion_min = 10000  # 换股比率过滤起点
     req.conversion_max = 10000  # 换股比率过滤终点
     req.sort_field = ft.SortField.VOLUME  # 根据哪个字段排序
     req.ascend = False  # 升序ture, 降序false
     req.begin = 0  # 数据起始点
-    req.num = 20  # 返回数据个数，最大200
+    req.num = 3  # 返回数据个数，最大200
 
     ret, data = quote_ctx.get_warrant(req=req)
     log.info('获取恒指牛熊，ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
         log.info('获取恒指牛熊失败')
-        cache['data'] = False
     else:
         data = data[0]
         data = data[data.stock_owner == HSI_CODE]
@@ -640,12 +640,10 @@ def get_stock_code(stock_type='all', cache_first=False):
             data = data.iloc[0]
             if data.ask_price == 0 or data.ask_price - data.bid_price > 0.002:
                 log.info('买卖价差太大，暂不买入')
-                cache['data'] = False
             else:
                 cache['data'] = data
         else:
             log.info('挑选失败，没有符合条件的')
-            cache['data'] = False
     cache['last_time'] = time.time()
     return cache['data']
 
@@ -661,17 +659,7 @@ def to_buy(stock_type, volume):
         code = BEAR_CODE
     if code == '':
         return False
-    if code == 'auto':
-        data = get_stock_code(stock_type=stock_type, cache_first=True)
-        if data is False:
-            return False
-        code = data.stock
-    # if stock_type == '牛':
-    #     BULL_CODE = code
-    #     cancel_all(stock_type='熊', trd_side=ft.TrdSide.BUY)
-    # elif stock_type == '熊':
-    #     BEAR_CODE = code
-    #     cancel_all(stock_type='牛', trd_side=ft.TrdSide.BUY)
+
     data = position_list_query(stock_type)
     if data is False or data is None:
         return False
@@ -683,17 +671,25 @@ def to_buy(stock_type, volume):
             return False
         elif total_qty > 0:
             if not ALLOW_ADD:
-                log.info('不允许补仓')
+                log.info('配置不允许补仓')
                 return False
-            elif data0.nominal_price > glb['last_buy_price'] - ADD_PRICE_DIFF:
-                log.info('现价%s没有比上次买入的订单价格%s低于等于%s元，不允许补仓' % (data0.nominal_price, max(glb['last_buy_price'], data0.cost_price), ADD_PRICE_DIFF))
+            # 可能存在买入多个熊证，所以要用当前持仓的成本价来max一下
+            last_buy_price = max(glb['last_buy_price'], data0.cost_price)
+            if data0.nominal_price >  last_buy_price - ADD_PRICE_DIFF:
+                log.info('持仓股票%s的现价%s没有比上次买入的订单价格%s低于等于%s元，不允许补仓' % (data0.code, data0.nominal_price, last_buy_price, ADD_PRICE_DIFF))
                 # if stock_type == '牛':
                 #     glb['pre_buy_bull_flag'] = False
                 # elif stock_type == '熊':
                 #     glb['pre_buy_bear_flag'] = False
                 return False
-            else:
-                log.info('准备补仓')
+            log.info('持仓股票%s的现价%s比上次买入的订单价格%s低于等于%s元，准备补仓' % (data0.code, data0.nominal_price, last_buy_price, ADD_PRICE_DIFF))
+
+    if code == 'auto':
+        data = get_stock_code(stock_type=stock_type)
+        if data is False or data is None:
+            return False
+        code = data.stock
+
     set_submitted_buy(code, stock_type)
     data = smart_buy(code, volume)
     if data is False or data is None:
@@ -989,6 +985,8 @@ position_list_query = throttle(_position_list_query, 3)
 # 每 30 秒内最多请求 15 次下单接口，且连续两次请求的间隔不可小于 0.02 秒
 smart_buy = throttle(_smart_buy, 2)
 smart_sell = throttle(_smart_sell, 0) # 自动挂卖单是遍历的，所以不能节流，需要在函数里面做延时
+# 每 30 秒内最多请求 60 次筛选窝轮接口
+get_stock_code = throttle(_get_stock_code, 0.5)
 # 每 30 秒内最多请求 10 次查询今日订单接口
 order_list_query = throttle(_order_list_query, 2)
 # 每 30 秒内最多请求 20 次改单撤单接口，且连续两次请求的间隔不可小于 0.04 秒
@@ -1046,6 +1044,7 @@ def start():
         quote_ctx.set_handler(OrderBookTest())
     position_list_query()
     order_list_query()
+    # get_stock_code('熊')
     if CHECK_GOLDEN_LINE:
         check_golden_line()
 
