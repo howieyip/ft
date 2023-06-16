@@ -75,7 +75,7 @@ glb = {
     'price_list': [],
     'cur_price': 0,
     'last_price': 0,
-    'last_buy_price': 0,
+    'last_buy_price': {},
     'adjust_ticker_list': [],
     'adjust_price_list': [],
     'submitted_buy_bull': None,
@@ -271,7 +271,7 @@ class TradeOrderTest(ft.TradeOrderHandlerBase):
         if data.order_status == ft.OrderStatus.FILLED_ALL:
             if data.trd_side == ft.TrdSide.BUY:
                 log.info('订单状态推送：订单买入全部成交')
-                glb['last_buy_price'] = data.price
+                glb['last_buy_price'][data.code] = data.price
                 reset_submitted_buy(data.code, data.stock_name)
                 set_has(data.code, data.stock_name)
                 if AUTO_PLACE_ORDER:
@@ -638,7 +638,7 @@ def _get_stock_code(stock_type='all', cache_first=False):
         # data = data[data.cur_price == min(data.cur_price)]
         if len(data) > 0:
             data = data.iloc[0]
-            if data.ask_price == 0 or data.ask_price - data.bid_price > 0.002:
+            if data.ask_price == 0 or data.ask_price - data.bid_price > 0.003:
                 log.info('买卖价差太大，暂不买入')
             else:
                 cache['data'] = data
@@ -673,9 +673,8 @@ def to_buy(stock_type, volume):
             if not ALLOW_ADD:
                 log.info('配置不允许补仓')
                 return False
-            # 可能存在买入多个熊证，所以要用当前持仓的成本价来max一下
-            last_buy_price = max(glb['last_buy_price'], data0.cost_price)
-            if data0.nominal_price >  last_buy_price - ADD_PRICE_DIFF:
+            last_buy_price = glb['last_buy_price'][data0.code]
+            if data0.nominal_price > last_buy_price - ADD_PRICE_DIFF:
                 log.info('持仓股票%s的现价%s没有比上次买入的订单价格%s低于等于%s元，不允许补仓' % (data0.code, data0.nominal_price, last_buy_price, ADD_PRICE_DIFF))
                 # if stock_type == '牛':
                 #     glb['pre_buy_bull_flag'] = False
@@ -738,8 +737,9 @@ def _order_list_query(code=''):
     last_buy_data = data[(data.trd_side == 'BUY') & (data.order_status == 'FILLED_ALL')]
     last_buy_data = last_buy_data[last_buy_data.create_time == last_buy_data.create_time.max()]
     if not last_buy_data.empty:
-        glb['last_buy_price'] = last_buy_data.iloc[-1].price
-        log.info('上次买入的订单价格为%s' % glb['last_buy_price'])
+        last_data = last_buy_data.iloc[-1]
+        glb['last_buy_price'][last_data.code] = last_data.price
+        log.info('上次买入股票%s的订单价格为%s' % (last_data.code, glb['last_buy_price'][last_data.code]))
     else:
         log.info('还没有已成交的买单')
     data = data[(data.order_status == 'SUBMITTED') | (data.order_status == 'FILLED_PART')]
