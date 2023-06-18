@@ -8,7 +8,7 @@
       "name": "Python: 当前文件",
       "type": "python",
       "request": "launch",
-      "program": "${file}",
+      "program": "futu/examples/fight.py",
       "console": "integratedTerminal",
       "justMyCode": true,
       "env": { "PYTHONPATH": "${workspaceRoot}" }
