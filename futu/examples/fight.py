@@ -28,10 +28,10 @@ ADJUST_BUY_DICT = {
     'fall': [2, 3, 2]                               # 最近多少秒内，往持仓股票反向波动多少点，调整买单为第几档
 }
 
-AUTO_ADJUST_SELL = False                            # 是否自动调整挂的卖单的价格，若是则下面的ADJUST_SELL_DICT有效
+AUTO_ADJUST_SELL = True                             # 是否自动调整挂的卖单的价格，若是则下面的ADJUST_SELL_DICT有效
 ADJUST_SELL_DICT = {
     'rise': [2, 3, 2],                              # 最近多少秒内，往持仓股票方向波动多少点，调整卖单为第几档
-    'fall': [2, 8, 1]                               # 最近多少秒内，往持仓股票反向波动多少点，调整卖单为第几档
+    'fall': [2, 3, 1]                               # 最近多少秒内，往持仓股票反向波动多少点，调整卖单为第几档
 }
 
 AUTO_BUY = True                                     # 是否自动买入，若是则下面的配置有效
@@ -68,6 +68,7 @@ glb = {
     'today_pl_val': 0,
     'trade_date': None,
     'restarted': False,
+    'soon_over': False,
     'almost_over': False,
     'to_over': False,
     'over': False,
@@ -274,7 +275,7 @@ class TradeOrderTest(ft.TradeOrderHandlerBase):
                 glb['last_buy_price'][data.code] = data.price
                 reset_submitted_buy(data.code, data.stock_name)
                 set_has(data.code, data.stock_name)
-                if AUTO_PLACE_ORDER:
+                if AUTO_PLACE_ORDER and data.stock_name.find('熊') > -1 and not glb['to_over']:
                     auto_place_order(data.code, data.dealt_qty, data.price)
             elif data.trd_side == ft.TrdSide.SELL:
                 log.info('订单状态推送：订单卖出全部成交')
@@ -284,8 +285,6 @@ class TradeOrderTest(ft.TradeOrderHandlerBase):
             if data.trd_side == ft.TrdSide.BUY:
                 log.info('订单状态推送：订单买入部分成交')
                 set_has(data.code, data.stock_name)
-                # if AUTO_PLACE_ORDER:
-                #     auto_place_order(data.code, data.dealt_qty, data.price)
             elif data.trd_side == ft.TrdSide.SELL:
                 log.info('订单状态推送：订单卖出部分成交')
         elif data.order_status == ft.OrderStatus.SUBMIT_FAILED or data.order_status == ft.OrderStatus.FAILED:
@@ -347,22 +346,25 @@ class TickerTest(ft.TickerHandlerBase):
             # elif h == 9 and m == 16:
             #     glb['restarted'] = False
             if h == 16 and m == 0:
+                glb['soon_over'] = False
                 glb['almost_over'] = False
                 glb['to_over'] = False
                 glb['over'] = False
             return ret, data
-        if (glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15) and m >= 55:
-            # log.info(data)
-            if not glb['almost_over']:
-                glb['almost_over'] = True
-                cancel_all()
-                position_list_query()
-            if m >= 59:
-                glb['to_over'] = True
-                if not glb['over']:
-                    sell_all('熊')
-                log.info('--------------------end--------------------')
-            return ret, data
+        if (glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15) and m >= 30:
+            glb['soon_over'] = True
+            if m >= 55:
+                # log.info(data)
+                if not glb['almost_over']:
+                    glb['almost_over'] = True
+                    cancel_all()
+                    position_list_query()
+                if m >= 59:
+                    glb['to_over'] = True
+                    if not glb['over']:
+                        sell_all('熊')
+                        log.info('--------------------end--------------------')
+                return ret, data
 
         if glb['to_over']:
             return ret, data
@@ -373,24 +375,20 @@ class TickerTest(ft.TickerHandlerBase):
             glb['last_price'] = glb['cur_price']
             position_list_query(logging=False)
 
-        # if AUTO_SELL_WHEN_DROP_PRICE:
-        #     auto_sell(glb['cur_price'])
-
-        # 尾盘30分钟不要买入了
-        if (glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15) and m >= 30:
-            return ret, data
-
+        # 自动买入和自动调价
         if AUTO_BUY or AUTO_ADJUST_BUY or AUTO_ADJUST_SELL:
             data_list = data.values.tolist()
             for i in range(0, len(data_list)):
-                if AUTO_BUY:
+                if AUTO_BUY and not glb['soon_over']:
                     glb['ticker_list'].append(data_list[i])
                     glb['price_list'].append(data_list[i][2])
                 if AUTO_ADJUST_BUY or AUTO_ADJUST_SELL:
                     glb['adjust_ticker_list'].append(data_list[i])
                     glb['adjust_price_list'].append(data_list[i][2])
-            if AUTO_BUY:
+            # 尾盘就不买了
+            if AUTO_BUY and not glb['soon_over']:
                 pre_buy()
+            # 自动调价
             if AUTO_ADJUST_BUY or AUTO_ADJUST_SELL:
                 pre_adjust()
 
@@ -429,7 +427,8 @@ def pre_adjust():
     if AUTO_ADJUST_BUY:
         auto_adjust(delta_price, i, ADJUST_BUY_DICT, 'submitted_buy_bear')
         auto_adjust(delta_price, i, ADJUST_BUY_DICT, 'submitted_buy_bull')
-    if AUTO_ADJUST_SELL:
+    # 快收盘清仓的时候才自动调价卖出
+    if AUTO_ADJUST_SELL and glb['almost_over']:
         auto_adjust(delta_price, i, ADJUST_SELL_DICT, 'submitted_sell_bear')
         auto_adjust(delta_price, i, ADJUST_SELL_DICT, 'submitted_sell_bull')
 
@@ -490,7 +489,8 @@ def auto_adjust(delta_price, i, adjust_dict, submitted_type):
     elif submitted_type.find('bear') > -1:
         rise_condition = delta_price <= -adjust_dict['rise'][1] and glb['adjust_ticker_list'][-1][2] <= min(glb['adjust_price_list'])
         fall_condition = delta_price >= adjust_dict['fall'][1] and glb['adjust_ticker_list'][-1][2] >= max(glb['adjust_price_list'])
-    if rise_condition:
+    # 要买入的时候才考虑升档，要卖出的时候只考虑降档
+    if rise_condition and submitted_type.find('buy') > -1:
         delta_seconds = datestr_to_timestamp(glb['adjust_ticker_list'][-1][1]) - datestr_to_timestamp(glb['adjust_ticker_list'][i][1])
         if delta_seconds <= adjust_dict['rise'][0] and data.price < rise_price:
             log.info('订单价为%s，调整价为%s，准备升档' % (data.price, rise_price))
@@ -950,15 +950,14 @@ def _position_list_query(stock_type='', logging=True):
         for i in range(0, len(data)):
             data2 = data.iloc[i]
             set_has(data2.code, data2.stock_name)
-            if data2.qty == data2.can_sell_qty and data2.stock_name.find('熊') > -1:
+            if data2.qty == data2.can_sell_qty:
                 reset_submitted_buy(data2.code, data2.stock_name)
-                if AUTO_PLACE_ORDER:
-                    if not glb['to_over']:
-                        log.info('%s\n存在买入的股票没自动挂卖单，现在重新自动挂卖单' % data2)
-                        if glb['almost_over']:
-                            auto_place_order(data2.code, data2.qty, data2.nominal_price, True)
-                        else:
-                            auto_place_order(data2.code, data2.qty, max(data2.nominal_price, data2.cost_price))
+                if AUTO_PLACE_ORDER and data2.stock_name.find('熊') > -1 and not glb['to_over']:
+                    log.info('%s\n存在买入的股票没自动挂卖单，现在重新自动挂卖单' % data2)
+                    if glb['almost_over']:
+                        auto_place_order(data2.code, data2.qty, data2.nominal_price, True)
+                    else:
+                        auto_place_order(data2.code, data2.qty, max(data2.nominal_price, data2.cost_price))
         bull_data = data[data.stock_name.str.contains('牛')]
         bear_data = data[data.stock_name.str.contains('熊')]
         if len(bull_data) == 0:
