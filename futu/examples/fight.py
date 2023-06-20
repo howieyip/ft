@@ -617,10 +617,10 @@ def _get_stock_code(stock_type='all', cache_first=False):
         req.type_list = [ft.WrtType.BULL]  # Qot_Common.WarrantType, 窝轮类型过滤列表 WrtType
     elif stock_type == '熊':
         req.type_list = [ft.WrtType.BEAR]  # Qot_Common.WarrantType, 窝轮类型过滤列表 WrtType
-    req.issuer_list = [ft.Issuer.JP]  # Qot_Common.Issuer, 发行人过滤列表
+    # req.issuer_list = [ft.Issuer.JP]  # Qot_Common.Issuer, 发行人过滤列表
     req.status = ft.WarrantStatus.NORMAL  # Qot_Common.WarrantStatus, 窝轮状态
     req.cur_price_min = 0.04  # 最新价过滤起点
-    req.cur_price_max = 0.07  # 最新价过滤终点
+    req.cur_price_max = 0.09  # 最新价过滤终点
     req.conversion_min = 10000  # 换股比率过滤起点
     req.conversion_max = 10000  # 换股比率过滤终点
     req.sort_field = ft.SortField.VOLUME  # 根据哪个字段排序
@@ -976,6 +976,7 @@ def _position_list_query(stock_type='', logging=True):
         reset_has(real=True)
         if glb['almost_over']:
             glb['over'] = True
+            log.info('--------------------end--------------------')
         return []
 
 
