@@ -2,6 +2,7 @@
 # import os
 import time
 import datetime
+import math
 import futu as ft
 from futu.examples.logger import Logger
 import pandas as pd
@@ -41,7 +42,8 @@ CHECK_GOLDEN_LINE = False                           # 是否检查黄金分割�
 BUY_LIST = [[60, 15, 200*1000]]                     # 固定多少秒，波动多少点，下单多少股
 MAX_VOLUME = 600*1000                               # 最大持仓股数，若超过则不会再买入
 ALLOW_ADD = True                                    # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
-ADD_PRICE_DIFF = 0.003                              # 现价低于等于成本价多少元才允许补仓
+ADD_PRICE_DIFF = 0.003                              # 持仓股票的现价与上次买入价或成本价的价差大于等于多少元，才允许补仓
+BID_ASK_DIFF = 0.002                                # 买一价和卖一价的价差小于等于多少元，才允许买入
 
 if TRADE_ENV == ft.TrdEnv.SIMULATE:
     AUTO_BUY = True                                 # 模拟盘强制开启自动买入
@@ -639,10 +641,12 @@ def _get_stock_code(stock_type='all', cache_first=False):
         # data = data[data.cur_price == min(data.cur_price)]
         if len(data) > 0:
             data = data.iloc[0]
-            if data.ask_price == 0 or data.ask_price - data.bid_price > 0.003:
-                log.info('买卖价差太大，暂不买入')
-            else:
+            bid_ask_diff = data.ask_price - data.bid_price
+            if data.ask_price != 0 and (bid_ask_diff < BID_ASK_DIFF or math.isclose(bid_ask_diff, BID_ASK_DIFF)):
+                log.info('买一价%s和卖一价%s的价差%s小于等于%s元，允许买入' % (data.bid_price, data.ask_price, bid_ask_diff, BID_ASK_DIFF))
                 cache['data'] = data
+            else:
+                log.info('买一价%s和卖一价%s的价差%s大于%s元，不允许买入' % (data.bid_price, data.ask_price, bid_ask_diff, BID_ASK_DIFF))
         else:
             log.info('挑选失败，没有符合条件的')
     cache['last_time'] = time.time()
@@ -675,14 +679,15 @@ def to_buy(stock_type, volume):
                 log.info('配置不允许补仓')
                 return False
             last_buy_price = max(glb['last_buy_price'][data0.code], data0.cost_price)
-            if data0.nominal_price > last_buy_price - ADD_PRICE_DIFF:
-                log.info('持仓股票%s的现价%s没有比上次买入价或成本价%s低于等于%s元，不允许补仓' % (data0.code, data0.nominal_price, last_buy_price, ADD_PRICE_DIFF))
+            add_price_diff = last_buy_price - data0.nominal_price
+            if add_price_diff < ADD_PRICE_DIFF and not math.isclose(add_price_diff, ADD_PRICE_DIFF):
+                log.info('持仓股票%s的现价%s与上次买入价或成本价%s的价差%s小于%s元，不允许补仓' % (data0.code, data0.nominal_price, last_buy_price, add_price_diff, ADD_PRICE_DIFF))
                 # if stock_type == '牛':
                 #     glb['pre_buy_bull_flag'] = False
                 # elif stock_type == '熊':
                 #     glb['pre_buy_bear_flag'] = False
                 return False
-            log.info('持仓股票%s的现价%s比上次买入价或成本价%s低于等于%s元，准备补仓' % (data0.code, data0.nominal_price, last_buy_price, ADD_PRICE_DIFF))
+            log.info('持仓股票%s的现价%s与上次买入价或成本价%s的价差%s大于等于%s元，允许补仓' % (data0.code, data0.nominal_price, last_buy_price, add_price_diff, ADD_PRICE_DIFF))
 
     if code == 'auto':
         data = get_stock_code(stock_type=stock_type)
