@@ -341,17 +341,19 @@ class TickerTest(ft.TickerHandlerBase):
         s = int(t[17:19])
         if h < 9 or h == 9 and m < 30 or h >= 16:
             # print(data)
-            # if h == 9 and m == 15 and not glb['restarted']:
-            #     log.info('准备开盘，需要重启程序获取参考股票')
-            #     glb['restarted'] = True
-            #     start()
-            # elif h == 9 and m == 16:
-            #     glb['restarted'] = False
-            if h == 16 and m == 0:
+            if h == 9 and m == 15 and not glb['restarted']:
+                log.info('准备开盘，需要重启程序获取交易日')
+                glb['restarted'] = True
+                start()
+            elif h == 9 and m == 30 and glb['restarted']:
+                log.info('--------------------开盘--------------------')
+                glb['restarted'] = False
+            if h == 16 and m == 0 and glb['soon_over']:
                 glb['soon_over'] = False
                 glb['almost_over'] = False
                 glb['to_over'] = False
                 glb['over'] = False
+                log.info('--------------------收盘--------------------')
             return ret, data
         if (glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15) and m >= 30:
             glb['soon_over'] = True
@@ -1005,14 +1007,14 @@ def start():
     global log, quote_ctx, trade_ctx
     log = Logger('futu/examples/logs/' + timestamp_to_datestr(time.time(), '%Y-%m-%d.log')).get_logger()
     log.info('--------------------start--------------------')
-    temp_quote_ctx = None
-    temp_trade_ctx = None
     if quote_ctx is not None:
-        log.info('开始重启程序')
-        temp_quote_ctx = quote_ctx
-        temp_trade_ctx = trade_ctx
+        log.info('关闭上次运行的程序')
+        quote_ctx.close()
+        trade_ctx.close()
+        time.sleep(5)
+        log.info('开始重启新的程序')
     quote_ctx = ft.OpenQuoteContext(host='127.0.0.1', port=11111)
-    trade_ctx = ft.OpenHKTradeContext(host='127.0.0.1', port=11111)
+    trade_ctx = ft.OpenSecTradeContext(filter_trdmarket=ft.TrdMarket.HK, host='127.0.0.1', port=11111)
     today = datetime.date.today()
     if today.month < 12:
         last_day = datetime.date(today.year, today.month + 1, 1) - datetime.timedelta(days=1)
@@ -1059,11 +1061,6 @@ def start():
     if ret != ft.RET_OK:
         log.info('查询订阅数据失败')
     quote_ctx.start()
-    if temp_quote_ctx is not None:
-        temp_quote_ctx.stop()
-        temp_quote_ctx.close()
-        temp_trade_ctx.close()
-        log.info('程序重启成功')
 
 
 if __name__ == "__main__":
