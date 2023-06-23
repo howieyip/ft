@@ -18,8 +18,8 @@ UNLOCK_PASSWORD = '822130'                          # 解锁交易密码，实�
 # DROP_PRICE = 100                                    # 下单后损失多少点自动卖出
 
 AUTO_PLACE_ORDER = True                             # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
-ORDER_LIST = [[400*1000, 100*1000, 1, 2, 3, 4],
-              [200*1000, 50*1000, 1, 2, 3, 4],
+ORDER_LIST = [[400*1000, 200*1000, 2, 3],
+              [200*1000, 100*1000, 2, 3],
               [100*1000, 50*1000, 2, 3]]            # 下单多少股以上（大的写前面），每单挂多少股，一单挂高几格，下一单挂高几格
 
 AUTO_ADJUST_BUY = True                              # 是否自动调整挂的买单的价格，若是则下面的ADJUST_BUY_DICT有效
@@ -41,7 +41,7 @@ CHECK_GOLDEN_LINE = False                           # 是否检查黄金分割�
 BUY_LIST = [[60, 15, 200*1000]]                     # 固定多少秒，波动多少点，下单多少股
 MAX_VOLUME = 600*1000                               # 最大持仓股数，若超过则不会再买入
 ALLOW_ADD = True                                    # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
-ADD_PRICE_DIFF = 0.004                              # 现价低于等于成本价多少元才允许补仓
+ADD_PRICE_DIFF = 0.003                              # 现价低于等于成本价多少元才允许补仓
 
 if TRADE_ENV == ft.TrdEnv.SIMULATE:
     AUTO_BUY = True                                 # 模拟盘强制开启自动买入
@@ -620,9 +620,10 @@ def _get_stock_code(stock_type='all', cache_first=False):
     # req.issuer_list = [ft.Issuer.JP]  # Qot_Common.Issuer, 发行人过滤列表
     req.status = ft.WarrantStatus.NORMAL  # Qot_Common.WarrantStatus, 窝轮状态
     req.cur_price_min = 0.04  # 最新价过滤起点
-    req.cur_price_max = 0.09  # 最新价过滤终点
+    req.cur_price_max = 0.12  # 最新价过滤终点
     req.conversion_min = 10000  # 换股比率过滤起点
     req.conversion_max = 10000  # 换股比率过滤终点
+    req.vol_min = 1000  # 成交量的过滤下限，单位K
     req.sort_field = ft.SortField.VOLUME  # 根据哪个字段排序
     req.ascend = False  # 升序ture, 降序false
     req.begin = 0  # 数据起始点
@@ -634,7 +635,7 @@ def _get_stock_code(stock_type='all', cache_first=False):
         log.info('获取恒指牛熊失败')
     else:
         data = data[0]
-        data = data[data.stock_owner == HSI_CODE]
+        data = data[data.stock_owner == HSI_CODE] # 坑，返回的结果还要再过滤一次
         # data = data[data.cur_price == min(data.cur_price)]
         if len(data) > 0:
             data = data.iloc[0]
@@ -673,15 +674,15 @@ def to_buy(stock_type, volume):
             if not ALLOW_ADD:
                 log.info('配置不允许补仓')
                 return False
-            last_buy_price = glb['last_buy_price'][data0.code]
+            last_buy_price = max(glb['last_buy_price'][data0.code], data0.cost_price)
             if data0.nominal_price > last_buy_price - ADD_PRICE_DIFF:
-                log.info('持仓股票%s的现价%s没有比上次买入的订单价格%s低于等于%s元，不允许补仓' % (data0.code, data0.nominal_price, last_buy_price, ADD_PRICE_DIFF))
+                log.info('持仓股票%s的现价%s没有比上次买入价或成本价%s低于等于%s元，不允许补仓' % (data0.code, data0.nominal_price, last_buy_price, ADD_PRICE_DIFF))
                 # if stock_type == '牛':
                 #     glb['pre_buy_bull_flag'] = False
                 # elif stock_type == '熊':
                 #     glb['pre_buy_bear_flag'] = False
                 return False
-            log.info('持仓股票%s的现价%s比上次买入的订单价格%s低于等于%s元，准备补仓' % (data0.code, data0.nominal_price, last_buy_price, ADD_PRICE_DIFF))
+            log.info('持仓股票%s的现价%s比上次买入价或成本价%s低于等于%s元，准备补仓' % (data0.code, data0.nominal_price, last_buy_price, ADD_PRICE_DIFF))
 
     if code == 'auto':
         data = get_stock_code(stock_type=stock_type)
@@ -953,7 +954,7 @@ def _position_list_query(stock_type='', logging=True):
             if data2.qty == data2.can_sell_qty:
                 reset_submitted_buy(data2.code, data2.stock_name)
                 if AUTO_PLACE_ORDER and data2.stock_name.find('熊') > -1 and not glb['to_over']:
-                    log.info('%s\n存在买入的股票没自动挂卖单，现在重新自动挂卖单' % data2)
+                    log.info('存在买入的股票%s没自动挂卖单，现在重新自动挂卖单，现价%s，成本价%s' % (data2.code, data2.nominal_price, data2.cost_price))
                     if glb['almost_over']:
                         auto_place_order(data2.code, data2.qty, data2.nominal_price, True)
                     else:
