@@ -22,7 +22,7 @@ BULL_CODE = ''                                      # 自动买入牛证的股�
 BEAR_CODE = 'auto'                                  # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
 CHECK_GOLDEN_LINE = False                           # 是否检查黄金分割线
 BUY_LIST = [[60, 15, 100*1000]]                     # 固定多少秒，波动多少点，下单多少股
-MAX_VOLUME = 400*1000                               # 最大持仓股数，若超过则不会再买入
+MAX_VOLUME = 300*1000                               # 最大持仓股数，若超过则不会再买入
 ALLOW_ADD = True                                    # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
 ADD_PRICE_DIFF = 0.003                              # 持仓股票的现价与上次买入价或成本价的价差大于等于多少元，才允许补仓
 BID_ASK_DIFF = 0.002                                # 买一价和卖一价的价差小于等于多少元，才允许买入
@@ -445,6 +445,8 @@ def pre_buy():
     while datestr_to_timestamp(glb['ticker_list'][-1][1]) - datestr_to_timestamp(glb['ticker_list'][0][1]) > MAX_DELTA_SECONDS:
         glb['ticker_list'].pop(0)
         glb['price_list'].pop(0)
+    if glb['ticker_list'][-1][1][-2:] != '00':
+        return False
     pre_buy_flag = False
     for j in range(0, len(BUY_LIST)):
         i = 0
@@ -1019,11 +1021,11 @@ def start():
     global log, quote_ctx, trade_ctx
     log = Logger('futu/examples/logs/' + timestamp_to_datestr(time.time(), '%Y-%m-%d.log')).get_logger()
     log.info('--------------------start--------------------')
+    temp_quote_ctx = None
+    temp_trade_ctx = None
     if quote_ctx is not None:
-        log.info('关闭上次运行的程序')
-        quote_ctx.close()
-        trade_ctx.close()
-        time.sleep(5)
+        temp_quote_ctx = quote_ctx
+        temp_trade_ctx = trade_ctx
         log.info('开始重启新的程序')
     quote_ctx = ft.OpenQuoteContext(host='127.0.0.1', port=11111)
     trade_ctx = ft.OpenSecTradeContext(filter_trdmarket=ft.TrdMarket.HK, host='127.0.0.1', port=11111)
@@ -1040,7 +1042,6 @@ def start():
         return False
     if len(data) == 0 or data[0]['time'] != today.strftime('%Y-%m-%d'):
         log.info('今天不是交易日')
-        return False
     glb['trade_date'] = data[0]
     if TRADE_ENV == ft.TrdEnv.REAL:
         ret, data = trade_ctx.unlock_trade(password_md5=PASSWORD_MD5, password=PASSWORD)
@@ -1073,6 +1074,10 @@ def start():
     if ret != ft.RET_OK:
         log.info('查询订阅数据失败')
     quote_ctx.start()
+    if temp_quote_ctx is not None:
+        temp_quote_ctx.close()
+        temp_trade_ctx.close()
+        log.info('程序重启成功')
 
 
 if __name__ == "__main__":
