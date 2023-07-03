@@ -114,6 +114,16 @@ glb = {
 }
 
 
+# 重置变量
+def resetVarible():
+    glb['soon_over'] = False
+    glb['almost_over'] = False
+    glb['to_over'] = False
+    glb['over'] = False
+    glb['pre_buy_bull_flag'] = True
+    glb['pre_buy_bear_flag'] = True
+
+
 # 节流函数
 def throttle(fn, wait):
     last_call_time = None
@@ -351,10 +361,7 @@ class TickerTest(ft.TickerHandlerBase):
                 log.info('--------------------开盘--------------------')
                 glb['restarted'] = False
             if h == 16 and m == 0 and glb['soon_over']:
-                glb['soon_over'] = False
-                glb['almost_over'] = False
-                glb['to_over'] = False
-                glb['over'] = False
+                resetVarible()
                 log.info('--------------------收盘--------------------')
             return ret, data
         if (glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15) and m >= 30:
@@ -445,14 +452,14 @@ def pre_buy():
     while datestr_to_timestamp(glb['ticker_list'][-1][1]) - datestr_to_timestamp(glb['ticker_list'][0][1]) > MAX_DELTA_SECONDS:
         glb['ticker_list'].pop(0)
         glb['price_list'].pop(0)
-    if glb['ticker_list'][-1][1][-2:] != '00':
-        return False
+    # if glb['ticker_list'][-1][1][-2:] != '00':
+    #     return False
     pre_buy_flag = False
     for j in range(0, len(BUY_LIST)):
         i = 0
         delta_price = glb['ticker_list'][-1][2] - glb['ticker_list'][i][2]
-        # 60秒内上涨点数比预设点数还要大
-        if delta_price >= BUY_LIST[j][1]:
+        # 60秒内上涨点数比预设点数还要大，且最后的价格是最高的价格
+        if delta_price >= BUY_LIST[j][1] and glb['ticker_list'][-1][2] >= max(glb['price_list']):
             delta_seconds = datestr_to_timestamp(glb['ticker_list'][-1][1]) - datestr_to_timestamp(glb['ticker_list'][i][1])
             if delta_seconds <= BUY_LIST[j][0] and len(BUY_LIST[j]) == 3:
                 pre_buy_flag = True
@@ -460,8 +467,8 @@ def pre_buy():
                     BUY_LIST[j].extend(['牛', i, delta_seconds, delta_price])
                 else:
                     BUY_LIST[j].extend(['熊', i, delta_seconds, delta_price])
-        # 60秒内下跌点数比预设点数还要小
-        elif delta_price <= -BUY_LIST[j][1]:
+        # 60秒内下跌点数比预设点数还要小，且最后的价格是最低的价格
+        elif delta_price <= -BUY_LIST[j][1] and glb['ticker_list'][-1][2] <= min(glb['price_list']):
             delta_seconds = datestr_to_timestamp(glb['ticker_list'][-1][1]) - datestr_to_timestamp(glb['ticker_list'][i][1])
             if delta_seconds <= BUY_LIST[j][0] and len(BUY_LIST[j]) == 3:
                 pre_buy_flag = True
