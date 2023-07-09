@@ -15,14 +15,16 @@ pd.set_option('display.max_columns', 1000)
 TRADE_ENV = ft.TrdEnv.REAL                          # 实盘交易：REAL，模拟交易：SIMULATE
 PASSWORD_MD5 = 'd7866f93b87fc9c1b0a06a6a6669bada'   # 优先使用 PASSWORD_MD5 解锁
 PASSWORD = ''                                       # 如果PASSWORD_MD5为空，则使用 PASSWORD 解锁
+HOST = '127.0.0.1'
+PORT = 11112
 
 AUTO_BUY = True                                     # 是否自动买入，若是则下面的配置有效
-FOLLOW_TREND = False                                 # 买入策略是否为顺势买入，逆势则为False
+BUY_LIST = [[60, 15, 200*1000]]                     # 固定多少秒，波动多少点，下单多少股
+MAX_VOLUME = 600*1000                               # 最大持仓股数，若超过则不会再买入
+FOLLOW_TREND = False                                # 买入策略是否为顺势买入，逆势则为False
 BULL_CODE = ''                                      # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
 BEAR_CODE = 'auto'                                  # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
 CHECK_GOLDEN_LINE = False                           # 是否检查黄金分割线
-BUY_LIST = [[60, 15, 100*1000]]                     # 固定多少秒，波动多少点，下单多少股
-MAX_VOLUME = 300*1000                               # 最大持仓股数，若超过则不会再买入
 ALLOW_ADD = True                                    # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
 ADD_PRICE_DIFF = 0.003                              # 持仓股票的现价与上次买入价或成本价的价差大于等于多少元，才允许补仓
 BID_ASK_DIFF = 0.002                                # 买一价和卖一价的价差小于等于多少元，才允许买入
@@ -112,16 +114,6 @@ glb = {
         }
     }
 }
-
-
-# 重置变量
-def resetVarible():
-    glb['soon_over'] = False
-    glb['almost_over'] = False
-    glb['to_over'] = False
-    glb['over'] = False
-    glb['pre_buy_bull_flag'] = True
-    glb['pre_buy_bear_flag'] = True
 
 
 # 节流函数
@@ -364,17 +356,17 @@ class TickerTest(ft.TickerHandlerBase):
         if h < 9 or h == 9 and m < 30 or h >= 16:
             # print(data)
             if h == 9 and m == 15 and not glb['restarted']:
-                log.info('准备开盘，需要重启程序获取交易日')
+                log.info('准备开盘，需要重置数据')
                 glb['restarted'] = True
-                start()
-            elif h == 9 and m == 30 and glb['restarted']:
-                log.info('--------------------开盘--------------------')
-                glb['restarted'] = False
-            if h == 16 and m == 0 and glb['soon_over']:
-                resetVarible()
+                resetData()
+            elif h == 16 and m == 0 and s == 0:
                 log.info('--------------------收盘--------------------')
             return ret, data
-        if (glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15) and m >= 30:
+
+        if h == 9 and m == 30 and glb['restarted']:
+            log.info('--------------------开盘--------------------')
+            glb['restarted'] = False
+        elif (glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15) and m >= 30:
             glb['soon_over'] = True
             if m >= 55:
                 if not glb['almost_over']:
@@ -608,10 +600,10 @@ def _smart_buy(code, volume, price=None):
     ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.BUY, trd_env=TRADE_ENV)
     log.info('下买单，ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
-        log.info('下买单失败')
+        log.info('股票%s下买单失败，价格%s，数量%s' % (code, price, volume))
         return False
     else:
-        log.info('下买单成功')
+        log.info('股票%s下买单成功，价格%s，数量%s' % (code, price, volume))
         return data
 
 
@@ -629,10 +621,10 @@ def _smart_sell(code, volume, price=None):
     ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.SELL, trd_env=TRADE_ENV)
     log.info('下卖单，ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
-        log.info('下卖单失败')
+        log.info('股票%s下卖单失败，价格%s，数量%s' % (code, price, volume))
         return False
     else:
-        log.info('下卖单成功')
+        log.info('股票%s下卖单成功，价格%s，数量%s' % (code, price, volume))
         return data
 
 
@@ -701,8 +693,8 @@ def to_buy(stock_type, volume):
     if len(data) > 0:
         data0 = data.iloc[0]
         total_qty = sum(data.qty)
-        if total_qty >= MAX_VOLUME:
-            log.info('已达最大持仓股数，不允许补仓')
+        if total_qty + volume > MAX_VOLUME:
+            log.info('买入后将会超过最大持仓股数，不允许补仓')
             return False
         elif total_qty > 0:
             if not ALLOW_ADD:
@@ -1043,18 +1035,8 @@ cancel_order = delay_execution(_cancel_order, 0.04) # 撤销订单是遍历的�
 cancel_all = delay_execution(_cancel_all, 0.04) # 撤销全部订单也是遍历的，所以不能节流，只能延时
 
 
-def start():
-    global log, quote_ctx, trade_ctx
-    log = Logger('logs/' + timestamp_to_datestr(time.time(), '%Y-%m-%d.log')).get_logger()
-    log.info('--------------------start--------------------')
-    temp_quote_ctx = None
-    temp_trade_ctx = None
-    if quote_ctx is not None:
-        temp_quote_ctx = quote_ctx
-        temp_trade_ctx = trade_ctx
-        log.info('开始重启新的程序')
-    quote_ctx = ft.OpenQuoteContext(host='127.0.0.1', port=11112)
-    trade_ctx = ft.OpenSecTradeContext(filter_trdmarket=ft.TrdMarket.HK, host='127.0.0.1', port=11112)
+# 获取交易日
+def request_trading_days():
     today = datetime.date.today()
     if today.month < 12:
         last_day = datetime.date(today.year, today.month + 1, 1) - datetime.timedelta(days=1)
@@ -1068,7 +1050,36 @@ def start():
         return False
     if len(data) == 0 or data[0]['time'] != today.strftime('%Y-%m-%d'):
         log.info('今天不是交易日')
+        return False
     glb['trade_date'] = data[0]
+    return glb['trade_date']
+
+
+# 重置数据
+def resetData():
+    global log
+    log = Logger('logs/' + timestamp_to_datestr(time.time(), '%Y-%m-%d.log')).get_logger()
+    log.info('--------------------start--------------------')
+    glb['soon_over'] = False
+    glb['almost_over'] = False
+    glb['to_over'] = False
+    glb['over'] = False
+    glb['pre_buy_bull_flag'] = True
+    glb['pre_buy_bear_flag'] = True
+    request_trading_days()
+
+
+def start():
+    global quote_ctx, trade_ctx
+    temp_quote_ctx = None
+    temp_trade_ctx = None
+    if quote_ctx is not None:
+        temp_quote_ctx = quote_ctx
+        temp_trade_ctx = trade_ctx
+        log.info('开始重启新的程序')
+    quote_ctx = ft.OpenQuoteContext(host=HOST, port=PORT)
+    trade_ctx = ft.OpenSecTradeContext(filter_trdmarket=ft.TrdMarket.HK, host=HOST, port=PORT)
+    resetData()
     if TRADE_ENV == ft.TrdEnv.REAL:
         ret, data = trade_ctx.unlock_trade(password_md5=PASSWORD_MD5, password=PASSWORD)
         log.info('解锁交易，ret: %s, data:%s' % (ret, data))
