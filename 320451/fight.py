@@ -550,13 +550,13 @@ def auto_buy(buy_type, volume):
             to_buy('熊', volume)
 
 
-def auto_place_order(code, volume, price, toSellAll=False):
+def auto_place_order(code, volume, price):
     if glb['auto_place_order_flag']:
         log.info('已经开始自动挂单，不要重复了')
         return False
-    if toSellAll:
+    if glb['almost_over']:
         glb['auto_place_order_flag'] = True
-        data = smart_sell(code, volume, price)
+        data = smart_sell(code, volume)
         if data is False:
             log.info('auto_place_order => smart_sell 自动挂卖单失败')
         glb['auto_place_order_flag'] = False
@@ -583,17 +583,23 @@ def auto_place_order(code, volume, price, toSellAll=False):
     glb['auto_place_order_flag'] = False
 
 
-def _smart_buy(code, volume, price=None):
+def get_order_book(code):
+    ret, data = quote_ctx.get_order_book(code, num=3)
+    log.info('获取摆盘数据，ret: %s, data:%s' % (ret, data))
+    if ret != ft.RET_OK:
+        log.info('获取摆盘数据失败')
+        return False
+    return data
+
+
+def _smart_buy(code, volume, price=None, type='Bid'):
     if price is None:
-        ret, data = quote_ctx.get_order_book(code)
-        log.info('获取摆盘数据，ret: %s, data:%s' % (ret, data))
-        if ret != ft.RET_OK:
-            log.info('获取摆盘数据失败')
+        data = get_order_book(code)
+        if not data:
             return False
         if TRADE_ENV == ft.TrdEnv.SIMULATE:
-            price = data['Ask'][0][0]
-        else:
-            price = data['Bid'][0][0]
+            type = 'Ask'
+        price = data[type][0][0]
     if not price > 0:
         log.info('价格不大于0，下买单失败')
         return False
@@ -607,14 +613,12 @@ def _smart_buy(code, volume, price=None):
         return data
 
 
-def _smart_sell(code, volume, price=None):
+def _smart_sell(code, volume, price=None, type='Ask'):
     if price is None:
-        ret, data = quote_ctx.get_order_book(code)
-        log.info('获取摆盘数据，ret: %s, data:%s' % (ret, data))
-        if ret != ft.RET_OK:
-            log.info('获取摆盘数据失败')
+        data = get_order_book(code)
+        if not data:
             return False
-        price = data['Bid'][0][0]
+        price = data[type][0][0]
     if not price > 0:
         log.info('价格不大于0，下卖单失败')
         return False
@@ -700,7 +704,7 @@ def to_buy(stock_type, volume):
             if not ALLOW_ADD:
                 log.info('配置不允许补仓')
                 return False
-            last_buy_price = max(glb['last_buy_price'][data0.code], data0.cost_price)
+            last_buy_price = glb['last_buy_price'][data0.code] or data0.cost_price
             add_price_diff = last_buy_price - data0.nominal_price
             if add_price_diff < ADD_PRICE_DIFF and not math.isclose(add_price_diff, ADD_PRICE_DIFF):
                 log.info('持仓股票%s的现价%s与上次买入价或成本价%s的价差%s小于%s元，不允许补仓' % (data0.code, data0.nominal_price, last_buy_price, add_price_diff, ADD_PRICE_DIFF))
@@ -805,7 +809,7 @@ def _cancel_all(code='', stock_type='', trd_side=''):
 
 # 清仓指定股票
 def force_sell(code='', qty=''):
-    data = smart_sell(code, qty)
+    data = smart_sell(code, qty, type='Bid')
     if data is False:
         log.info('force_sell => smart_sell 清仓失败')
         return False
@@ -987,10 +991,7 @@ def _position_list_query(stock_type='', logging=True):
                 reset_submitted_buy(data2.code, data2.stock_name)
                 if AUTO_PLACE_ORDER and data2.nominal_price > 0.02 and data2.stock_name.find('熊') > -1 and not glb['to_over']:
                     log.info('存在买入的股票%s没自动挂卖单，现在重新自动挂卖单，现价%s，成本价%s' % (data2.code, data2.nominal_price, data2.cost_price))
-                    if glb['almost_over']:
-                        auto_place_order(data2.code, data2.qty, data2.nominal_price, True)
-                    else:
-                        auto_place_order(data2.code, data2.qty, max(data2.nominal_price, data2.cost_price))
+                    auto_place_order(data2.code, data2.qty, max(data2.nominal_price, data2.cost_price))
             if data2.nominal_price <= 0.02:
                 log.info('存在买入的股票%s快被回收，现在开始自动换股，现价%s，成本价%s' % (data2.code, data2.nominal_price, data2.cost_price))
                 sell_all(code=data2.code, qty=data2.qty)
