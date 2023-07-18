@@ -26,7 +26,7 @@ BULL_CODE = ''                                      # 自动买入牛证的股�
 BEAR_CODE = 'auto'                                  # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
 CHECK_GOLDEN_LINE = False                           # 是否检查黄金分割线
 ALLOW_ADD = True                                    # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
-ADD_PRICE_DIFF = 0.003                              # 持仓股票的现价与上次买入价或成本价的价差大于等于多少元，才允许补仓
+ADD_PRICE_DIFF = 0.003                              # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
 BID_ASK_DIFF = 0.002                                # 买一价和卖一价的价差小于等于多少元，才允许买入
 
 # AUTO_SELL_WHEN_DROP_PRICE = False                   # 是否设置按价格跟踪止损，若是则下面的DROP_PRICE有效
@@ -82,7 +82,7 @@ glb = {
     'price_list': [],
     'cur_price': 0,
     'last_price': 0,
-    'last_buy_price': {},
+    'last_filled_all_order': {},
     'adjust_ticker_list': [],
     'adjust_price_list': [],
     'submitted_buy_bull': None,
@@ -286,9 +286,9 @@ class TradeOrderTest(ft.TradeOrderHandlerBase):
             log.info('该订单状态推送不是当前环境，无需处理')
             return ret, data
         if data.order_status == ft.OrderStatus.FILLED_ALL:
+            glb['last_filled_all_order'][data.code] = {'create_time': data.create_time, 'price': data.price}
             if data.trd_side == ft.TrdSide.BUY:
                 log.info('订单状态推送：订单买入全部成交')
-                glb['last_buy_price'][data.code] = data.price
                 reset_submitted_buy(data.code, data.stock_name)
                 set_has(data.code, data.stock_name)
                 if AUTO_PLACE_ORDER and data.stock_name.find('熊') > -1 and not glb['to_over']:
@@ -679,7 +679,7 @@ def _get_stock_code(stock_type='all', cache_first=False):
     return cache['data']
 
 
-def to_buy(stock_type, volume):
+def to_buy(stock_type, volume, force=False):
     global BULL_CODE, BEAR_CODE
     if volume <= 0:
         return False
@@ -691,29 +691,33 @@ def to_buy(stock_type, volume):
     if code == '':
         return False
 
-    data = position_list_query(stock_type=stock_type)
-    if data is False or data is None:
-        return False
-    if len(data) > 0:
-        data0 = data.iloc[0]
-        total_qty = sum(data.qty)
-        if total_qty + volume > MAX_VOLUME:
-            log.info('买入后将会超过最大持仓股数，不允许补仓')
+    if force is False:
+        data = position_list_query(stock_type=stock_type)
+        if data is False or data is None:
             return False
-        elif total_qty > 0:
-            if not ALLOW_ADD:
-                log.info('配置不允许补仓')
+        if len(data) > 0:
+            data0 = data.iloc[0]
+            total_qty = sum(data.qty)
+            if total_qty + volume > MAX_VOLUME:
+                log.info('买入后将会超过最大持仓股数，不允许补仓')
                 return False
-            last_buy_price = glb['last_buy_price'][data0.code] or data0.cost_price
-            add_price_diff = last_buy_price - data0.nominal_price
-            if add_price_diff < ADD_PRICE_DIFF and not math.isclose(add_price_diff, ADD_PRICE_DIFF):
-                log.info('持仓股票%s的现价%s与上次买入价或成本价%s的价差%s小于%s元，不允许补仓' % (data0.code, data0.nominal_price, last_buy_price, add_price_diff, ADD_PRICE_DIFF))
-                if stock_type == '牛':
-                    glb['pre_buy_bull_flag'] = False
-                elif stock_type == '熊':
-                    glb['pre_buy_bear_flag'] = False
-                return False
-            log.info('持仓股票%s的现价%s与上次买入价或成本价%s的价差%s大于等于%s元，允许补仓' % (data0.code, data0.nominal_price, last_buy_price, add_price_diff, ADD_PRICE_DIFF))
+            elif total_qty > 0:
+                if not ALLOW_ADD:
+                    log.info('配置不允许补仓')
+                    return False
+                reference_price = glb['last_filled_all_order'].get(data0.code, {}).get('price')
+                if not reference_price:
+                    log.info('股票%s的最近一次成交价不存在，\n%s' % (data0.code, glb['last_filled_all_order']))
+                    reference_price = data0.cost_price
+                add_price_diff = reference_price - data0.nominal_price
+                if add_price_diff < ADD_PRICE_DIFF and not math.isclose(add_price_diff, ADD_PRICE_DIFF):
+                    log.info('持仓股票%s的现价%s与最近一次成交价%s的价差%s小于%s元，不允许补仓' % (data0.code, data0.nominal_price, reference_price, add_price_diff, ADD_PRICE_DIFF))
+                    if stock_type == '牛':
+                        glb['pre_buy_bull_flag'] = False
+                    elif stock_type == '熊':
+                        glb['pre_buy_bear_flag'] = False
+                    return False
+                log.info('持仓股票%s的现价%s与最近一次成交价%s的价差%s大于等于%s元，允许补仓' % (data0.code, data0.nominal_price, reference_price, add_price_diff, ADD_PRICE_DIFF))
 
     if code == 'auto':
         data = get_stock_code(stock_type=stock_type)
@@ -756,22 +760,30 @@ def _modify_order(order_id, price, qty):
         return data
 
 
-def _order_list_query(code=''):
-    ret, data = trade_ctx.order_list_query(status_filter_list=[ft.OrderStatus.SUBMITTED, ft.OrderStatus.FILLED_PART, ft.OrderStatus.FILLED_ALL], code=code, trd_env=TRADE_ENV, refresh_cache=True)
+def _order_list_query(code='', status=''):
+    status_filter_list = [ft.OrderStatus.SUBMITTED, ft.OrderStatus.FILLED_PART]
+    if status != '':
+        status_filter_list.append(status)
+    ret, data = trade_ctx.order_list_query(status_filter_list=status_filter_list, code=code, trd_env=TRADE_ENV, refresh_cache=True)
     # log.info('查询订单，ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
         log.info('查询订单失败')
         return False
     log.info('查询订单成功')
-    last_buy_data = data[(data.trd_side == 'BUY') & (data.order_status == 'FILLED_ALL')]
-    last_buy_data = last_buy_data[last_buy_data.create_time == last_buy_data.create_time.max()]
-    if not last_buy_data.empty:
-        last_data = last_buy_data.iloc[-1]
-        glb['last_buy_price'][last_data.code] = last_data.price
-        log.info('上次买入股票%s的订单价格为%s' % (last_data.code, glb['last_buy_price'][last_data.code]))
-    else:
-        log.info('还没有已成交的买单')
-    data = data[(data.order_status == 'SUBMITTED') | (data.order_status == 'FILLED_PART')]
+    if ft.OrderStatus.FILLED_ALL in status_filter_list:
+        filled_all_data = data[data.order_status == ft.OrderStatus.FILLED_ALL]
+        if not filled_all_data.empty:
+            for index, row in filled_all_data.iterrows():
+                code, create_time, price = row.code, row.create_time, row.price
+                if code not in glb['last_filled_all_order']:
+                    glb['last_filled_all_order'][code] = {'create_time': create_time, 'price': price}
+                else:
+                    if create_time > glb['last_filled_all_order'][code].create_time:
+                        glb['last_filled_all_order'][code] = {'create_time': create_time, 'price': price}
+            log.info('所有股票最近一次成交的订单价格为\n%s' % glb['last_filled_all_order'])
+        else:
+            log.info('还没有已全部成交的订单')
+    data = data[(data.order_status == ft.OrderStatus.SUBMITTED) | (data.order_status == ft.OrderStatus.FILLED_PART)]
     for i in range(0, len(data)):
         data2 = data.iloc[i]
         if data2.trd_side == ft.TrdSide.BUY:
@@ -996,7 +1008,7 @@ def _position_list_query(stock_type='', logging=True):
                 log.info('存在买入的股票%s快被回收，现在开始自动换股，现价%s，成本价%s' % (data2.code, data2.nominal_price, data2.cost_price))
                 sell_all(code=data2.code, qty=data2.qty)
                 if data2.stock_name.find('熊') > -1:
-                    to_buy('熊', data2.qty)
+                    to_buy('熊', data2.qty, force=True)
                 # else:
                     # to_buy('牛', data2.qty)
         bull_data = data[data.stock_name.str.contains('牛')]
@@ -1102,7 +1114,7 @@ def start():
     if AUTO_ADJUST_BUY or AUTO_ADJUST_SELL:
         quote_ctx.set_handler(OrderBookTest())
     position_list_query()
-    order_list_query()
+    order_list_query(status=ft.OrderStatus.FILLED_ALL)
     # get_stock_code('熊')
     if CHECK_GOLDEN_LINE:
         check_golden_line()
