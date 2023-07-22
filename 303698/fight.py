@@ -102,6 +102,7 @@ glb = {
     'pre_buy_bear_flag': True,
     'bull_stop_price': 0,
     'bear_stop_price': 0,
+    'force_replacing': False,
     'cache_get_stock_code': {
         '牛': {
             'data': None,
@@ -583,6 +584,7 @@ def _position_list_query(stock_type='', logging=True):
                     auto_place_order(data2.code, data2.qty, max(data2.nominal_price, data2.cost_price))
             if data2.nominal_price <= 0.02:
                 log.info('存在买入的股票%s快被回收，现在开始自动换股，现价%s，成本价%s' % (data2.code, data2.nominal_price, data2.cost_price))
+                glb.force_replacing = True
                 sell_all(code=data2.code, qty=data2.qty)
                 if data2.stock_name.find('熊') > -1:
                     to_buy('熊', data2.qty, force=True)
@@ -658,10 +660,14 @@ def auto_place_order(code, volume, price):
         if volume >= ORDER_LIST[i][0]:
             item = ORDER_LIST[i]
             break
+    if glb.force_replacing:
+        price += 0.02
     for i in range(0, len(item) - 2):
         data = smart_sell(code, item[1], price + 0.001 * item[2 + i])
         if data is False:
             log.info('auto_place_order => smart_sell 自动挂卖单失败')
+        elif glb.force_replacing:
+            glb.force_replacing = False
     glb['auto_place_order_flag'] = False
 
 
