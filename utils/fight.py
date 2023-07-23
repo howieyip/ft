@@ -13,6 +13,7 @@ pd.set_option('display.max_columns', 1000)
 
 # 运行前需检查并改变下面的值
 conf = {
+    'log_file': 'logs/fight',
     'PORT' : 11111,
 
     'BUY_LIST' : [[60, 15, 100*1000]],                  # 固定多少秒，波动多少点，下单多少股
@@ -1110,7 +1111,7 @@ def start(config=None):
     if config is not None:
         set_config(config)
     ft.set_futu_debug_model(False)
-    log = Logger('logs/' + os.path.basename(__file__)[:-3]).get_logger()
+    log = Logger(conf['log_file']).get_logger()
     temp_quote_ctx = None
     temp_trade_ctx = None
     if quote_ctx is not None:
