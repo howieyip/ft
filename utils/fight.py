@@ -63,13 +63,6 @@ if TRADE_ENV == ft.TrdEnv.SIMULATE:
 
 HSI_CODE = 'HK.800000'                              # 恒指代码
 MHI_CODE = 'HK.MHImain'                             # 小恒指代码
-MAX_ADJUST_DELTA_SECONDS = max(conf.ADJUST_BUY_DICT['rise'][0], conf.ADJUST_BUY_DICT['fall'][0], ADJUST_SELL_DICT['rise'][0], ADJUST_SELL_DICT['fall'][0])
-# MAX_ADJUST_DELTA_PRICE = max(conf.ADJUST_BUY_DICT['rise'][1], conf.ADJUST_BUY_DICT['fall'][1], ADJUST_SELL_DICT['rise'][1], ADJUST_SELL_DICT['fall'][1])
-MAX_DELTA_SECONDS = conf.BUY_LIST[-1][0]
-# DELTA_PRICE_LIST = []
-# for x in range(0, len(conf.BUY_LIST)):
-#     DELTA_PRICE_LIST.append(conf.BUY_LIST[x][1])
-# MAX_DELTA_PRICE = max(DELTA_PRICE_LIST)
 
 
 # 全局变量
@@ -787,7 +780,7 @@ def pre_adjust():
     #     'rise': [2, 3, 1],                              # 最近多少秒内，往持仓股票方向波动多少点，调整买单为第几档
     #     'fall': [2, 3, 2]                               # 最近多少秒内，往持仓股票反向波动多少点，调整买单为第几档
     # }
-    while datestr_to_timestamp(glb['adjust_ticker_list'][-1][1]) - datestr_to_timestamp(glb['adjust_ticker_list'][0][1]) > MAX_ADJUST_DELTA_SECONDS:
+    while datestr_to_timestamp(glb['adjust_ticker_list'][-1][1]) - datestr_to_timestamp(glb['adjust_ticker_list'][0][1]) > conf.MAX_ADJUST_DELTA_SECONDS:
         glb['adjust_ticker_list'].pop(0)
         glb['adjust_price_list'].pop(0)
     # i 从逐笔列表的倒数第二项开始，依次递减1，直到0为止，要遍历的前提是预设的多少秒内是不统一的
@@ -943,7 +936,7 @@ def pre_buy():
     #       code              time                 price        volume  turnover    ticker_direction       sequence   type      push_data_type
     # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
     # conf.BUY_LIST = [[60, 15, 200*1000]]
-    while datestr_to_timestamp(glb['ticker_list'][-1][1]) - datestr_to_timestamp(glb['ticker_list'][0][1]) > MAX_DELTA_SECONDS:
+    while datestr_to_timestamp(glb['ticker_list'][-1][1]) - datestr_to_timestamp(glb['ticker_list'][0][1]) > conf.MAX_DELTA_SECONDS:
         glb['ticker_list'].pop(0)
         glb['price_list'].pop(0)
     # if glb['ticker_list'][-1][1][-2:] != '00':
@@ -1103,6 +1096,13 @@ cancel_all = delay_execution(_cancel_all, 0.04) # 撤销全部订单也是遍历
 def set_config(config):
     global conf
     conf.update(config)
+    conf.MAX_ADJUST_DELTA_SECONDS = max(conf.ADJUST_BUY_DICT['rise'][0], conf.ADJUST_BUY_DICT['fall'][0], ADJUST_SELL_DICT['rise'][0], ADJUST_SELL_DICT['fall'][0])
+    # MAX_ADJUST_DELTA_PRICE = max(conf.ADJUST_BUY_DICT['rise'][1], conf.ADJUST_BUY_DICT['fall'][1], ADJUST_SELL_DICT['rise'][1], ADJUST_SELL_DICT['fall'][1])
+    conf.MAX_DELTA_SECONDS = conf.BUY_LIST[-1][0]
+    # DELTA_PRICE_LIST = []
+    # for x in range(0, len(conf.BUY_LIST)):
+    #     DELTA_PRICE_LIST.append(conf.BUY_LIST[x][1])
+    # MAX_DELTA_PRICE = max(DELTA_PRICE_LIST)
 
 
 def start(config=None):
