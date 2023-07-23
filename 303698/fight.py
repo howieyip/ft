@@ -3,7 +3,7 @@ sys.path.append('../ft')
 from utils.fight import start
 
 start({
-    'log_file': '303698/logs/ft',
+    'log_file': '303698/logs/fight.log',
     'PORT' : 11111,
     'BUY_LIST' : [[60, 15, 100*1000]],
     'MAX_VOLUME' : 300*1000,
