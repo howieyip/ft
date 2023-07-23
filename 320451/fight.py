@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/data/release/ft')
+sys.path.append('../ft')
 from utils.fight import start
 
 start({

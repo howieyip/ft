@@ -47,7 +47,7 @@ ORDER_LIST = [[400*1000, 200*1000, 2, 3],
               [200*1000, 100*1000, 2, 3],
               [100*1000, 50*1000, 2, 3]]            # 下单多少股以上（大的写前面），每单挂多少股，一单挂高几格，下一单挂高几格
 
-AUTO_ADJUST_BUY = True                              # 是否自动调整挂的买单的价格，若是则下面的conf.ADJUST_BUY_DICT有效
+AUTO_ADJUST_BUY = True                              # 是否自动调整挂的买单的价格，若是则下面的conf['ADJUST_BUY_DICT']有效
 
 
 AUTO_ADJUST_SELL = True                             # 是否自动调整挂的卖单的价格，若是则下面的ADJUST_SELL_DICT有效
@@ -583,7 +583,7 @@ def _position_list_query(stock_type='', logging=True):
                     auto_place_order(data2.code, data2.qty, max(data2.nominal_price, data2.cost_price))
             if data2.nominal_price <= 0.02:
                 log.info('存在买入的股票%s快被回收，现在开始自动换股，现价%s，成本价%s' % (data2.code, data2.nominal_price, data2.cost_price))
-                glb.force_replacing = True
+                glb['force_replacing'] = True
                 sell_all(code=data2.code, qty=data2.qty)
                 if data2.stock_name.find('熊') > -1:
                     to_buy('熊', data2.qty, force=True)
@@ -659,14 +659,14 @@ def auto_place_order(code, volume, price):
         if volume >= ORDER_LIST[i][0]:
             item = ORDER_LIST[i]
             break
-    if glb.force_replacing:
+    if glb['force_replacing']:
         price += 0.02
     for i in range(0, len(item) - 2):
         data = smart_sell(code, item[1], price + 0.001 * item[2 + i])
         if data is False:
             log.info('auto_place_order => smart_sell 自动挂卖单失败')
-        elif glb.force_replacing:
-            glb.force_replacing = False
+        elif glb['force_replacing']:
+            glb['force_replacing'] = False
     glb['auto_place_order_flag'] = False
 
 
@@ -776,11 +776,11 @@ def auto_adjust(delta_price, i, adjust_dict, submitted_type):
 
 
 def pre_adjust():
-    # conf.ADJUST_BUY_DICT = {
+    # conf['ADJUST_BUY_DICT'] = {
     #     'rise': [2, 3, 1],                              # 最近多少秒内，往持仓股票方向波动多少点，调整买单为第几档
     #     'fall': [2, 3, 2]                               # 最近多少秒内，往持仓股票反向波动多少点，调整买单为第几档
     # }
-    while datestr_to_timestamp(glb['adjust_ticker_list'][-1][1]) - datestr_to_timestamp(glb['adjust_ticker_list'][0][1]) > conf.MAX_ADJUST_DELTA_SECONDS:
+    while datestr_to_timestamp(glb['adjust_ticker_list'][-1][1]) - datestr_to_timestamp(glb['adjust_ticker_list'][0][1]) > conf['MAX_ADJUST_DELTA_SECONDS']:
         glb['adjust_ticker_list'].pop(0)
         glb['adjust_price_list'].pop(0)
     # i 从逐笔列表的倒数第二项开始，依次递减1，直到0为止，要遍历的前提是预设的多少秒内是不统一的
@@ -790,8 +790,8 @@ def pre_adjust():
     # if delta_price > MAX_ADJUST_DELTA_PRICE:
     #     break
     if AUTO_ADJUST_BUY:
-        auto_adjust(delta_price, i, conf.ADJUST_BUY_DICT, 'submitted_buy_bear')
-        auto_adjust(delta_price, i, conf.ADJUST_BUY_DICT, 'submitted_buy_bull')
+        auto_adjust(delta_price, i, conf['ADJUST_BUY_DICT'], 'submitted_buy_bear')
+        auto_adjust(delta_price, i, conf['ADJUST_BUY_DICT'], 'submitted_buy_bull')
     # 快收盘清仓的时候才自动调价卖出
     if AUTO_ADJUST_SELL and glb['almost_over']:
         auto_adjust(delta_price, i, ADJUST_SELL_DICT, 'submitted_sell_bear')
@@ -864,12 +864,12 @@ def to_buy(stock_type, volume, force=False):
         if len(data) > 0:
             data0 = data.iloc[0]
             total_qty = sum(data.qty)
-            if total_qty + volume > conf.MAX_VOLUME:
-                if conf.MAX_VOLUME - total_qty >= 100*1000:
-                    volume = conf.MAX_VOLUME - total_qty
-                    log.info('当前持仓股数%s，买入后将会超过最大持仓股数%s，最多只能买%s' % (total_qty, conf.MAX_VOLUME, volume))
+            if total_qty + volume > conf['MAX_VOLUME']:
+                if conf['MAX_VOLUME'] - total_qty >= 100*1000:
+                    volume = conf['MAX_VOLUME'] - total_qty
+                    log.info('当前持仓股数%s，买入后将会超过最大持仓股数%s，最多只能买%s' % (total_qty, conf['MAX_VOLUME'], volume))
                 else:
-                    log.info('当前持仓股数%s，买入后将会超过最大持仓股数%s，不允许补仓' % (total_qty, conf.MAX_VOLUME))
+                    log.info('当前持仓股数%s，买入后将会超过最大持仓股数%s，不允许补仓' % (total_qty, conf['MAX_VOLUME']))
                     return False
             if total_qty > 0:
                 if not ALLOW_ADD:
@@ -935,44 +935,44 @@ def auto_buy(buy_type, volume):
 def pre_buy():
     #       code              time                 price        volume  turnover    ticker_direction       sequence   type      push_data_type
     # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
-    # conf.BUY_LIST = [[60, 15, 200*1000]]
-    while datestr_to_timestamp(glb['ticker_list'][-1][1]) - datestr_to_timestamp(glb['ticker_list'][0][1]) > conf.MAX_DELTA_SECONDS:
+    # conf['BUY_LIST'] = [[60, 15, 200*1000]]
+    while datestr_to_timestamp(glb['ticker_list'][-1][1]) - datestr_to_timestamp(glb['ticker_list'][0][1]) > conf['MAX_DELTA_SECONDS']:
         glb['ticker_list'].pop(0)
         glb['price_list'].pop(0)
     # if glb['ticker_list'][-1][1][-2:] != '00':
     #     return False
     pre_buy_flag = False
-    for j in range(0, len(conf.BUY_LIST)):
+    for j in range(0, len(conf['BUY_LIST'])):
         i = 0
         delta_price = glb['ticker_list'][-1][2] - glb['ticker_list'][i][2]
         # 60秒内上涨点数比预设点数还要大，且最后的价格是最高的价格
-        if delta_price >= conf.BUY_LIST[j][1] and glb['ticker_list'][-1][2] >= max(glb['price_list']):
+        if delta_price >= conf['BUY_LIST'][j][1] and glb['ticker_list'][-1][2] >= max(glb['price_list']):
             delta_seconds = datestr_to_timestamp(glb['ticker_list'][-1][1]) - datestr_to_timestamp(glb['ticker_list'][i][1])
-            if delta_seconds <= conf.BUY_LIST[j][0] and len(conf.BUY_LIST[j]) == 3:
+            if delta_seconds <= conf['BUY_LIST'][j][0] and len(conf['BUY_LIST'][j]) == 3:
                 pre_buy_flag = True
                 if FOLLOW_TREND:
-                    conf.BUY_LIST[j].extend(['牛', i, delta_seconds, delta_price])
+                    conf['BUY_LIST'][j].extend(['牛', i, delta_seconds, delta_price])
                 else:
-                    conf.BUY_LIST[j].extend(['熊', i, delta_seconds, delta_price])
+                    conf['BUY_LIST'][j].extend(['熊', i, delta_seconds, delta_price])
         # 60秒内下跌点数比预设点数还要小，且最后的价格是最低的价格
-        elif delta_price <= -conf.BUY_LIST[j][1] and glb['ticker_list'][-1][2] <= min(glb['price_list']):
+        elif delta_price <= -conf['BUY_LIST'][j][1] and glb['ticker_list'][-1][2] <= min(glb['price_list']):
             delta_seconds = datestr_to_timestamp(glb['ticker_list'][-1][1]) - datestr_to_timestamp(glb['ticker_list'][i][1])
-            if delta_seconds <= conf.BUY_LIST[j][0] and len(conf.BUY_LIST[j]) == 3:
+            if delta_seconds <= conf['BUY_LIST'][j][0] and len(conf['BUY_LIST'][j]) == 3:
                 pre_buy_flag = True
                 if FOLLOW_TREND:
-                    conf.BUY_LIST[j].extend(['熊', i, delta_seconds, delta_price])
+                    conf['BUY_LIST'][j].extend(['熊', i, delta_seconds, delta_price])
                 else:
-                    conf.BUY_LIST[j].extend(['牛', i, delta_seconds, delta_price])
+                    conf['BUY_LIST'][j].extend(['牛', i, delta_seconds, delta_price])
     if pre_buy_flag:
         # [[60, 15, 200000, '熊', 0, 60, 16.0]]
-        # log.info(conf.BUY_LIST)
-        for j in range(0, len(conf.BUY_LIST)):
-            if len(conf.BUY_LIST[j]) > 3:
-                # log.info(glb['ticker_list'][conf.BUY_LIST[j][4]])
+        # log.info(conf['BUY_LIST'])
+        for j in range(0, len(conf['BUY_LIST'])):
+            if len(conf['BUY_LIST'][j]) > 3:
+                # log.info(glb['ticker_list'][conf['BUY_LIST'][j][4]])
                 # log.info(glb['ticker_list'][-1])
-                # log.info('最近%s秒内波动了%s点' % (conf.BUY_LIST[j][5], conf.BUY_LIST[j][6]))
-                auto_buy(conf.BUY_LIST[j][3], conf.BUY_LIST[j][2])
-                conf.BUY_LIST[j] = conf.BUY_LIST[j][0:3]
+                # log.info('最近%s秒内波动了%s点' % (conf['BUY_LIST'][j][5], conf['BUY_LIST'][j][6]))
+                auto_buy(conf['BUY_LIST'][j][3], conf['BUY_LIST'][j][2])
+                conf['BUY_LIST'][j] = conf['BUY_LIST'][j][0:3]
 
 
 class TickerTest(ft.TickerHandlerBase):
@@ -1096,12 +1096,12 @@ cancel_all = delay_execution(_cancel_all, 0.04) # 撤销全部订单也是遍历
 def set_config(config):
     global conf
     conf.update(config)
-    conf.MAX_ADJUST_DELTA_SECONDS = max(conf.ADJUST_BUY_DICT['rise'][0], conf.ADJUST_BUY_DICT['fall'][0], ADJUST_SELL_DICT['rise'][0], ADJUST_SELL_DICT['fall'][0])
-    # MAX_ADJUST_DELTA_PRICE = max(conf.ADJUST_BUY_DICT['rise'][1], conf.ADJUST_BUY_DICT['fall'][1], ADJUST_SELL_DICT['rise'][1], ADJUST_SELL_DICT['fall'][1])
-    conf.MAX_DELTA_SECONDS = conf.BUY_LIST[-1][0]
+    conf['MAX_ADJUST_DELTA_SECONDS'] = max(conf['ADJUST_BUY_DICT']['rise'][0], conf['ADJUST_BUY_DICT']['fall'][0], ADJUST_SELL_DICT['rise'][0], ADJUST_SELL_DICT['fall'][0])
+    # MAX_ADJUST_DELTA_PRICE = max(conf['ADJUST_BUY_DICT']['rise'][1], conf['ADJUST_BUY_DICT']['fall'][1], ADJUST_SELL_DICT['rise'][1], ADJUST_SELL_DICT['fall'][1])
+    conf['MAX_DELTA_SECONDS'] = conf['BUY_LIST'][-1][0]
     # DELTA_PRICE_LIST = []
-    # for x in range(0, len(conf.BUY_LIST)):
-    #     DELTA_PRICE_LIST.append(conf.BUY_LIST[x][1])
+    # for x in range(0, len(conf['BUY_LIST'])):
+    #     DELTA_PRICE_LIST.append(conf['BUY_LIST'][x][1])
     # MAX_DELTA_PRICE = max(DELTA_PRICE_LIST)
 
 
@@ -1117,8 +1117,8 @@ def start(config=None):
         temp_quote_ctx = quote_ctx
         temp_trade_ctx = trade_ctx
         log.info('开始重启新的程序')
-    quote_ctx = ft.OpenQuoteContext(host=HOST, port=conf.PORT)
-    trade_ctx = ft.OpenSecTradeContext(filter_trdmarket=ft.TrdMarket.HK, host=HOST, port=conf.PORT)
+    quote_ctx = ft.OpenQuoteContext(host=HOST, port=conf['PORT'])
+    trade_ctx = ft.OpenSecTradeContext(filter_trdmarket=ft.TrdMarket.HK, host=HOST, port=conf['PORT'])
     resetData()
     if TRADE_ENV == ft.TrdEnv.REAL:
         ret, data = trade_ctx.unlock_trade(password_md5=PASSWORD_MD5, password=PASSWORD)
