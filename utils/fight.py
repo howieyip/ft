@@ -72,7 +72,8 @@ quote_ctx = None
 trade_ctx = None
 glb = {
     'golden_line': [0, 0],
-    'today_pl_val': 0,
+    'today_pl_val_bull': 0,
+    'today_pl_val_bear': 0,
     'trade_date': None,
     'restarted': False,
     'soon_over': False,
@@ -564,13 +565,17 @@ def _position_list_query(stock_type='', logging=True):
     data = data[(data.today_buy_qty > 0) & data.stock_name.str.contains('恒指')]
 
     # 统计今日盈亏
-    glb['today_pl_val'] = 0
+    glb['today_pl_val_bull'] = 0
+    glb['today_pl_val_bear'] = 0
     for i in range(0, len(data)):
         data2 = data.iloc[i]
-        glb['today_pl_val'] += data2.today_pl_val
+        if data2.stock_name.find('牛') > -1:
+            glb['today_pl_val_bull'] += data2.today_pl_val
+        elif data2.stock_name.find('熊') > -1:
+            glb['today_pl_val_bear'] += data2.today_pl_val
         if data2.qty > 0 and data2.qty != data2.today_buy_qty - data2.today_sell_qty and data2.today_buy_qty > data2.today_sell_qty:
             log.info('持仓股数有问题，ret: %s, data:\n%s' % (ret, data))
-    log.info('当前股价：%s，今日短炒盈亏：%s元' % (glb['cur_price'], glb['today_pl_val']))
+    log.info('当前股价：%s，今日盈亏：牛%s元，熊%s元' % (glb['cur_price'], glb['today_pl_val_bull'], glb['today_pl_val_bear']))
 
     data = data[data.qty > 0]
     if len(data) > 0:
@@ -690,6 +695,7 @@ class TradeOrderTest(ft.TradeOrderHandlerBase):
                 reset_submitted_buy(data.code, data.stock_name)
                 set_has(data.code, data.stock_name)
                 if AUTO_PLACE_ORDER and data.stock_name.find('熊') > -1 and not glb['to_over']:
+                    time.sleep(2)
                     auto_place_order(data.code, data.dealt_qty, data.price)
             elif data.trd_side == ft.TrdSide.SELL:
                 log.info('订单状态推送：订单卖出全部成交')
