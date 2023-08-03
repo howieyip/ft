@@ -873,7 +873,7 @@ def to_buy(stock_type, volume, force=False):
             total_qty = sum(data.qty)
             if total_qty + volume > conf['MAX_VOLUME']:
                 if conf['MAX_VOLUME'] - total_qty >= 100*1000:
-                    volume = conf['MAX_VOLUME'] - total_qty
+                    volume = math.floor((conf['MAX_VOLUME'] - total_qty) / 100*1000) * 100*1000
                     log.info('当前持仓股数%s，买入后将会超过最大持仓股数%s，最多只能买%s' % (total_qty, conf['MAX_VOLUME'], volume))
                 else:
                     log.info('当前持仓股数%s，买入后将会超过最大持仓股数%s，不允许补仓' % (total_qty, conf['MAX_VOLUME']))
