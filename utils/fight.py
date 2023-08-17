@@ -798,11 +798,11 @@ def pre_adjust():
     #     break
     if AUTO_ADJUST_BUY:
         auto_adjust(delta_price, i, conf['ADJUST_BUY_DICT'], 'submitted_buy_bear')
-        auto_adjust(delta_price, i, conf['ADJUST_BUY_DICT'], 'submitted_buy_bull')
+        # auto_adjust(delta_price, i, conf['ADJUST_BUY_DICT'], 'submitted_buy_bull')
     # 快收盘清仓的时候才自动调价卖出
     if AUTO_ADJUST_SELL and glb['almost_over']:
         auto_adjust(delta_price, i, ADJUST_SELL_DICT, 'submitted_sell_bear')
-        auto_adjust(delta_price, i, ADJUST_SELL_DICT, 'submitted_sell_bull')
+        # auto_adjust(delta_price, i, ADJUST_SELL_DICT, 'submitted_sell_bull')
 
 
 def _get_stock_code(stock_type='all', cache_first=False):
