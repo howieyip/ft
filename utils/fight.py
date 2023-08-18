@@ -764,20 +764,20 @@ def auto_adjust(delta_price, i, adjust_dict, submitted_type):
     rise_condition = False
     fall_condition = False
     if submitted_type.find('bull') > -1:
-        rise_condition = delta_price >= adjust_dict['rise'][1] and glb['adjust_ticker_list'][-1][2] >= max(glb['adjust_price_list'])
-        fall_condition = delta_price <= -adjust_dict['fall'][1] and glb['adjust_ticker_list'][-1][2] <= min(glb['adjust_price_list'])
+        rise_condition = delta_price >= adjust_dict['rise'][1] and glb['adjust_ticker_list'][-1][3] >= max(glb['adjust_price_list'])
+        fall_condition = delta_price <= -adjust_dict['fall'][1] and glb['adjust_ticker_list'][-1][3] <= min(glb['adjust_price_list'])
     elif submitted_type.find('bear') > -1:
-        rise_condition = delta_price <= -adjust_dict['rise'][1] and glb['adjust_ticker_list'][-1][2] <= min(glb['adjust_price_list'])
-        fall_condition = delta_price >= adjust_dict['fall'][1] and glb['adjust_ticker_list'][-1][2] >= max(glb['adjust_price_list'])
+        rise_condition = delta_price <= -adjust_dict['rise'][1] and glb['adjust_ticker_list'][-1][3] <= min(glb['adjust_price_list'])
+        fall_condition = delta_price >= adjust_dict['fall'][1] and glb['adjust_ticker_list'][-1][3] >= max(glb['adjust_price_list'])
     # 要买入的时候才考虑升档，要卖出的时候只考虑降档
     if rise_condition and submitted_type.find('buy') > -1:
-        delta_seconds = datestr_to_timestamp(glb['adjust_ticker_list'][-1][1]) - datestr_to_timestamp(glb['adjust_ticker_list'][i][1])
+        delta_seconds = datestr_to_timestamp(glb['adjust_ticker_list'][-1][2]) - datestr_to_timestamp(glb['adjust_ticker_list'][i][2])
         if delta_seconds <= adjust_dict['rise'][0] and data.price < rise_price:
             log.info('订单价为%s，调整价为%s，准备升档' % (data.price, rise_price))
             data.price = rise_price
             modify_order(data.order_id, rise_price, data.qty)
     elif fall_condition:
-        delta_seconds = datestr_to_timestamp(glb['adjust_ticker_list'][-1][1]) - datestr_to_timestamp(glb['adjust_ticker_list'][i][1])
+        delta_seconds = datestr_to_timestamp(glb['adjust_ticker_list'][-1][2]) - datestr_to_timestamp(glb['adjust_ticker_list'][i][2])
         if delta_seconds <= adjust_dict['fall'][0] and data.price > fall_price:
             log.info('订单价为%s，调整价为%s，准备降档' % (data.price, fall_price))
             data.price = fall_price
@@ -789,13 +789,13 @@ def pre_adjust():
     #     'rise': [2, 3, 1],                              # 最近多少秒内，往持仓股票方向波动多少点，调整买单为第几档
     #     'fall': [2, 3, 2]                               # 最近多少秒内，往持仓股票反向波动多少点，调整买单为第几档
     # }
-    while datestr_to_timestamp(glb['adjust_ticker_list'][-1][1]) - datestr_to_timestamp(glb['adjust_ticker_list'][0][1]) > conf['MAX_ADJUST_DELTA_SECONDS']:
+    while datestr_to_timestamp(glb['adjust_ticker_list'][-1][2]) - datestr_to_timestamp(glb['adjust_ticker_list'][0][2]) > conf['MAX_ADJUST_DELTA_SECONDS']:
         glb['adjust_ticker_list'].pop(0)
         glb['adjust_price_list'].pop(0)
     # i 从逐笔列表的倒数第二项开始，依次递减1，直到0为止，要遍历的前提是预设的多少秒内是不统一的
     # for i in range(len(glb['adjust_ticker_list']) - 2, -1, -1):
     i = 0
-    delta_price = glb['adjust_ticker_list'][-1][2] - glb['adjust_ticker_list'][i][2]
+    delta_price = glb['adjust_ticker_list'][-1][3] - glb['adjust_ticker_list'][i][3]
     # if delta_price > MAX_ADJUST_DELTA_PRICE:
     #     break
     if AUTO_ADJUST_BUY:
