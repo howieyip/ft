@@ -945,7 +945,7 @@ def pre_buy():
     #       code              time                 price        volume  turnover    ticker_direction       sequence   type      push_data_type
     # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
     # conf['BUY_LIST'] = [[60, 15, 200*1000]]
-    while datestr_to_timestamp(glb['ticker_list'][-1][1]) - datestr_to_timestamp(glb['ticker_list'][0][1]) > conf['MAX_DELTA_SECONDS']:
+    while datestr_to_timestamp(glb['ticker_list'][-1][2]) - datestr_to_timestamp(glb['ticker_list'][0][2]) > conf['MAX_DELTA_SECONDS']:
         glb['ticker_list'].pop(0)
         glb['price_list'].pop(0)
     # if glb['ticker_list'][-1][1][-2:] != '00':
@@ -953,10 +953,10 @@ def pre_buy():
     pre_buy_flag = False
     for j in range(0, len(conf['BUY_LIST'])):
         i = 0
-        delta_price = glb['ticker_list'][-1][2] - glb['ticker_list'][i][2]
+        delta_price = glb['ticker_list'][-1][3] - glb['ticker_list'][i][3]
         # 60秒内上涨点数比预设点数还要大，且最后的价格是最高的价格
-        if delta_price >= conf['BUY_LIST'][j][1] and glb['ticker_list'][-1][2] >= max(glb['price_list']):
-            delta_seconds = datestr_to_timestamp(glb['ticker_list'][-1][1]) - datestr_to_timestamp(glb['ticker_list'][i][1])
+        if delta_price >= conf['BUY_LIST'][j][1] and glb['ticker_list'][-1][3] >= max(glb['price_list']):
+            delta_seconds = datestr_to_timestamp(glb['ticker_list'][-1][2]) - datestr_to_timestamp(glb['ticker_list'][i][2])
             if delta_seconds <= conf['BUY_LIST'][j][0] and len(conf['BUY_LIST'][j]) == 3:
                 pre_buy_flag = True
                 if FOLLOW_TREND:
@@ -964,8 +964,8 @@ def pre_buy():
                 else:
                     conf['BUY_LIST'][j].extend(['熊', i, delta_seconds, delta_price])
         # 60秒内下跌点数比预设点数还要小，且最后的价格是最低的价格
-        elif delta_price <= -conf['BUY_LIST'][j][1] and glb['ticker_list'][-1][2] <= min(glb['price_list']):
-            delta_seconds = datestr_to_timestamp(glb['ticker_list'][-1][1]) - datestr_to_timestamp(glb['ticker_list'][i][1])
+        elif delta_price <= -conf['BUY_LIST'][j][1] and glb['ticker_list'][-1][3] <= min(glb['price_list']):
+            delta_seconds = datestr_to_timestamp(glb['ticker_list'][-1][2]) - datestr_to_timestamp(glb['ticker_list'][i][2])
             if delta_seconds <= conf['BUY_LIST'][j][0] and len(conf['BUY_LIST'][j]) == 3:
                 pre_buy_flag = True
                 if FOLLOW_TREND:
@@ -994,7 +994,7 @@ class TickerTest(ft.TickerHandlerBase):
         #       code              time                 price        volume  turnover    ticker_direction       sequence   type      push_data_type
         # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
         data0 = data.iloc[0]
-        # log.info('逐笔明细推送, data:\n%s' % data0)
+        log.info('逐笔明细推送, data:\n%s' % data0)
         t = data0.time
         h = int(t[11:13])
         m = int(t[14:16])
@@ -1041,10 +1041,10 @@ class TickerTest(ft.TickerHandlerBase):
             for i in range(0, len(data_list)):
                 if AUTO_BUY and not glb['soon_over']:
                     glb['ticker_list'].append(data_list[i])
-                    glb['price_list'].append(data_list[i][2])
+                    glb['price_list'].append(data_list[i][3])
                 if AUTO_ADJUST_BUY or AUTO_ADJUST_SELL:
                     glb['adjust_ticker_list'].append(data_list[i])
-                    glb['adjust_price_list'].append(data_list[i][2])
+                    glb['adjust_price_list'].append(data_list[i][3])
             # 尾盘就不买了
             if AUTO_BUY and not glb['soon_over']:
                 pre_buy()
