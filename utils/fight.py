@@ -994,7 +994,7 @@ class TickerTest(ft.TickerHandlerBase):
         #       code              time                 price        volume  turnover    ticker_direction       sequence   type      push_data_type
         # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
         data0 = data.iloc[0]
-        log.info('逐笔明细推送, data:\n%s' % data0)
+        # log.info('逐笔明细推送, data:\n%s' % data0)
         t = data0.time
         h = int(t[11:13])
         m = int(t[14:16])
