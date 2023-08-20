@@ -1101,15 +1101,15 @@ def resetData():
 position_list_query = throttle(_position_list_query, 3)
 # 每 30 秒内最多请求 15 次下单接口，且连续两次请求的间隔不可小于 0.02 秒
 smart_buy = throttle(_smart_buy, 2)
-smart_sell = delay_execution(_smart_sell, 0.02) # 自动挂卖单是遍历的，所以不能节流，只能延时
+smart_sell = delay_execution(_smart_sell, 2) # 自动挂卖单是遍历的，所以不能节流，只能延时
 # 每 30 秒内最多请求 60 次筛选窝轮接口
 get_stock_code = throttle(_get_stock_code, 0.5)
 # 每 30 秒内最多请求 10 次查询今日订单接口
 order_list_query = throttle(_order_list_query, 3)
 # 每 30 秒内最多请求 20 次改单撤单接口，且连续两次请求的间隔不可小于 0.04 秒
-modify_order = delay_execution(_modify_order, 0.04) # 自动调价要连续执行，所以不能节流，只能延时
-cancel_order = delay_execution(_cancel_order, 0.04) # 撤销订单是遍历的，所以不能节流，只能延时
-cancel_all = delay_execution(_cancel_all, 0.04) # 撤销全部订单也是遍历的，所以不能节流，只能延时
+modify_order = delay_execution(_modify_order, 1.5) # 自动调价要连续执行，所以不能节流，只能延时
+cancel_order = delay_execution(_cancel_order, 1.5) # 撤销订单是遍历的，所以不能节流，只能延时
+cancel_all = delay_execution(_cancel_all, 1.5) # 撤销全部订单也是遍历的，所以不能节流，只能延时
 
 
 def set_config(config):
