@@ -17,8 +17,8 @@ conf = {
     'log_file': 'logs/fight',
     'PORT' : 11111,
 
-    'BUY_LIST' : [[60, 15, 100*1000]],                  # 固定多少秒，波动多少点，下单多少股
-    'MAX_VOLUME' : 300*1000,                            # 最大持仓股数，若超过则不会再买入
+    'BUY_LIST' : [[60, 15, 100e3]],                  # 固定多少秒，波动多少点，下单多少股
+    'MAX_VOLUME' : 300e3,                            # 最大持仓股数，若超过则不会再买入
 
     'ADJUST_BUY_DICT' : {
         'rise': [2, 3, 1],                              # 最近多少秒内，往持仓股票方向波动多少点，调整买单为第几档
@@ -44,10 +44,10 @@ BID_ASK_DIFF = 0.002                                # 买一价和卖一价的�
 # DROP_PRICE = 100                                    # 下单后损失多少点自动卖出
 
 AUTO_PLACE_ORDER = True                             # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
-ORDER_LIST = [[400*1000, 200*1000, 2, 3],
-              [300*1000, 150*1000, 2, 3],
-              [200*1000, 100*1000, 2, 3],
-              [100*1000, 50*1000, 2, 3]]            # 下单多少股以上（大的写前面），每单挂多少股，一单挂高几格，下一单挂高几格
+ORDER_LIST = [[400e3, 200e3, 2, 3],
+              [300e3, 150e3, 2, 3],
+              [200e3, 100e3, 2, 3],
+              [100e3, 50e3, 2, 3]]            # 下单多少股以上（大的写前面），每单挂多少股，一单挂高几格，下一单挂高几格
 
 AUTO_ADJUST_BUY = True                              # 是否自动调整挂的买单的价格，若是则下面的conf['ADJUST_BUY_DICT']有效
 
@@ -652,7 +652,7 @@ def auto_place_order(code, volume, price):
             log.info('auto_place_order => smart_sell 自动挂卖单失败')
         glb['auto_place_order_flag'] = False
         return
-    if volume < 100*1000:
+    if volume < 100e3:
         return False
     # if glb['submitted_sell_bull'] is not None and glb['submitted_sell_bull'].code == code:
     #     return False
@@ -660,9 +660,9 @@ def auto_place_order(code, volume, price):
     #     return False
     glb['auto_place_order_flag'] = True
     item = []
-    # ORDER_LIST = [[400*1000, 200*1000, 2, 3],
-    #     [200*1000, 100*1000, 2, 3],
-    #     [100*1000, 50*1000, 2, 3]]            # 下单多少股以上（大的写前面），每单挂多少股，一单挂高几格，下一单挂高几格
+    # ORDER_LIST = [[400e3, 200e3, 2, 3],
+    #     [200e3, 100e3, 2, 3],
+    #     [100e3, 50e3, 2, 3]]            # 下单多少股以上（大的写前面），每单挂多少股，一单挂高几格，下一单挂高几格
     for i in range(0, len(ORDER_LIST)):
         if volume >= ORDER_LIST[i][0]:
             item = ORDER_LIST[i]
@@ -874,8 +874,8 @@ def to_buy(stock_type, volume, force=False):
             data0 = data.iloc[0]
             total_qty = sum(data.qty)
             if total_qty + volume > conf['MAX_VOLUME']:
-                if conf['MAX_VOLUME'] - total_qty >= 100*1000:
-                    volume = math.floor((conf['MAX_VOLUME'] - total_qty) / 100*1000) * 100*1000
+                if conf['MAX_VOLUME'] - total_qty >= 100e3:
+                    volume = math.floor((conf['MAX_VOLUME'] - total_qty) / 100e3) * 100e3
                     log.info('当前持仓股数%s，买入后将会超过最大持仓股数%s，最多只能买%s' % (total_qty, conf['MAX_VOLUME'], volume))
                 else:
                     log.info('当前持仓股数%s，买入后将会超过最大持仓股数%s，不允许补仓' % (total_qty, conf['MAX_VOLUME']))
@@ -944,7 +944,7 @@ def auto_buy(buy_type, volume):
 def pre_buy():
     #       code              time                 price        volume  turnover    ticker_direction       sequence   type      push_data_type
     # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
-    # conf['BUY_LIST'] = [[60, 15, 200*1000]]
+    # conf['BUY_LIST'] = [[60, 15, 200e3]]
     while datestr_to_timestamp(glb['ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['ticker_list'][0].get('time')) > conf['MAX_DELTA_SECONDS']:
         glb['ticker_list'].pop(0)
         glb['price_list'].pop(0)
