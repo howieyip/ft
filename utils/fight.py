@@ -756,11 +756,11 @@ def auto_adjust(delta_price, i, adjust_dict, submitted_type):
     rise_price = 0
     fall_price = 0
     if submitted_type.find('buy') > -1:
-        rise_price = bid_price - (adjust_dict['rise'][2] - 1) * 0.001
-        fall_price = bid_price - (adjust_dict['fall'][2] - 1) * 0.001
+        rise_price = round(bid_price - (adjust_dict['rise'][2] - 1) * 0.001, 3)
+        fall_price = round(bid_price - (adjust_dict['fall'][2] - 1) * 0.001, 3)
     elif submitted_type.find('sell') > -1:
-        rise_price = ask_price + (adjust_dict['rise'][2] - 1) * 0.001
-        fall_price = ask_price + (adjust_dict['fall'][2] - 1) * 0.001
+        rise_price = round(ask_price + (adjust_dict['rise'][2] - 1) * 0.001, 3)
+        fall_price = round(ask_price + (adjust_dict['fall'][2] - 1) * 0.001, 3)
     rise_condition = False
     fall_condition = False
     if submitted_type.find('bull') > -1:
@@ -888,8 +888,8 @@ def to_buy(stock_type, volume, force=False):
                 if not reference_price:
                     log.info('股票%s的最近一次成交价不存在，\n%s' % (data0.code, glb['last_filled_all_order']))
                     reference_price = data0.cost_price
-                add_price_diff = reference_price - data0.nominal_price
-                if add_price_diff < ADD_PRICE_DIFF and not math.isclose(add_price_diff, ADD_PRICE_DIFF):
+                add_price_diff = round(reference_price - data0.nominal_price, 3)
+                if add_price_diff < ADD_PRICE_DIFF:
                     log.info('持仓股票%s的现价%s与最近一次成交价%s的价差%s小于%s元，不允许补仓' % (data0.code, data0.nominal_price, reference_price, add_price_diff, ADD_PRICE_DIFF))
                     if stock_type == '牛':
                         glb['pre_buy_bull_flag'] = False
