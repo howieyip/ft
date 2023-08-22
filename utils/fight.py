@@ -1125,6 +1125,7 @@ def set_config(config):
 
 
 def start(config=None):
+    time.sleep(3)
     global log, quote_ctx, trade_ctx
     if config is not None:
         set_config(config)
