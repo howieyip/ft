@@ -359,7 +359,7 @@ def _order_list_query(code='', status=''):
                 if code not in glb['last_filled_all_order']:
                     glb['last_filled_all_order'][code] = {'create_time': create_time, 'price': price}
                 else:
-                    if create_time > glb['last_filled_all_order'][code].create_time:
+                    if create_time > glb['last_filled_all_order'][code].get('create_time'):
                         glb['last_filled_all_order'][code] = {'create_time': create_time, 'price': price}
             log.info('所有股票最近一次成交的订单价格为\n%s' % glb['last_filled_all_order'])
         else:
