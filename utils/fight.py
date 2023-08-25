@@ -891,10 +891,10 @@ def to_buy(stock_type, volume, force=False):
                 add_price_diff = round(reference_price - data0.nominal_price, 3)
                 if add_price_diff < ADD_PRICE_DIFF:
                     log.info('持仓股票%s的现价%s与最近一次成交价%s的价差%s小于%s元，不允许补仓' % (data0.code, data0.nominal_price, reference_price, add_price_diff, ADD_PRICE_DIFF))
-                    if stock_type == '牛':
-                        glb['pre_buy_bull_flag'] = False
-                    elif stock_type == '熊':
-                        glb['pre_buy_bear_flag'] = False
+                    # if stock_type == '牛':
+                    #     glb['pre_buy_bull_flag'] = False
+                    # elif stock_type == '熊':
+                    #     glb['pre_buy_bear_flag'] = False
                     return False
                 log.info('持仓股票%s的现价%s与最近一次成交价%s的价差%s大于等于%s元，允许补仓' % (data0.code, data0.nominal_price, reference_price, add_price_diff, ADD_PRICE_DIFF))
 
