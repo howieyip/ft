@@ -566,7 +566,7 @@ def _position_list_query(stock_type='', logging=True):
             glb['today_pl_val_bear'] += data2.today_pl_val
         if data2.qty > 0 and data2.qty != data2.today_buy_qty - data2.today_sell_qty and data2.today_buy_qty > data2.today_sell_qty:
             log.info('持仓股数有问题，ret: %s, data:\n%s' % (ret, data))
-    log.info('当前股价：%s，今日盈亏：牛%s元，熊%s元' % (glb['cur_price'], glb['today_pl_val_bull'], glb['today_pl_val_bear']))
+    log.info('-------------------- current price: %s, today bear: %s --------------------' % (glb['cur_price'], glb['today_pl_val_bear']))
 
     data = data[data.qty > 0]
     if len(data) > 0:
@@ -604,7 +604,7 @@ def _position_list_query(stock_type='', logging=True):
         reset_has(real=True) # TODO 没有取消订阅，因为has_bear_list已经在上面被清空了
         if glb['almost_over']:
             glb['over'] = True
-            log.info('--------------------end--------------------')
+            log.info('--------------------over--------------------')
         return []
 
 
@@ -986,11 +986,11 @@ class TickerTest(ft.TickerHandlerBase):
                 glb['restarted'] = True
                 resetData()
             elif h == 16 and m == 0 and s == 0:
-                log.info('--------------------收盘--------------------')
+                log.info('--------------------end--------------------')
             return ret, data
 
         if h == 9 and m == 30 and glb['restarted']:
-            log.info('--------------------开盘--------------------')
+            log.info('--------------------start--------------------')
             glb['restarted'] = False
         elif (glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15) and m >= 30:
             glb['soon_over'] = True
@@ -1003,7 +1003,7 @@ class TickerTest(ft.TickerHandlerBase):
                     glb['to_over'] = True
                     if not glb['over']:
                         sell_all(stock_type='bear')
-                        log.info('--------------------end--------------------')
+                        log.info('--------------------to_over--------------------')
                 return ret, data
 
         if glb['to_over']:
@@ -1056,7 +1056,7 @@ def request_trading_days():
 
 # 重置数据
 def resetData():
-    log.info('--------------------start--------------------')
+    log.info('--------------------resetData--------------------')
     glb['soon_over'] = False
     glb['almost_over'] = False
     glb['to_over'] = False
