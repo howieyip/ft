@@ -15,12 +15,14 @@ pd.set_option('display.max_columns', 1000)
 # 运行前需检查并改变下面的值
 conf = {
     'log_file': 'logs/fight',
-    'PORT' : 11111,
+    'PORT': 11111,
 
-    'BUY_LIST' : [[60, 15, 100e3]],                 # 固定多少秒，波动多少点，下单多少股
-    'MAX_VOLUME' : 300e3,                           # 最大持仓股数，若超过则不会再买入
+    'DELTA_SECONDS': 60,                            # 多少秒内
+    'DELTA_PRICE': 15,                              # 波动多少点
+    'BUY_VOLUME': 100e3,                            # 下单多少股
+    'MAX_VOLUME': 300e3,                            # 最大持仓股数，若超过则不会再买入
 
-    'ADJUST_BUY_DICT' : {
+    'ADJUST_BUY_DICT': {
         'rise': [2, 3, 1],                          # 最近多少秒内，往持仓股票方向波动多少点，调整买单为第几档
         'fall': [2, 3, 2]                           # 最近多少秒内，往持仓股票反向波动多少点，调整买单为第几档
     },
@@ -41,8 +43,6 @@ BEAR_CODE = 'auto'                                  # 自动买入熊证的股�
 CHECK_GOLDEN_LINE = False                           # 是否检查黄金分割线
 BID_ASK_DIFF = 0.002                                # 买一价和卖一价的价差小于等于多少元，才允许买入
 
-# AUTO_SELL_WHEN_DROP_PRICE = False                   # 是否设置按价格跟踪止损，若是则下面的DROP_PRICE有效
-# DROP_PRICE = 100                                    # 下单后损失多少点自动卖出
 
 AUTO_PLACE_ORDER = True                             # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
 ORDER_LIST = [[400e3, 200e3, 2, 3],
@@ -62,7 +62,6 @@ ADJUST_SELL_DICT = {
 if TRADE_ENV == ft.TrdEnv.SIMULATE:
     AUTO_BUY = True                                 # 模拟盘强制开启自动买入
     AUTO_ADJUST_BUY = False                         # 模拟盘强制关闭自动调价买单
-    # AUTO_SELL_WHEN_DROP_PRICE = True                # 模拟盘强制开启按价格跟踪止损
 
 HSI_CODE = 'HK.800000'                              # 恒指代码
 MHI_CODE = 'HK.MHImain'                             # 小恒指代码
@@ -107,16 +106,20 @@ glb = {
     'bear_stop_price': 0,
     'force_replacing': False,
     'cache_get_stock_code': {
-        '牛': {
+        'bull': {
             'data': None,
             'duration': 5,
             'last_time': 0
         },
-        '熊': {
+        'bear': {
             'data': None,
             'duration': 5,
             'last_time': 0
         }
+    },
+    'stock_name': {
+        'bull': '牛',
+        'bear': '熊'
     }
 }
 
@@ -256,21 +259,6 @@ def check_golden_line():
     return value
 
 
-# def auto_sell(cur_price):
-#     if len(glb['has_bull_list']) > 0:
-#         if glb['bull_stop_price'] == 0 or cur_price > glb['bull_stop_price'] + DROP_PRICE:
-#             glb['bull_stop_price'] = cur_price - DROP_PRICE
-#         elif cur_price <= glb['bull_stop_price']:
-#             log.info('触发卖牛，当前价格%s，牛证止损价%s' % (cur_price, glb['bull_stop_price']))
-#             sell_all('牛')
-#     if len(glb['has_bear_list']) > 0:
-#         if glb['bear_stop_price'] == 0 or cur_price < glb['bear_stop_price'] - DROP_PRICE:
-#             glb['bear_stop_price'] = cur_price + DROP_PRICE
-#         elif cur_price >= glb['bear_stop_price']:
-#             log.info('触发卖熊，当前价格%s，熊证止损价%s' % (cur_price, glb['bear_stop_price']))
-#             sell_all('熊')
-
-
 def get_order_book(code):
     ret, data = quote_ctx.get_order_book(code, num=3)
     log.info('获取摆盘数据，ret: %s, data:%s' % (ret, data))
@@ -393,9 +381,9 @@ def _cancel_all(code='', stock_type='', trd_side=''):
             data2 = data.iloc[i]
             if stock_type == '' and trd_side == '':
                 cancel_order(data2.order_id)
-            elif data2.stock_name.find(stock_type) > -1 and trd_side == '':
+            elif data2.stock_name.find(glb['stock_name'][stock_type]) > -1 and trd_side == '':
                 cancel_order(data2.order_id)
-            elif data2.stock_name.find(stock_type) > -1 and trd_side == data2.trd_side:
+            elif data2.stock_name.find(glb['stock_name'][stock_type]) > -1 and trd_side == data2.trd_side:
                 cancel_order(data2.order_id)
             elif stock_type == '' and trd_side == data2.trd_side:
                 cancel_order(data2.order_id)
@@ -595,18 +583,18 @@ def _position_list_query(stock_type='', logging=True):
                 glb['force_replacing'] = True
                 sell_all(code=data2.code, qty=data2.qty)
                 if data2.stock_name.find('熊') > -1:
-                    to_buy('熊', data2.qty, force=True)
+                    to_buy('bear', data2.qty, force=True)
                 # else:
-                    # to_buy('牛', data2.qty)
+                    # to_buy('bull', data2.qty, force=True)
         bull_data = data[data.stock_name.str.contains('牛')]
         bear_data = data[data.stock_name.str.contains('熊')]
         if len(bull_data) == 0:
             reset_has('牛', True)
         if len(bear_data) == 0:
             reset_has('熊', True)
-        if stock_type == '牛':
+        if stock_type == 'bull':
             data = bull_data
-        elif stock_type == '熊':
+        elif stock_type == 'bear':
             data = bear_data
         if logging:
             log.info('今天买入的恒指牛熊持仓列表:\n%s' % data)
@@ -817,9 +805,9 @@ def _get_stock_code(stock_type='all', cache_first=False):
 
     req = ft.WarrantRequest()
     req.stock_owner = HSI_CODE  # 所属正股
-    if stock_type == '牛':
+    if stock_type == 'bull':
         req.type_list = [ft.WrtType.BULL]  # Qot_Common.WarrantType, 窝轮类型过滤列表 WrtType
-    elif stock_type == '熊':
+    elif stock_type == 'bear':
         req.type_list = [ft.WrtType.BEAR]  # Qot_Common.WarrantType, 窝轮类型过滤列表 WrtType
     # req.issuer_list = [ft.Issuer.JP]  # Qot_Common.Issuer, 发行人过滤列表
     req.status = ft.WarrantStatus.NORMAL  # Qot_Common.WarrantStatus, 窝轮状态
@@ -855,14 +843,14 @@ def _get_stock_code(stock_type='all', cache_first=False):
     return cache['data']
 
 
-def to_buy(stock_type, volume, force=False):
+def to_buy(stock_type, volume=None, force=False):
     global BULL_CODE, BEAR_CODE
-    if volume <= 0:
-        return False
+    if volume is None:
+        volume = conf['BUY_VOLUME']
     code = ''
-    if stock_type == '牛':
+    if stock_type == 'bull':
         code = BULL_CODE
-    elif stock_type == '熊':
+    elif stock_type == 'bear':
         code = BEAR_CODE
     if code == '':
         return False
@@ -892,9 +880,9 @@ def to_buy(stock_type, volume, force=False):
                 add_price_diff = round(reference_price - data0.nominal_price, 3)
                 if add_price_diff < conf['ADD_PRICE_DIFF']:
                     log.info('持仓股票%s的现价%s与最近一次成交价%s的价差%s小于%s元，不允许补仓' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
-                    # if stock_type == '牛':
+                    # if stock_type == 'bull':
                     #     glb['pre_buy_bull_flag'] = False
-                    # elif stock_type == '熊':
+                    # elif stock_type == 'bear':
                     #     glb['pre_buy_bear_flag'] = False
                     return False
                 log.info('持仓股票%s的现价%s与最近一次成交价%s的价差%s大于等于%s元，允许补仓' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
@@ -905,22 +893,22 @@ def to_buy(stock_type, volume, force=False):
             return False
         code = data.stock
 
-    set_submitted_buy(code, stock_type)
+    set_submitted_buy(code, glb['stock_name'][stock_type])
     data = smart_buy(code, volume)
     if data is False or data is None:
-        reset_submitted_buy(code, stock_type)
+        reset_submitted_buy(code, glb['stock_name'][stock_type])
     else:
         # 刚买入，先设置别追买，要等待时机才买
-        if stock_type == '牛':
+        if stock_type == 'bull':
             glb['pre_buy_bull_flag'] = False
-        elif stock_type == '熊':
+        elif stock_type == 'bear':
             glb['pre_buy_bear_flag'] = False
     return data
 
 
-def auto_buy(buy_type, volume):
+def auto_buy(stock_type):
     # log.info('auto_buy，submitted_buy_bear_flag：%s' % glb['submitted_buy_bear_flag'])
-    if buy_type == '牛' and not glb['submitted_buy_bull_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bull_list']) == 0):
+    if stock_type == 'bull' and not glb['submitted_buy_bull_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bull_list']) == 0):
         glb['pre_buy_bear_flag'] = True
         if BULL_CODE == '':
             return False
@@ -929,8 +917,8 @@ def auto_buy(buy_type, volume):
             return False
         if not CHECK_GOLDEN_LINE or check_golden_line() == '牛':
             log.info('触发买牛')
-            to_buy('牛', volume)
-    elif buy_type == '熊' and not glb['submitted_buy_bear_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bear_list']) == 0):
+            to_buy('bull')
+    elif stock_type == 'bear' and not glb['submitted_buy_bear_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bear_list']) == 0):
         glb['pre_buy_bull_flag'] = True
         if BEAR_CODE == '':
             return False
@@ -939,50 +927,30 @@ def auto_buy(buy_type, volume):
             return False
         if not CHECK_GOLDEN_LINE or check_golden_line() == '熊':
             log.info('触发买熊')
-            to_buy('熊', volume)
+            to_buy('bear')
 
 
 def pre_buy():
     #       code              time                 price        volume  turnover    ticker_direction       sequence   type      push_data_type
     # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
-    # conf['BUY_LIST'] = [[60, 15, 200e3]]
-    while datestr_to_timestamp(glb['ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['ticker_list'][0].get('time')) > conf['MAX_DELTA_SECONDS']:
+    while datestr_to_timestamp(glb['ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['ticker_list'][0].get('time')) > conf['DELTA_SECONDS']:
         glb['ticker_list'].pop(0)
         glb['price_list'].pop(0)
     # if glb['ticker_list'][-1][1][-2:] != '00':
     #     return False
-    pre_buy_flag = False
-    for j in range(0, len(conf['BUY_LIST'])):
-        i = 0
-        delta_price = glb['ticker_list'][-1].get('price') - glb['ticker_list'][i].get('price')
-        # 60秒内上涨点数比预设点数还要大，且最后的价格是最高的价格
-        if delta_price >= conf['BUY_LIST'][j][1] and glb['ticker_list'][-1].get('price') >= max(glb['price_list']):
-            delta_seconds = datestr_to_timestamp(glb['ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['ticker_list'][i].get('time'))
-            if delta_seconds <= conf['BUY_LIST'][j][0] and len(conf['BUY_LIST'][j]) == 3:
-                pre_buy_flag = True
-                if FOLLOW_TREND:
-                    conf['BUY_LIST'][j].extend(['牛', i, delta_seconds, delta_price])
-                else:
-                    conf['BUY_LIST'][j].extend(['熊', i, delta_seconds, delta_price])
-        # 60秒内下跌点数比预设点数还要小，且最后的价格是最低的价格
-        elif delta_price <= -conf['BUY_LIST'][j][1] and glb['ticker_list'][-1].get('price') <= min(glb['price_list']):
-            delta_seconds = datestr_to_timestamp(glb['ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['ticker_list'][i].get('time'))
-            if delta_seconds <= conf['BUY_LIST'][j][0] and len(conf['BUY_LIST'][j]) == 3:
-                pre_buy_flag = True
-                if FOLLOW_TREND:
-                    conf['BUY_LIST'][j].extend(['熊', i, delta_seconds, delta_price])
-                else:
-                    conf['BUY_LIST'][j].extend(['牛', i, delta_seconds, delta_price])
-    if pre_buy_flag:
-        # [[60, 15, 200000, '熊', 0, 60, 16.0]]
-        # log.info(conf['BUY_LIST'])
-        for j in range(0, len(conf['BUY_LIST'])):
-            if len(conf['BUY_LIST'][j]) > 3:
-                # log.info(glb['ticker_list'][conf['BUY_LIST'][j][4]])
-                # log.info(glb['ticker_list'][-1])
-                # log.info('最近%s秒内波动了%s点' % (conf['BUY_LIST'][j][5], conf['BUY_LIST'][j][6]))
-                auto_buy(conf['BUY_LIST'][j][3], conf['BUY_LIST'][j][2])
-                conf['BUY_LIST'][j] = conf['BUY_LIST'][j][0:3]
+    delta_price = glb['ticker_list'][-1].get('price') - glb['ticker_list'][0].get('price')
+    # 60秒内上涨点数比预设点数还要大，且最后的价格是最高的价格
+    if delta_price >= conf['DELTA_PRICE'] and glb['ticker_list'][-1].get('price') >= max(glb['price_list']):
+        if FOLLOW_TREND:
+            auto_buy('bull')
+        else:
+            auto_buy('bear')
+    # 60秒内下跌点数比预设点数还要小，且最后的价格是最低的价格
+    elif delta_price <= -conf['DELTA_PRICE'] and glb['ticker_list'][-1].get('price') <= min(glb['price_list']):
+        if FOLLOW_TREND:
+            auto_buy('bear')
+        else:
+            auto_buy('bull')
 
 
 class TickerTest(ft.TickerHandlerBase):
@@ -1034,7 +1002,7 @@ class TickerTest(ft.TickerHandlerBase):
                 if m >= 59:
                     glb['to_over'] = True
                     if not glb['over']:
-                        sell_all(stock_type='熊')
+                        sell_all(stock_type='bear')
                         log.info('--------------------end--------------------')
                 return ret, data
 
@@ -1118,11 +1086,6 @@ def set_config(config):
     conf.update(config)
     conf['MAX_ADJUST_DELTA_SECONDS'] = max(conf['ADJUST_BUY_DICT']['rise'][0], conf['ADJUST_BUY_DICT']['fall'][0], ADJUST_SELL_DICT['rise'][0], ADJUST_SELL_DICT['fall'][0])
     # MAX_ADJUST_DELTA_PRICE = max(conf['ADJUST_BUY_DICT']['rise'][1], conf['ADJUST_BUY_DICT']['fall'][1], ADJUST_SELL_DICT['rise'][1], ADJUST_SELL_DICT['fall'][1])
-    conf['MAX_DELTA_SECONDS'] = conf['BUY_LIST'][-1][0]
-    # DELTA_PRICE_LIST = []
-    # for x in range(0, len(conf['BUY_LIST'])):
-    #     DELTA_PRICE_LIST.append(conf['BUY_LIST'][x][1])
-    # MAX_DELTA_PRICE = max(DELTA_PRICE_LIST)
 
 
 def start(config=None):
