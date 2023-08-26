@@ -10,5 +10,7 @@ start({
     'ADJUST_BUY_DICT' : {
         'rise': [2, 3, 1],
         'fall': [2, 3, 2]
-    }
+    },
+    'ALLOW_ADD': True,
+    'ADD_PRICE_DIFF': 0.01
 })

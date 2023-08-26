@@ -17,13 +17,16 @@ conf = {
     'log_file': 'logs/fight',
     'PORT' : 11111,
 
-    'BUY_LIST' : [[60, 15, 100e3]],                  # 固定多少秒，波动多少点，下单多少股
-    'MAX_VOLUME' : 300e3,                            # 最大持仓股数，若超过则不会再买入
+    'BUY_LIST' : [[60, 15, 100e3]],                 # 固定多少秒，波动多少点，下单多少股
+    'MAX_VOLUME' : 300e3,                           # 最大持仓股数，若超过则不会再买入
 
     'ADJUST_BUY_DICT' : {
-        'rise': [2, 3, 1],                              # 最近多少秒内，往持仓股票方向波动多少点，调整买单为第几档
-        'fall': [2, 3, 2]                               # 最近多少秒内，往持仓股票反向波动多少点，调整买单为第几档
-    }
+        'rise': [2, 3, 1],                          # 最近多少秒内，往持仓股票方向波动多少点，调整买单为第几档
+        'fall': [2, 3, 2]                           # 最近多少秒内，往持仓股票反向波动多少点，调整买单为第几档
+    },
+
+    'ALLOW_ADD': True,                              # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
+    'ADD_PRICE_DIFF': 0.003                         # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
 }
 
 TRADE_ENV = ft.TrdEnv.REAL                          # 实盘交易：REAL，模拟交易：SIMULATE
@@ -36,8 +39,6 @@ FOLLOW_TREND = False                                # 买入策略是否为顺�
 BULL_CODE = ''                                      # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
 BEAR_CODE = 'auto'                                  # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
 CHECK_GOLDEN_LINE = False                           # 是否检查黄金分割线
-ALLOW_ADD = True                                    # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
-ADD_PRICE_DIFF = 0.003                              # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
 BID_ASK_DIFF = 0.002                                # 买一价和卖一价的价差小于等于多少元，才允许买入
 
 # AUTO_SELL_WHEN_DROP_PRICE = False                   # 是否设置按价格跟踪止损，若是则下面的DROP_PRICE有效
@@ -586,10 +587,10 @@ def _position_list_query(stock_type='', logging=True):
             set_has(data2.code, data2.stock_name)
             if data2.qty == data2.can_sell_qty:
                 reset_submitted_buy(data2.code, data2.stock_name)
-                if AUTO_PLACE_ORDER and data2.nominal_price > 0.02 and data2.stock_name.find('熊') > -1 and not glb['to_over']:
+                if AUTO_PLACE_ORDER and round(data2.nominal_price, 3) > 0.021 and data2.stock_name.find('熊') > -1 and not glb['to_over']:
                     log.info('存在买入的股票%s没自动挂卖单，现在重新自动挂卖单，现价%s，成本价%s' % (data2.code, data2.nominal_price, data2.cost_price))
                     auto_place_order(data2.code, data2.qty, max(data2.nominal_price, data2.cost_price))
-            if data2.nominal_price <= 0.02:
+            if round(data2.nominal_price, 3) <= 0.021:
                 log.info('存在买入的股票%s快被回收，现在开始自动换股，现价%s，成本价%s' % (data2.code, data2.nominal_price, data2.cost_price))
                 glb['force_replacing'] = True
                 sell_all(code=data2.code, qty=data2.qty)
@@ -881,7 +882,7 @@ def to_buy(stock_type, volume, force=False):
                     log.info('当前持仓股数%s，买入后将会超过最大持仓股数%s，不允许补仓' % (total_qty, conf['MAX_VOLUME']))
                     return False
             if total_qty > 0:
-                if not ALLOW_ADD:
+                if not conf['ALLOW_ADD']:
                     log.info('配置不允许补仓')
                     return False
                 reference_price = glb['last_filled_all_order'].get(data0.code, {}).get('price')
@@ -889,14 +890,14 @@ def to_buy(stock_type, volume, force=False):
                     log.info('股票%s的最近一次成交价不存在，\n%s' % (data0.code, glb['last_filled_all_order']))
                     reference_price = data0.cost_price
                 add_price_diff = round(reference_price - data0.nominal_price, 3)
-                if add_price_diff < ADD_PRICE_DIFF:
-                    log.info('持仓股票%s的现价%s与最近一次成交价%s的价差%s小于%s元，不允许补仓' % (data0.code, data0.nominal_price, reference_price, add_price_diff, ADD_PRICE_DIFF))
+                if add_price_diff < conf['ADD_PRICE_DIFF']:
+                    log.info('持仓股票%s的现价%s与最近一次成交价%s的价差%s小于%s元，不允许补仓' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
                     # if stock_type == '牛':
                     #     glb['pre_buy_bull_flag'] = False
                     # elif stock_type == '熊':
                     #     glb['pre_buy_bear_flag'] = False
                     return False
-                log.info('持仓股票%s的现价%s与最近一次成交价%s的价差%s大于等于%s元，允许补仓' % (data0.code, data0.nominal_price, reference_price, add_price_diff, ADD_PRICE_DIFF))
+                log.info('持仓股票%s的现价%s与最近一次成交价%s的价差%s大于等于%s元，允许补仓' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
 
     if code == 'auto':
         data = get_stock_code(stock_type=stock_type)
@@ -919,7 +920,7 @@ def to_buy(stock_type, volume, force=False):
 
 def auto_buy(buy_type, volume):
     # log.info('auto_buy，submitted_buy_bear_flag：%s' % glb['submitted_buy_bear_flag'])
-    if buy_type == '牛' and not glb['submitted_buy_bull_flag'] and (ALLOW_ADD or len(glb['has_bull_list']) == 0):
+    if buy_type == '牛' and not glb['submitted_buy_bull_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bull_list']) == 0):
         glb['pre_buy_bear_flag'] = True
         if BULL_CODE == '':
             return False
@@ -929,7 +930,7 @@ def auto_buy(buy_type, volume):
         if not CHECK_GOLDEN_LINE or check_golden_line() == '牛':
             log.info('触发买牛')
             to_buy('牛', volume)
-    elif buy_type == '熊' and not glb['submitted_buy_bear_flag'] and (ALLOW_ADD or len(glb['has_bear_list']) == 0):
+    elif buy_type == '熊' and not glb['submitted_buy_bear_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bear_list']) == 0):
         glb['pre_buy_bull_flag'] = True
         if BEAR_CODE == '':
             return False
