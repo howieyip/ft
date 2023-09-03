@@ -12,57 +12,53 @@ pd.set_option('display.max_rows', 1000)
 pd.set_option('display.max_columns', 1000)
 
 
-# 运行前需检查并改变下面的值
+# 配置
 conf = {
     'log_file': 'logs/fight',
+    'TRADE_ENV': ft.TrdEnv.REAL,                          # 实盘交易：REAL，模拟交易：SIMULATE
+    'PASSWORD_MD5': 'd7866f93b87fc9c1b0a06a6a6669bada',   # 优先使用 PASSWORD_MD5 解锁
+    'PASSWORD': '',                                       # 如果PASSWORD_MD5为空，则使用 PASSWORD 解锁
+    'HOST': '127.0.0.1',
     'PORT': 11111,
+
+    'AUTO_BUY': True,                               # 是否自动买入，若是则下面的配置有效
+    'FOLLOW_TREND': False,                          # 买入策略是否为顺势买入，逆势则为False
+    'BULL_CODE': '',                                # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
+    'BEAR_CODE': 'auto',                            # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
+    'CHECK_GOLDEN_LINE': False,                     # 是否检查黄金分割线
+    'BID_ASK_DIFF': 0.002,                          # 买一价和卖一价的价差小于等于多少元，才允许买入
 
     'DELTA_SECONDS': 60,                            # 多少秒内
     'DELTA_PRICE': 15,                              # 波动多少点
     'BUY_VOLUME': 100e3,                            # 下单多少股
     'MAX_VOLUME': 300e3,                            # 最大持仓股数，若超过则不会再买入
 
+    'AUTO_ADJUST_BUY': True,                        # 是否自动调整挂的买单的价格，若是则下面的ADJUST_BUY_DICT有效
     'ADJUST_BUY_DICT': {
         'rise': [2, 3, 1],                          # 最近多少秒内，往持仓股票方向波动多少点，调整买单为第几档
         'fall': [2, 3, 2]                           # 最近多少秒内，往持仓股票反向波动多少点，调整买单为第几档
     },
 
     'ALLOW_ADD': True,                              # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
-    'ADD_PRICE_DIFF': 0.003                         # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
+    'ADD_PRICE_DIFF': 0.003,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
+
+    'AUTO_PLACE_ORDER': True,                       # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
+    'ORDER_LIST': [
+        [400e3, 200e3, 2, 3],
+        [300e3, 150e3, 2, 3],
+        [200e3, 100e3, 2, 3],
+        [100e3, 50e3, 2, 3]
+    ],                                              # 下单多少股以上（大的写前面），每单挂多少股，一单挂高几格，下一单挂高几格
+
+    'AUTO_ADJUST_SELL': True,                       # 是否自动调整挂的卖单的价格，若是则下面的ADJUST_SELL_DICT有效
+    'ADJUST_SELL_DICT': {
+        'rise': [2, 3, 2],                          # 最近多少秒内，往持仓股票方向波动多少点，调整卖单为第几档
+        'fall': [2, 3, 1]                           # 最近多少秒内，往持仓股票反向波动多少点，调整卖单为第几档
+    }
 }
 
-TRADE_ENV = ft.TrdEnv.REAL                          # 实盘交易：REAL，模拟交易：SIMULATE
-PASSWORD_MD5 = 'd7866f93b87fc9c1b0a06a6a6669bada'   # 优先使用 PASSWORD_MD5 解锁
-PASSWORD = ''                                       # 如果PASSWORD_MD5为空，则使用 PASSWORD 解锁
-HOST = '127.0.0.1'
 
-AUTO_BUY = True                                     # 是否自动买入，若是则下面的配置有效
-FOLLOW_TREND = False                                # 买入策略是否为顺势买入，逆势则为False
-BULL_CODE = ''                                      # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
-BEAR_CODE = 'auto'                                  # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
-CHECK_GOLDEN_LINE = False                           # 是否检查黄金分割线
-BID_ASK_DIFF = 0.002                                # 买一价和卖一价的价差小于等于多少元，才允许买入
-
-
-AUTO_PLACE_ORDER = True                             # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
-ORDER_LIST = [[400e3, 200e3, 2, 3],
-              [300e3, 150e3, 2, 3],
-              [200e3, 100e3, 2, 3],
-              [100e3, 50e3, 2, 3]]            # 下单多少股以上（大的写前面），每单挂多少股，一单挂高几格，下一单挂高几格
-
-AUTO_ADJUST_BUY = True                              # 是否自动调整挂的买单的价格，若是则下面的conf['ADJUST_BUY_DICT']有效
-
-
-AUTO_ADJUST_SELL = True                             # 是否自动调整挂的卖单的价格，若是则下面的ADJUST_SELL_DICT有效
-ADJUST_SELL_DICT = {
-    'rise': [2, 3, 2],                              # 最近多少秒内，往持仓股票方向波动多少点，调整卖单为第几档
-    'fall': [2, 3, 1]                               # 最近多少秒内，往持仓股票反向波动多少点，调整卖单为第几档
-}
-
-if TRADE_ENV == ft.TrdEnv.SIMULATE:
-    AUTO_BUY = True                                 # 模拟盘强制开启自动买入
-    AUTO_ADJUST_BUY = False                         # 模拟盘强制关闭自动调价买单
-
+# 常量
 HSI_CODE = 'HK.800000'                              # 恒指代码
 MHI_CODE = 'HK.MHImain'                             # 小恒指代码
 
@@ -273,13 +269,13 @@ def _smart_buy(code, volume, price=None, type='Bid'):
         data = get_order_book(code)
         if not data:
             return False
-        if TRADE_ENV == ft.TrdEnv.SIMULATE:
+        if conf['TRADE_ENV'] == ft.TrdEnv.SIMULATE:
             type = 'Ask'
         price = data[type][0][0]
     if not price > 0:
         log.info('价格不大于0，下买单失败')
         return False
-    ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.BUY, trd_env=TRADE_ENV)
+    ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.BUY, trd_env=conf['TRADE_ENV'])
     log.info('下买单，ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
         log.info('股票%s下买单失败，价格%s，数量%s' % (code, price, volume))
@@ -298,7 +294,7 @@ def _smart_sell(code, volume, price=None, type='Ask'):
     if not price > 0:
         log.info('价格不大于0，下卖单失败')
         return False
-    ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.SELL, trd_env=TRADE_ENV)
+    ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.SELL, trd_env=conf['TRADE_ENV'])
     log.info('下卖单，ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
         log.info('股票%s下卖单失败，价格%s，数量%s' % (code, price, volume))
@@ -309,7 +305,7 @@ def _smart_sell(code, volume, price=None, type='Ask'):
 
 
 def _cancel_order(order_id):
-    ret, data = trade_ctx.modify_order(modify_order_op=ft.ModifyOrderOp.CANCEL, order_id=order_id, price=0, qty=0, trd_env=TRADE_ENV)
+    ret, data = trade_ctx.modify_order(modify_order_op=ft.ModifyOrderOp.CANCEL, order_id=order_id, price=0, qty=0, trd_env=conf['TRADE_ENV'])
     log.info('撤单，ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
         log.info('撤单失败')
@@ -320,7 +316,7 @@ def _cancel_order(order_id):
 
 
 def _modify_order(order_id, price, qty):
-    ret, data = trade_ctx.modify_order(modify_order_op=ft.ModifyOrderOp.NORMAL, order_id=order_id, price=price, qty=qty, trd_env=TRADE_ENV)
+    ret, data = trade_ctx.modify_order(modify_order_op=ft.ModifyOrderOp.NORMAL, order_id=order_id, price=price, qty=qty, trd_env=conf['TRADE_ENV'])
     log.info('修改订单，ret: %s, data:\n%s, order_id: %s, price: %s, qty: %s' % (ret, data, order_id, price, qty))
     if ret != ft.RET_OK:
         log.info('修改订单失败')
@@ -334,7 +330,7 @@ def _order_list_query(code='', status=''):
     status_filter_list = [ft.OrderStatus.SUBMITTED, ft.OrderStatus.FILLED_PART]
     if status != '':
         status_filter_list.append(status)
-    ret, data = trade_ctx.order_list_query(status_filter_list=status_filter_list, code=code, trd_env=TRADE_ENV, refresh_cache=True)
+    ret, data = trade_ctx.order_list_query(status_filter_list=status_filter_list, code=code, trd_env=conf['TRADE_ENV'], refresh_cache=True)
     # log.info('查询订单，ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
         log.info('查询订单失败')
@@ -365,7 +361,7 @@ def _order_list_query(code='', status=''):
 
 def _cancel_all(code='', stock_type='', trd_side=''):
     if code == '' and stock_type == '' and trd_side == '':
-        ret, data = trade_ctx.cancel_all_order(trd_env=TRADE_ENV)
+        ret, data = trade_ctx.cancel_all_order(trd_env=conf['TRADE_ENV'])
         log.info('撤销全部订单，ret: %s, data:\n%s' % (ret, data))
         if ret != ft.RET_OK:
             log.info('撤销全部订单失败')
@@ -495,7 +491,7 @@ def reset_submitted_buy(code, stock_name=''):
         glb['submitted_buy_bear_flag'] = False
         glb['submitted_buy_bear'] = None
         log.info('已重置买单数据，熊证%s' % code)
-    # if not AUTO_ADJUST_SELL:
+    # if not conf['AUTO_ADJUST_SELL']:
     #     unsubscribe(code, ft.SubType.ORDER_BOOK)
 
 
@@ -546,7 +542,7 @@ def reset_submitted_sell(code, stock_name='', data=None):
 
 
 def _position_list_query(stock_type='', logging=True):
-    ret, data = trade_ctx.position_list_query(trd_env=TRADE_ENV, refresh_cache=True)
+    ret, data = trade_ctx.position_list_query(trd_env=conf['TRADE_ENV'], refresh_cache=True)
     if logging:
         log.info('查询持仓列表，ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
@@ -575,7 +571,7 @@ def _position_list_query(stock_type='', logging=True):
             set_has(data2.code, data2.stock_name)
             if data2.qty == data2.can_sell_qty:
                 reset_submitted_buy(data2.code, data2.stock_name)
-                if AUTO_PLACE_ORDER and round(data2.nominal_price, 3) > 0.021 and data2.stock_name.find('熊') > -1 and not glb['to_over']:
+                if conf['AUTO_PLACE_ORDER'] and round(data2.nominal_price, 3) > 0.021 and data2.stock_name.find('熊') > -1 and not glb['to_over']:
                     log.info('存在买入的股票%s没自动挂卖单，现在重新自动挂卖单，现价%s，成本价%s' % (data2.code, data2.nominal_price, data2.cost_price))
                     auto_place_order(data2.code, data2.qty, max(data2.nominal_price, data2.cost_price))
             if round(data2.nominal_price, 3) <= 0.021:
@@ -649,12 +645,12 @@ def auto_place_order(code, volume, price):
     #     return False
     glb['auto_place_order_flag'] = True
     item = []
-    # ORDER_LIST = [[400e3, 200e3, 2, 3],
+    # conf['ORDER_LIST'] = [[400e3, 200e3, 2, 3],
     #     [200e3, 100e3, 2, 3],
     #     [100e3, 50e3, 2, 3]]            # 下单多少股以上（大的写前面），每单挂多少股，一单挂高几格，下一单挂高几格
-    for i in range(0, len(ORDER_LIST)):
-        if volume >= ORDER_LIST[i][0]:
-            item = ORDER_LIST[i]
+    for i in range(0, len(conf['ORDER_LIST'])):
+        if volume >= conf['ORDER_LIST'][i][0]:
+            item = conf['ORDER_LIST'][i]
             break
     if glb['force_replacing']:
         price += 0.02
@@ -676,7 +672,7 @@ class TradeOrderTest(ft.TradeOrderHandlerBase):
             log.info('订单状态推送失败')
             return ret, data
         data = data.iloc[0]
-        if data.trd_env != TRADE_ENV:
+        if data.trd_env != conf['TRADE_ENV']:
             log.info('该订单状态推送不是当前环境，无需处理')
             return ret, data
         if data.order_status == ft.OrderStatus.FILLED_ALL:
@@ -685,7 +681,7 @@ class TradeOrderTest(ft.TradeOrderHandlerBase):
                 log.info('订单状态推送：订单买入全部成交')
                 reset_submitted_buy(data.code, data.stock_name)
                 set_has(data.code, data.stock_name)
-                if AUTO_PLACE_ORDER and data.stock_name.find('熊') > -1 and not glb['to_over']:
+                if conf['AUTO_PLACE_ORDER'] and data.stock_name.find('熊') > -1 and not glb['to_over']:
                     time.sleep(2)
                     auto_place_order(data.code, data.dealt_qty, data.price)
             elif data.trd_side == ft.TrdSide.SELL:
@@ -787,13 +783,13 @@ def pre_adjust():
     delta_price = glb['adjust_ticker_list'][-1].get('price') - glb['adjust_ticker_list'][i].get('price')
     # if delta_price > MAX_ADJUST_DELTA_PRICE:
     #     break
-    if AUTO_ADJUST_BUY:
+    if conf['AUTO_ADJUST_BUY']:
         auto_adjust(delta_price, i, conf['ADJUST_BUY_DICT'], 'submitted_buy_bear')
         # auto_adjust(delta_price, i, conf['ADJUST_BUY_DICT'], 'submitted_buy_bull')
     # 快收盘清仓的时候才自动调价卖出
-    if AUTO_ADJUST_SELL and glb['almost_over']:
-        auto_adjust(delta_price, i, ADJUST_SELL_DICT, 'submitted_sell_bear')
-        # auto_adjust(delta_price, i, ADJUST_SELL_DICT, 'submitted_sell_bull')
+    if conf['AUTO_ADJUST_SELL'] and glb['almost_over']:
+        auto_adjust(delta_price, i, conf['ADJUST_SELL_DICT'], 'submitted_sell_bear')
+        # auto_adjust(delta_price, i, conf['ADJUST_SELL_DICT'], 'submitted_sell_bull')
 
 
 def _get_stock_code(stock_type='all', cache_first=False):
@@ -832,11 +828,11 @@ def _get_stock_code(stock_type='all', cache_first=False):
         if len(data) > 0:
             data = data.iloc[0]
             bid_ask_diff = data.ask_price - data.bid_price
-            if data.ask_price != 0 and (bid_ask_diff < BID_ASK_DIFF or math.isclose(bid_ask_diff, BID_ASK_DIFF)):
-                log.info('买一价%s和卖一价%s的价差%s小于等于%s元，允许买入' % (data.bid_price, data.ask_price, bid_ask_diff, BID_ASK_DIFF))
+            if data.ask_price != 0 and (bid_ask_diff < conf['BID_ASK_DIFF'] or math.isclose(bid_ask_diff, conf['BID_ASK_DIFF'])):
+                log.info('买一价%s和卖一价%s的价差%s小于等于%s元，允许买入' % (data.bid_price, data.ask_price, bid_ask_diff, conf['BID_ASK_DIFF']))
                 cache['data'] = data
             else:
-                log.info('买一价%s和卖一价%s的价差%s大于%s元，不允许买入' % (data.bid_price, data.ask_price, bid_ask_diff, BID_ASK_DIFF))
+                log.info('买一价%s和卖一价%s的价差%s大于%s元，不允许买入' % (data.bid_price, data.ask_price, bid_ask_diff, conf['BID_ASK_DIFF']))
         else:
             log.info('挑选失败，没有符合条件的')
     cache['last_time'] = time.time()
@@ -844,14 +840,13 @@ def _get_stock_code(stock_type='all', cache_first=False):
 
 
 def to_buy(stock_type, volume=None, force=False):
-    global BULL_CODE, BEAR_CODE
     if volume is None:
         volume = conf['BUY_VOLUME']
     code = ''
     if stock_type == 'bull':
-        code = BULL_CODE
+        code = conf['BULL_CODE']
     elif stock_type == 'bear':
-        code = BEAR_CODE
+        code = conf['BEAR_CODE']
     if code == '':
         return False
 
@@ -910,22 +905,22 @@ def auto_buy(stock_type):
     # log.info('auto_buy，submitted_buy_bear_flag：%s' % glb['submitted_buy_bear_flag'])
     if stock_type == 'bull' and not glb['submitted_buy_bull_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bull_list']) == 0):
         glb['pre_buy_bear_flag'] = True
-        if BULL_CODE == '':
+        if conf['BULL_CODE'] == '':
             return False
         if not glb['pre_buy_bull_flag']:
             log.info('刚买入不久，还未掉头，不宜追牛')
             return False
-        if not CHECK_GOLDEN_LINE or check_golden_line() == '牛':
+        if not conf['CHECK_GOLDEN_LINE'] or check_golden_line() == '牛':
             log.info('触发买牛')
             to_buy('bull')
     elif stock_type == 'bear' and not glb['submitted_buy_bear_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bear_list']) == 0):
         glb['pre_buy_bull_flag'] = True
-        if BEAR_CODE == '':
+        if conf['BEAR_CODE'] == '':
             return False
         if not glb['pre_buy_bear_flag']:
             log.info('刚买入不久，还未掉头，不宜追熊')
             return False
-        if not CHECK_GOLDEN_LINE or check_golden_line() == '熊':
+        if not conf['CHECK_GOLDEN_LINE'] or check_golden_line() == '熊':
             log.info('触发买熊')
             to_buy('bear')
 
@@ -941,13 +936,13 @@ def pre_buy():
     delta_price = glb['ticker_list'][-1].get('price') - glb['ticker_list'][0].get('price')
     # 60秒内上涨点数比预设点数还要大，且最后的价格是最高的价格
     if delta_price >= conf['DELTA_PRICE'] and glb['ticker_list'][-1].get('price') >= max(glb['price_list']):
-        if FOLLOW_TREND:
+        if conf['FOLLOW_TREND']:
             auto_buy('bull')
         else:
             auto_buy('bear')
     # 60秒内下跌点数比预设点数还要小，且最后的价格是最低的价格
     elif delta_price <= -conf['DELTA_PRICE'] and glb['ticker_list'][-1].get('price') <= min(glb['price_list']):
-        if FOLLOW_TREND:
+        if conf['FOLLOW_TREND']:
             auto_buy('bear')
         else:
             auto_buy('bull')
@@ -1016,19 +1011,19 @@ class TickerTest(ft.TickerHandlerBase):
             position_list_query(logging=False)
 
         # 自动买入和自动调价
-        if AUTO_BUY or AUTO_ADJUST_BUY or AUTO_ADJUST_SELL:
+        if conf['AUTO_BUY'] or conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']:
             for index, row in data.iterrows():
-                if AUTO_BUY and not glb['soon_over']:
+                if conf['AUTO_BUY'] and not glb['soon_over']:
                     glb['ticker_list'].append(row)
                     glb['price_list'].append(row.price)
-                if AUTO_ADJUST_BUY or AUTO_ADJUST_SELL:
+                if conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']:
                     glb['adjust_ticker_list'].append(row)
                     glb['adjust_price_list'].append(row.price)
             # 尾盘就不买了
-            if AUTO_BUY and not glb['soon_over']:
+            if conf['AUTO_BUY'] and not glb['soon_over']:
                 pre_buy()
             # 自动调价
-            if AUTO_ADJUST_BUY or AUTO_ADJUST_SELL:
+            if conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']:
                 pre_adjust()
 
         return ret, data
@@ -1084,8 +1079,12 @@ cancel_all = delay_execution(_cancel_all, 1.5) # 撤销全部订单也是遍历�
 def set_config(config):
     global conf
     conf.update(config)
-    conf['MAX_ADJUST_DELTA_SECONDS'] = max(conf['ADJUST_BUY_DICT']['rise'][0], conf['ADJUST_BUY_DICT']['fall'][0], ADJUST_SELL_DICT['rise'][0], ADJUST_SELL_DICT['fall'][0])
-    # MAX_ADJUST_DELTA_PRICE = max(conf['ADJUST_BUY_DICT']['rise'][1], conf['ADJUST_BUY_DICT']['fall'][1], ADJUST_SELL_DICT['rise'][1], ADJUST_SELL_DICT['fall'][1])
+    conf['MAX_ADJUST_DELTA_SECONDS'] = max(conf['ADJUST_BUY_DICT']['rise'][0], conf['ADJUST_BUY_DICT']['fall'][0], conf['ADJUST_SELL_DICT']['rise'][0], conf['ADJUST_SELL_DICT']['fall'][0])
+    # MAX_ADJUST_DELTA_PRICE = max(conf['ADJUST_BUY_DICT']['rise'][1], conf['ADJUST_BUY_DICT']['fall'][1], conf['ADJUST_SELL_DICT']['rise'][1], conf['ADJUST_SELL_DICT']['fall'][1])
+
+    if conf['TRADE_ENV'] == ft.TrdEnv.SIMULATE:
+        conf['AUTO_BUY'] = True                         # 模拟盘强制开启自动买入
+        conf['AUTO_ADJUST_BUY'] = False                 # 模拟盘强制关闭自动调价买单
 
 
 def start(config=None):
@@ -1101,11 +1100,11 @@ def start(config=None):
         temp_quote_ctx = quote_ctx
         temp_trade_ctx = trade_ctx
         log.info('开始重启新的程序')
-    quote_ctx = ft.OpenQuoteContext(host=HOST, port=conf['PORT'])
-    trade_ctx = ft.OpenSecTradeContext(filter_trdmarket=ft.TrdMarket.HK, host=HOST, port=conf['PORT'])
+    quote_ctx = ft.OpenQuoteContext(host=conf['HOST'], port=conf['PORT'])
+    trade_ctx = ft.OpenSecTradeContext(filter_trdmarket=ft.TrdMarket.HK, host=conf['HOST'], port=conf['PORT'])
     resetData()
-    if TRADE_ENV == ft.TrdEnv.REAL:
-        ret, data = trade_ctx.unlock_trade(password_md5=PASSWORD_MD5, password=PASSWORD)
+    if conf['TRADE_ENV'] == ft.TrdEnv.REAL:
+        ret, data = trade_ctx.unlock_trade(password_md5=conf['PASSWORD_MD5'], password=conf['PASSWORD'])
         log.info('解锁交易，ret: %s, data:%s' % (ret, data))
         if ret != ft.RET_OK:
             glb['restarted'] = False
@@ -1122,12 +1121,12 @@ def start(config=None):
     quote_ctx.set_handler(SysNotifyTest())
     quote_ctx.set_handler(TickerTest())
     trade_ctx.set_handler(TradeOrderTest())
-    if AUTO_ADJUST_BUY or AUTO_ADJUST_SELL:
+    if conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']:
         quote_ctx.set_handler(OrderBookTest())
     position_list_query()
     order_list_query(status=ft.OrderStatus.FILLED_ALL)
     # get_stock_code('熊')
-    if CHECK_GOLDEN_LINE:
+    if conf['CHECK_GOLDEN_LINE']:
         check_golden_line()
 
     ret, data = quote_ctx.query_subscription()
