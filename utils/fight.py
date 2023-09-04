@@ -27,6 +27,8 @@ conf = {
     'BEAR_CODE': 'auto',                            # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
     'CHECK_GOLDEN_LINE': False,                     # 是否检查黄金分割线
     'BID_ASK_DIFF': 0.002,                          # 买一价和卖一价的价差小于等于多少元，才允许买入
+    'CUR_PRICE_MIN': 0.04,
+    'CUR_PRICE_MAX': 0.15,
 
     'DELTA_SECONDS': 60,                            # 多少秒内
     'DELTA_PRICE': 15,                              # 波动多少点
@@ -549,7 +551,7 @@ def _position_list_query(stock_type='', logging=True):
         log.info('查询持仓列表失败，ret: %s, data:\n%s' % (ret, data))
         return False
     reset_has()
-    data = data[(data.today_buy_qty > 0) & data.stock_name.str.contains('恒指')]
+    data = data[(data.today_buy_qty > 0) & data.stock_name.str.contains('恒指') & (data.nominal_price < conf['CUR_PRICE_MAX'])]
 
     # 统计今日盈亏
     glb['today_pl_val_bull'] = 0
@@ -562,7 +564,7 @@ def _position_list_query(stock_type='', logging=True):
             glb['today_pl_val_bear'] += data2.today_pl_val
         if data2.qty > 0 and data2.qty != data2.today_buy_qty - data2.today_sell_qty and data2.today_buy_qty > data2.today_sell_qty:
             log.info('持仓股数有问题，ret: %s, data:\n%s' % (ret, data))
-    log.info('-------------------- current price: %s, today bear: %s --------------------' % (glb['cur_price'], glb['today_pl_val_bear']))
+    log.info('current price: %s, today bull: %s, today bear: %s' % (glb['cur_price'], glb['today_pl_val_bull'], glb['today_pl_val_bear']))
 
     data = data[data.qty > 0]
     if len(data) > 0:
@@ -807,8 +809,8 @@ def _get_stock_code(stock_type='all', cache_first=False):
         req.type_list = [ft.WrtType.BEAR]  # Qot_Common.WarrantType, 窝轮类型过滤列表 WrtType
     # req.issuer_list = [ft.Issuer.JP]  # Qot_Common.Issuer, 发行人过滤列表
     req.status = ft.WarrantStatus.NORMAL  # Qot_Common.WarrantStatus, 窝轮状态
-    req.cur_price_min = 0.04  # 最新价过滤起点
-    req.cur_price_max = 0.12  # 最新价过滤终点
+    req.cur_price_min = conf['CUR_PRICE_MIN']  # 最新价过滤起点
+    req.cur_price_max = conf['CUR_PRICE_MAX']  # 最新价过滤终点
     req.conversion_min = 10000  # 换股比率过滤起点
     req.conversion_max = 10000  # 换股比率过滤终点
     req.vol_min = 1000  # 成交量的过滤下限，单位K
