@@ -573,9 +573,10 @@ def _position_list_query(stock_type='', logging=True):
             set_has(data2.code, data2.stock_name)
             if data2.qty == data2.can_sell_qty:
                 reset_submitted_buy(data2.code, data2.stock_name)
-                if conf['AUTO_PLACE_ORDER'] and round(data2.nominal_price, 3) > 0.021 and data2.stock_name.find('熊') > -1 and not glb['to_over']:
-                    log.info('存在买入的股票%s没自动挂卖单，现在重新自动挂卖单，现价%s，成本价%s' % (data2.code, data2.nominal_price, data2.cost_price))
-                    auto_place_order(data2.code, data2.qty, max(data2.nominal_price, data2.cost_price))
+                if conf['AUTO_PLACE_ORDER'] and round(data2.nominal_price, 3) > 0.021 and not glb['to_over']:
+                    if data2.stock_name.find('熊') > -1 or (data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto'):
+                        log.info('存在买入的股票%s没自动挂卖单，现在重新自动挂卖单，现价%s，成本价%s' % (data2.code, data2.nominal_price, data2.cost_price))
+                        auto_place_order(data2.code, data2.qty, max(data2.nominal_price, data2.cost_price))
             if round(data2.nominal_price, 3) <= 0.021:
                 log.info('存在买入的股票%s快被回收，现在开始自动换股，现价%s，成本价%s' % (data2.code, data2.nominal_price, data2.cost_price))
                 glb['force_replacing'] = True
@@ -632,6 +633,8 @@ def auto_place_order(code, volume, price):
     if glb['auto_place_order_flag']:
         log.info('已经开始自动挂单，不要重复了')
         return False
+    if price > conf['CUR_PRICE_MAX']:
+        return False
     if glb['almost_over']:
         glb['auto_place_order_flag'] = True
         data = smart_sell(code, volume)
@@ -683,9 +686,10 @@ class TradeOrderTest(ft.TradeOrderHandlerBase):
                 log.info('订单状态推送：订单买入全部成交')
                 reset_submitted_buy(data.code, data.stock_name)
                 set_has(data.code, data.stock_name)
-                if conf['AUTO_PLACE_ORDER'] and data.stock_name.find('熊') > -1 and not glb['to_over']:
-                    time.sleep(2)
-                    auto_place_order(data.code, data.dealt_qty, data.price)
+                if conf['AUTO_PLACE_ORDER'] and not glb['to_over']:
+                    if data.stock_name.find('熊') > -1 or (data.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto'):
+                        time.sleep(2)
+                        auto_place_order(data.code, data.dealt_qty, data.price)
             elif data.trd_side == ft.TrdSide.SELL:
                 log.info('订单状态推送：订单卖出全部成交')
                 reset_submitted_sell(data.code, data.stock_name, data)
