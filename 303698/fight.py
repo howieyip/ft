@@ -5,6 +5,7 @@ from utils.fight import start
 start({
     'log_file': '303698/logs/fight.log',
     'PORT' : 11111,
+    'BULL_CODE': 'auto',
     'BUY_VOLUME' : 300e3,
     'MAX_VOLUME' : 500e3,
     'ADJUST_BUY_DICT' : {

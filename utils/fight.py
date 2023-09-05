@@ -582,8 +582,8 @@ def _position_list_query(stock_type='', logging=True):
                 sell_all(code=data2.code, qty=data2.qty)
                 if data2.stock_name.find('熊') > -1:
                     to_buy('bear', data2.qty, force=True)
-                # else:
-                    # to_buy('bull', data2.qty, force=True)
+                else:
+                    to_buy('bull', data2.qty, force=True)
         bull_data = data[data.stock_name.str.contains('牛')]
         bear_data = data[data.stock_name.str.contains('熊')]
         if len(bull_data) == 0:
@@ -787,11 +787,11 @@ def pre_adjust():
     #     break
     if conf['AUTO_ADJUST_BUY']:
         auto_adjust(delta_price, i, conf['ADJUST_BUY_DICT'], 'submitted_buy_bear')
-        # auto_adjust(delta_price, i, conf['ADJUST_BUY_DICT'], 'submitted_buy_bull')
+        auto_adjust(delta_price, i, conf['ADJUST_BUY_DICT'], 'submitted_buy_bull')
     # 快收盘清仓的时候才自动调价卖出
     if conf['AUTO_ADJUST_SELL'] and glb['almost_over']:
         auto_adjust(delta_price, i, conf['ADJUST_SELL_DICT'], 'submitted_sell_bear')
-        # auto_adjust(delta_price, i, conf['ADJUST_SELL_DICT'], 'submitted_sell_bull')
+        auto_adjust(delta_price, i, conf['ADJUST_SELL_DICT'], 'submitted_sell_bull')
 
 
 def _get_stock_code(stock_type='all', cache_first=False):
@@ -1000,6 +1000,8 @@ class TickerTest(ft.TickerHandlerBase):
                     glb['to_over'] = True
                     if not glb['over']:
                         sell_all(stock_type='bear')
+                        if conf['BULL_CODE'] == 'auto':
+                            sell_all(stock_type='bull')
                         log.info('--------------------to_over--------------------')
                 return ret, data
 
