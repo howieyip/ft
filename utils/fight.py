@@ -182,10 +182,10 @@ def draw_golden_line():
     ret, data = quote_ctx.get_rt_data(HSI_CODE)
     # log.info('获取分时数据，data:\n%s' % data)
     if ret != ft.RET_OK:
-        log.info('获取分时数据失败')
+        log.info('get_rt_data error')
         return False
     if data.iloc[-1].time[0:10] != glb['trade_date'].get('time'):
-        log.info('获取分时数据日期不是今天的，请重启客户端')
+        log.info('get_rt_data not today')
         return False
     glb['golden_line'] = [0, 0]
     data_min = data[data.cur_price == min(data.cur_price)]
@@ -259,9 +259,9 @@ def check_golden_line():
 
 def get_order_book(code):
     ret, data = quote_ctx.get_order_book(code, num=3)
-    log.info('获取摆盘数据，ret: %s, data:%s' % (ret, data))
+    log.info('get_order_book, ret: %s, data:%s' % (ret, data))
     if ret != ft.RET_OK:
-        log.info('获取摆盘数据失败')
+        log.info('get_order_book error')
         return False
     return data
 
@@ -275,15 +275,15 @@ def _smart_buy(code, volume, price=None, type='Bid'):
             type = 'Ask'
         price = data[type][0][0]
     if not price > 0:
-        log.info('价格不大于0，下买单失败')
+        log.info('not price > 0, _smart_buy error')
         return False
     ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.BUY, trd_env=conf['TRADE_ENV'])
-    log.info('下买单，ret: %s, data:\n%s' % (ret, data))
+    log.info('_smart_buy, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
-        log.info('股票%s下买单失败，价格%s，数量%s' % (code, price, volume))
+        log.info('code %s _smart_buy error, price %s, volume %s' % (code, price, volume))
         return False
     else:
-        log.info('股票%s下买单成功，价格%s，数量%s' % (code, price, volume))
+        log.info('code %s _smart_buy success, price %s, volume %s' % (code, price, volume))
         return data
 
 
@@ -294,37 +294,37 @@ def _smart_sell(code, volume, price=None, type='Ask'):
             return False
         price = data[type][0][0]
     if not price > 0:
-        log.info('价格不大于0，下卖单失败')
+        log.info('not price > 0, _smart_sell error')
         return False
     ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.SELL, trd_env=conf['TRADE_ENV'])
-    log.info('下卖单，ret: %s, data:\n%s' % (ret, data))
+    log.info('_smart_sell, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
-        log.info('股票%s下卖单失败，价格%s，数量%s' % (code, price, volume))
+        log.info('code %s _smart_sell error, price %s, volume %s' % (code, price, volume))
         return False
     else:
-        log.info('股票%s下卖单成功，价格%s，数量%s' % (code, price, volume))
+        log.info('code %s _smart_sell success, price %s, volume %s' % (code, price, volume))
         return data
 
 
 def _cancel_order(order_id):
     ret, data = trade_ctx.modify_order(modify_order_op=ft.ModifyOrderOp.CANCEL, order_id=order_id, price=0, qty=0, trd_env=conf['TRADE_ENV'])
-    log.info('撤单，ret: %s, data:\n%s' % (ret, data))
+    log.info('_cancel_order, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
-        log.info('撤单失败')
+        log.info('_cancel_order error')
         return False
     else:
-        log.info('撤单成功')
+        log.info('_cancel_order success')
         return data
 
 
 def _modify_order(order_id, price, qty):
     ret, data = trade_ctx.modify_order(modify_order_op=ft.ModifyOrderOp.NORMAL, order_id=order_id, price=price, qty=qty, trd_env=conf['TRADE_ENV'])
-    log.info('修改订单，ret: %s, data:\n%s, order_id: %s, price: %s, qty: %s' % (ret, data, order_id, price, qty))
+    log.info('modify_order, ret: %s, data:\n%s, order_id: %s, price: %s, qty: %s' % (ret, data, order_id, price, qty))
     if ret != ft.RET_OK:
-        log.info('修改订单失败')
+        log.info('modify_order error')
         return False
     else:
-        log.info('修改订单成功')
+        log.info('modify_order success')
         return data
 
 
@@ -335,9 +335,9 @@ def _order_list_query(code='', status=''):
     ret, data = trade_ctx.order_list_query(status_filter_list=status_filter_list, code=code, trd_env=conf['TRADE_ENV'], refresh_cache=True)
     # log.info('查询订单，ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
-        log.info('查询订单失败')
+        log.info('order_list_query error')
         return False
-    log.info('查询订单成功')
+    log.info('order_list_query success')
     if ft.OrderStatus.FILLED_ALL in status_filter_list:
         filled_all_data = data[data.order_status == ft.OrderStatus.FILLED_ALL]
         if not filled_all_data.empty:
@@ -364,15 +364,15 @@ def _order_list_query(code='', status=''):
 def _cancel_all(code='', stock_type='', trd_side=''):
     if code == '' and stock_type == '' and trd_side == '':
         ret, data = trade_ctx.cancel_all_order(trd_env=conf['TRADE_ENV'])
-        log.info('撤销全部订单，ret: %s, data:\n%s' % (ret, data))
+        log.info('cancel_all_order, ret: %s, data:\n%s' % (ret, data))
         if ret != ft.RET_OK:
-            log.info('撤销全部订单失败')
+            log.info('cancel_all_order error')
     data = order_list_query(code)
     if data is False:
-        log.info('_cancel_all => order_list_query 撤销全部订单失败')
+        log.info('_cancel_all => order_list_query error')
         return False
     if data is None:
-        log.info('_cancel_all => order_list_query 限频节流中')
+        log.info('_cancel_all => order_list_query throttling')
         return False
     if len(data) > 0:
         for i in range(0, len(data)):
@@ -391,10 +391,10 @@ def _cancel_all(code='', stock_type='', trd_side=''):
 def force_sell(code='', qty=''):
     data = smart_sell(code, qty, type='Bid')
     if data is False:
-        log.info('force_sell => smart_sell 清仓失败')
+        log.info('force_sell => smart_sell error')
         return False
     if data is None:
-        log.info('force_sell => smart_sell 限频节流中')
+        log.info('force_sell => smart_sell throttling')
         return False
     if len(data) > 0:
         data0 = data.iloc[0]
@@ -402,7 +402,7 @@ def force_sell(code='', qty=''):
             log.info('订单部分成交，改单降低一格')
             modify_order(data0.order_id, data0.price - 0.001, data0.qty)
         else:
-            log.info('清仓成功')
+            log.info('force_sell success')
 
 # 清仓今日买的指定股票
 def sell_all(code='', qty='', stock_type=''):
@@ -609,11 +609,11 @@ def _position_list_query(stock_type='', logging=True):
 
 class SysNotifyTest(ft.SysNotifyHandlerBase):
     def on_recv_rsp(self, rsp_pb):
-        log.info('--------------------OpenD通知推送--------------------')
+        log.info('--------------------SysNotify push--------------------')
         ret, data = super(SysNotifyTest, self).on_recv_rsp(rsp_pb)
-        log.info('OpenD通知推送，ret: %s, data:%s' % (ret, data))
+        log.info('SysNotify push ret: %s, data:%s' % (ret, data))
         if ret != ft.RET_OK:
-            log.info('OpenD通知推送失败')
+            log.info('SysNotify push error')
             return ret, data
         return ret, data
 
@@ -623,7 +623,7 @@ class OrderBookTest(ft.OrderBookHandlerBase):
         ret, data = super(OrderBookTest, self).on_recv_rsp(rsp_str)
         # log.info('实时摆盘推送，ret: %s, data:%s' % (ret, data))
         if ret != ft.RET_OK:
-            log.info('实时摆盘推送失败，ret: %s, data:%s' % (ret, data))
+            log.info('OrderBook push error，ret: %s, data:%s' % (ret, data))
             return ret, data
         glb['order_book'][data['code']] = data
         return ret, data
@@ -639,7 +639,7 @@ def auto_place_order(code, volume, price):
         glb['auto_place_order_flag'] = True
         data = smart_sell(code, volume)
         if data is False:
-            log.info('auto_place_order => smart_sell 自动挂卖单失败')
+            log.info('auto_place_order => smart_sell error')
         glb['auto_place_order_flag'] = False
         return
     if volume < 100e3:
@@ -662,7 +662,7 @@ def auto_place_order(code, volume, price):
     for i in range(0, len(item) - 2):
         data = smart_sell(code, item[1], price + 0.001 * item[2 + i])
         if data is False:
-            log.info('auto_place_order => smart_sell 自动挂卖单失败')
+            log.info('auto_place_order => smart_sell error')
         elif glb['force_replacing']:
             glb['force_replacing'] = False
     glb['auto_place_order_flag'] = False
@@ -726,7 +726,7 @@ class TradeOrderTest(ft.TradeOrderHandlerBase):
 #         # log.info('--------------------分时推送--------------------')
 #         ret, data = super(RTDataTest, self).on_recv_rsp(rsp_str)
 #         if ret != ft.RET_OK:
-#             log.info('分时推送失败')
+#             log.info('分时推送error')
 #             return ret, data
 #         #    code                 time      is_blank    opened_mins  cur_price  last_close     avg_price  turnover  volume
 #         # 0  HK.800000  2019-08-14 13:01:00     False          781   25416.63     25281.3  25482.145921  660739.0       0
@@ -824,9 +824,9 @@ def _get_stock_code(stock_type='all', cache_first=False):
     req.num = 3  # 返回数据个数，最大200
 
     ret, data = quote_ctx.get_warrant(req=req)
-    log.info('获取恒指牛熊，ret: %s, data:\n%s' % (ret, data))
+    log.info('get_warrant, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
-        log.info('获取恒指牛熊失败')
+        log.info('get_warrant error')
     else:
         data = data[0]
         data = data[data.stock_owner == HSI_CODE] # 坑，返回的结果还要再过滤一次
@@ -840,7 +840,7 @@ def _get_stock_code(stock_type='all', cache_first=False):
             else:
                 log.info('买一价%s和卖一价%s的价差%s大于%s元，不允许买入' % (data.bid_price, data.ask_price, bid_ask_diff, conf['BID_ASK_DIFF']))
         else:
-            log.info('挑选失败，没有符合条件的')
+            log.info('_get_stock_code error, conditions not met')
     cache['last_time'] = time.time()
     return cache['data']
 
@@ -959,7 +959,7 @@ class TickerTest(ft.TickerHandlerBase):
         # log.info('--------------------逐笔明细--------------------')
         ret, data = super(TickerTest, self).on_recv_rsp(rsp_str)
         if ret != ft.RET_OK:
-            log.info('逐笔明细推送失败')
+            log.info('ticker push error')
             return ret, data
         #       code              time                 price        volume  turnover    ticker_direction       sequence   type      push_data_type
         # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
@@ -975,7 +975,7 @@ class TickerTest(ft.TickerHandlerBase):
         # data = pd.DataFrame(data)
 
         data0 = data.iloc[0]
-        # log.info('逐笔明细推送, data:\n%s' % data0)
+        # log.info('ticker push, data:\n%s' % data0)
         t = data0.time
         h = int(t[11:13])
         m = int(t[14:16])
@@ -983,15 +983,15 @@ class TickerTest(ft.TickerHandlerBase):
         if h < 9 or h == 9 and m < 30 or h >= 16:
             # print(data)
             if h == 9 and m == 15 and not glb['restarted']:
-                log.info('准备开盘，需要重置数据')
+                log.info('[%s]准备开盘，需要重置数据' % t)
                 glb['restarted'] = True
                 resetData()
             elif h == 16 and m == 0 and s == 0:
-                log.info('--------------------end--------------------')
+                log.info('[%s]--------------------end--------------------' % t)
             return ret, data
 
         if h == 9 and m == 30 and glb['restarted']:
-            log.info('--------------------start--------------------')
+            log.info('[%s]--------------------start--------------------' % t)
             glb['restarted'] = False
         elif (glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15) and m >= 30:
             glb['soon_over'] = True
@@ -1006,7 +1006,7 @@ class TickerTest(ft.TickerHandlerBase):
                         sell_all(stock_type='bear')
                         if conf['BULL_CODE'] == 'auto':
                             sell_all(stock_type='bull')
-                        log.info('--------------------to_over--------------------')
+                        log.info('[%s]--------------------to_over--------------------' % t)
                 return ret, data
 
         if glb['to_over']:
@@ -1048,7 +1048,7 @@ def request_trading_days():
     log.info('获取交易日，ret: %s, data:%s' % (ret, data))
     if ret != ft.RET_OK:
         glb['restarted'] = False
-        log.info('获取交易日失败')
+        log.info('获取交易日er ro r')
         return False
     if len(data) == 0 or data[0]['time'] != today.strftime('%Y-%m-%d'):
         log.info('今天不是交易日')
@@ -1113,10 +1113,10 @@ def start(config=None):
     resetData()
     if conf['TRADE_ENV'] == ft.TrdEnv.REAL:
         ret, data = trade_ctx.unlock_trade(password_md5=conf['PASSWORD_MD5'], password=conf['PASSWORD'])
-        log.info('解锁交易，ret: %s, data:%s' % (ret, data))
+        log.info('unlock_trade, ret: %s, data:%s' % (ret, data))
         if ret != ft.RET_OK:
             glb['restarted'] = False
-            log.info('解锁交易失败')
+            log.info('unlock_trade error')
             return False
     data = subscribe(MHI_CODE, ft.SubType.TICKER)
     if data is False:
@@ -1138,9 +1138,9 @@ def start(config=None):
         check_golden_line()
 
     ret, data = quote_ctx.query_subscription()
-    log.info('查询订阅数据，ret: %s, data:%s' % (ret, data))
+    log.info('query_subscription, ret: %s, data:%s' % (ret, data))
     if ret != ft.RET_OK:
-        log.info('查询订阅数据失败')
+        log.info('query_subscription error')
     quote_ctx.start()
 
     # ticker_test = TickerTest()
@@ -1149,5 +1149,5 @@ def start(config=None):
     if temp_quote_ctx is not None:
         temp_quote_ctx.close()
         temp_trade_ctx.close()
-        log.info('程序重启成功')
+        log.info('restart success')
 
