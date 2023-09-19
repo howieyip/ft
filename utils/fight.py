@@ -25,7 +25,7 @@ conf = {
     'FOLLOW_TREND': False,                          # 买入策略是否为顺势买入，逆势则为False
     'BULL_CODE': '',                                # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
     'BEAR_CODE': 'auto',                            # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
-    'CHECK_GOLDEN_LINE': False,                     # 是否检查黄金分割线
+    'CHECK_GOLDEN_LINE': True,                      # 是否检查黄金分割线
     'BID_ASK_DIFF': 0.002,                          # 买一价和卖一价的价差小于等于多少元，才允许买入
     'CUR_PRICE_MIN': 0.04,
     'CUR_PRICE_MAX': 0.15,
@@ -227,33 +227,35 @@ def check_golden_line():
     data = data.iloc[-1]
     golden_line = get_golden_line(glb['golden_line'][0], glb['golden_line'][1])
     if glb['golden_line'][1] < glb['golden_line'][0]:
-        if data.cur_price > glb['golden_line'][1]:
-            log.info('当前价格位于黄金分割0%和100%之间，适合买熊')
-            value = '熊'
-        elif data.cur_price > golden_line['200']:
-            if data.cur_price > data.avg_price:
-                log.info('当前价格位于黄金分割100%和200%之间，均线之上，适合买牛')
-                value = '牛'
-            else:
-                log.info('当前价格位于黄金分割100%和200%之间，均线之下，适合买熊')
-                value = '熊'
-        else:
-            log.info('当前价格位于黄金分割200%之上，别追了')
-            value = '不允许'
+        value = 'bear'
+        # if data.cur_price > glb['golden_line'][1]:
+        #     log.info('当前价格位于黄金分割0%和100%之间，适合买熊')
+        #     value = 'bear'
+        # elif data.cur_price > golden_line['200']:
+        #     if data.cur_price > data.avg_price:
+        #         log.info('当前价格位于黄金分割100%和200%之间，均线之上，适合买牛')
+        #         value = 'bull'
+        #     else:
+        #         log.info('当前价格位于黄金分割100%和200%之间，均线之下，适合买熊')
+        #         value = 'bear'
+        # else:
+        #     log.info('当前价格位于黄金分割200%之上，别追了')
+        #     value = 'null'
     else:
-        if data.cur_price < glb['golden_line'][1]:
-            log.info('当前价格位于黄金分割0%和100%之间，适合买牛')
-            value = '牛'
-        elif data.cur_price < golden_line['200']:
-            if data.cur_price > data.avg_price:
-                log.info('当前价格位于黄金分割100%和200%之间，均线之上，适合买牛')
-                value = '牛'
-            else:
-                log.info('当前价格位于黄金分割100%和200%之间，均线之下，适合买熊')
-                value = '熊'
-        else:
-            log.info('当前价格位于黄金分割200%之上，别追了')
-            value = '不允许'
+        value = 'bull'
+        # if data.cur_price < glb['golden_line'][1]:
+        #     log.info('当前价格位于黄金分割0%和100%之间，适合买牛')
+        #     value = 'bull'
+        # elif data.cur_price < golden_line['200']:
+        #     if data.cur_price > data.avg_price:
+        #         log.info('当前价格位于黄金分割100%和200%之间，均线之上，适合买牛')
+        #         value = 'bull'
+        #     else:
+        #         log.info('当前价格位于黄金分割100%和200%之间，均线之下，适合买熊')
+        #         value = 'bear'
+        # else:
+        #     log.info('当前价格位于黄金分割200%之上，别追了')
+        #     value = 'null'
     return value
 
 
@@ -335,9 +337,9 @@ def _order_list_query(code='', status=''):
     ret, data = trade_ctx.order_list_query(status_filter_list=status_filter_list, code=code, trd_env=conf['TRADE_ENV'], refresh_cache=True)
     # log.info('查询订单，ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
-        log.info('order_list_query error')
+        log.info('order_list_query error, code: %s' % code)
         return False
-    log.info('order_list_query success')
+    log.info('order_list_query success, code: %s' % code)
     if ft.OrderStatus.FILLED_ALL in status_filter_list:
         filled_all_data = data[data.order_status == ft.OrderStatus.FILLED_ALL]
         if not filled_all_data.empty:
@@ -596,7 +598,7 @@ def _position_list_query(stock_type='', logging=True):
         elif stock_type == 'bear':
             data = bear_data
         if logging:
-            log.info('today buy:\n%s' % data)
+            log.info('today buy %s, data:\n%s' % (stock_type, data))
         return data
     else:
         log.info('today buy qty has empty')
@@ -916,7 +918,7 @@ def auto_buy(stock_type):
         if not glb['pre_buy_bull_flag']:
             log.info('just bought, not pre_buy_bull_flag')
             return False
-        if not conf['CHECK_GOLDEN_LINE'] or check_golden_line() == '牛':
+        if not conf['CHECK_GOLDEN_LINE'] or check_golden_line() == 'bull':
             log.info('to buy bull')
             to_buy('bull')
     elif stock_type == 'bear' and not glb['submitted_buy_bear_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bear_list']) == 0):
@@ -926,7 +928,7 @@ def auto_buy(stock_type):
         if not glb['pre_buy_bear_flag']:
             log.info('just bought, not pre_buy_bear_flag')
             return False
-        if not conf['CHECK_GOLDEN_LINE'] or check_golden_line() == '熊':
+        if not conf['CHECK_GOLDEN_LINE'] or check_golden_line() == 'bear':
             log.info('to buy bear')
             to_buy('bear')
 
@@ -1000,13 +1002,14 @@ class TickerTest(ft.TickerHandlerBase):
                     glb['almost_over'] = True
                     cancel_all()
                     position_list_query()
-                if m >= 59:
-                    glb['to_over'] = True
-                    if not glb['over']:
-                        sell_all(stock_type='bear')
-                        if conf['BULL_CODE'] == 'auto':
-                            sell_all(stock_type='bull')
+                if m >= 58:
+                    if not glb['to_over']:
+                        glb['to_over'] = True
                         log.info('[%s]--------------------to_over--------------------' % t)
+                        if not glb['over']:
+                            sell_all(stock_type='bear')
+                            if conf['BULL_CODE'] == 'auto':
+                                sell_all(stock_type='bull')
                 return ret, data
 
         if glb['to_over']:
