@@ -180,13 +180,13 @@ def get_golden_line(a, b):
 
 def draw_golden_line():
     ret, data = quote_ctx.get_rt_data(HSI_CODE)
-    # log.info('获取分时数据，data:\n%s' % data)
+    # log.info('get_rt_data, ret: %s, data:%s' % (ret, data))
     if ret != ft.RET_OK:
-        log.info('get_rt_data error')
+        log.info('get_rt_data error, ret: %s, data:%s' % (ret, data))
         return False
     if data.iloc[-1].time[0:10] != glb['trade_date'].get('time'):
         log.info('get_rt_data not today')
-        return False
+        # return False
     glb['golden_line'] = [0, 0]
     data_min = data[data.cur_price == min(data.cur_price)]
     data_max = data[data.cur_price == max(data.cur_price)]
@@ -213,17 +213,17 @@ def draw_golden_line():
                     glb['golden_line'][1] = data.iloc[i - 1].cur_price
                     break
     if glb['golden_line'][1] > 0:
-        log.info('黄金分割0%%、100%%的数值分别为：%s' % glb['golden_line'])
+        log.info('golden_line 0%% 100%% values：%s' % glb['golden_line'])
         return data
     else:
-        log.info('黄金分割还未确定')
+        log.info('golden_line not ready')
         return False
 
 
 def check_golden_line():
     data = draw_golden_line()
     if data is False:
-        return False
+        return 'null'
     data = data.iloc[-1]
     golden_line = get_golden_line(glb['golden_line'][0], glb['golden_line'][1])
     if glb['golden_line'][1] < glb['golden_line'][0]:
@@ -1125,10 +1125,6 @@ def start(config=None):
     if data is False:
         glb['restarted'] = False
         return False
-    # data = subscribe(HSI_CODE, ft.SubType.RT_DATA)
-    # if data is False:
-    #     glb['restarted'] = False
-    #     return False
     quote_ctx.set_handler(SysNotifyTest())
     quote_ctx.set_handler(TickerTest())
     trade_ctx.set_handler(TradeOrderTest())
@@ -1138,6 +1134,10 @@ def start(config=None):
     order_list_query(status=ft.OrderStatus.FILLED_ALL)
     # get_stock_code('熊')
     if conf['CHECK_GOLDEN_LINE']:
+        data = subscribe(HSI_CODE, ft.SubType.RT_DATA)
+        if data is False:
+            glb['restarted'] = False
+            return False
         check_golden_line()
 
     ret, data = quote_ctx.query_subscription()
