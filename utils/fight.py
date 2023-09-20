@@ -1073,8 +1073,8 @@ def resetData():
     glb['almost_over'] = False
     glb['to_over'] = False
     glb['over'] = False
-    glb['pre_buy_bull_flag'] = True
-    glb['pre_buy_bear_flag'] = True
+    glb['pre_buy_bull_flag'] = False
+    glb['pre_buy_bear_flag'] = False
     request_trading_days()
 
 
