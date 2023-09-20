@@ -194,26 +194,32 @@ def draw_golden_line():
     max_index = data_max.index.tolist()[0]
     data_min = data_min.iloc[0]
     data_max = data_max.iloc[0]
+    inflection_point = 0
+    is_enough = False
+    is_not_exceed = False
     if data_max.opened_mins > data_min.opened_mins:
         glb['golden_line'][0] = data_min.cur_price
         for i in range(min_index, max_index):
             if i >= 2:
-                if (data.iloc[i - 2].cur_price < data.iloc[i - 1].cur_price > data.iloc[i].cur_price
-                        and data.iloc[i - 1].cur_price - glb['golden_line'][0] > 80
-                        and get_golden_line(glb['golden_line'][0], data.iloc[i - 1].cur_price)['2618'] >= data_max.cur_price):
-                    glb['golden_line'][1] = data.iloc[i - 1].cur_price
-                    break
+                if (data.iloc[i - 2].cur_price < data.iloc[i - 1].cur_price > data.iloc[i].cur_price):
+                    inflection_point = data.iloc[i - 1].cur_price
+                    is_enough = inflection_point - glb['golden_line'][0] > 80
+                    is_not_exceed = data_max.cur_price <= get_golden_line(glb['golden_line'][0], inflection_point)['2618']
+                    if (is_enough and is_not_exceed):
+                        break
     else:
         glb['golden_line'][0] = data_max.cur_price
         for i in range(max_index, min_index):
             if i >= 2:
-                if (data.iloc[i - 2].cur_price > data.iloc[i - 1].cur_price < data.iloc[i].cur_price
-                        and glb['golden_line'][0] - data.iloc[i - 1].cur_price > 80
-                        and get_golden_line(glb['golden_line'][0], data.iloc[i - 1].cur_price)['2618'] <= data_min.cur_price):
-                    glb['golden_line'][1] = data.iloc[i - 1].cur_price
-                    break
-    if glb['golden_line'][1] > 0:
-        log.info('golden_line 0%% 100%% values：%s' % glb['golden_line'])
+                if (data.iloc[i - 2].cur_price > data.iloc[i - 1].cur_price < data.iloc[i].cur_price):
+                    inflection_point = data.iloc[i - 1].cur_price
+                    is_enough = glb['golden_line'][0] - inflection_point > 80
+                    is_not_exceed = data_min.cur_price >= get_golden_line(glb['golden_line'][0], inflection_point)['2618']
+                    if (is_enough and is_not_exceed):
+                        break
+    if inflection_point > 0:
+        glb['golden_line'][1] = inflection_point
+        log.info('golden_line 0%% 100%% values：%s, is_enough: %s, is_not_exceed: %s' % (glb['golden_line'], is_enough, is_not_exceed))
         return data
     else:
         log.info('golden_line not ready')
