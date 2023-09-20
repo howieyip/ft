@@ -26,6 +26,7 @@ conf = {
     'BULL_CODE': '',                                # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
     'BEAR_CODE': 'auto',                            # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
     'CHECK_GOLDEN_LINE': True,                      # 是否检查黄金分割线
+    'GOLDEN_LINE_DIFF': 80,                         # 黄金分割线0-100之间要间隔多少点
     'BID_ASK_DIFF': 0.002,                          # 买一价和卖一价的价差小于等于多少元，才允许买入
     'CUR_PRICE_MIN': 0.04,
     'CUR_PRICE_MAX': 0.15,
@@ -194,32 +195,31 @@ def draw_golden_line():
     max_index = data_max.index.tolist()[0]
     data_min = data_min.iloc[0]
     data_max = data_max.iloc[0]
-    inflection_point = 0
-    is_enough = False
     is_not_exceed = False
     if data_max.opened_mins > data_min.opened_mins:
         glb['golden_line'][0] = data_min.cur_price
         for i in range(min_index, max_index):
             if i >= 2:
-                if (data.iloc[i - 2].cur_price < data.iloc[i - 1].cur_price > data.iloc[i].cur_price):
-                    inflection_point = data.iloc[i - 1].cur_price
-                    is_enough = inflection_point - glb['golden_line'][0] > 80
-                    is_not_exceed = data_max.cur_price <= get_golden_line(glb['golden_line'][0], inflection_point)['2618']
-                    if (is_enough and is_not_exceed):
-                        break
+                cur_price = data.iloc[i - 1].cur_price
+                if ((data.iloc[i - 2].cur_price < cur_price > data.iloc[i].cur_price) and
+                    (cur_price - glb['golden_line'][0] > conf['GOLDEN_LINE_DIFF'])):
+                        glb['golden_line'][1] = cur_price
+                        is_not_exceed = data_max.cur_price <= get_golden_line(glb['golden_line'][0], cur_price)['2618']
+                        if (is_not_exceed):
+                            break
     else:
         glb['golden_line'][0] = data_max.cur_price
         for i in range(max_index, min_index):
             if i >= 2:
-                if (data.iloc[i - 2].cur_price > data.iloc[i - 1].cur_price < data.iloc[i].cur_price):
-                    inflection_point = data.iloc[i - 1].cur_price
-                    is_enough = glb['golden_line'][0] - inflection_point > 80
-                    is_not_exceed = data_min.cur_price >= get_golden_line(glb['golden_line'][0], inflection_point)['2618']
-                    if (is_enough and is_not_exceed):
-                        break
-    if inflection_point > 0:
-        glb['golden_line'][1] = inflection_point
-        log.info('golden_line 0%% 100%% values：%s, is_enough: %s, is_not_exceed: %s' % (glb['golden_line'], is_enough, is_not_exceed))
+                cur_price = data.iloc[i - 1].cur_price
+                if ((data.iloc[i - 2].cur_price > cur_price < data.iloc[i].cur_price) and
+                    (glb['golden_line'][0] - cur_price > conf['GOLDEN_LINE_DIFF'])):
+                        glb['golden_line'][1] = cur_price
+                        is_not_exceed = data_min.cur_price >= get_golden_line(glb['golden_line'][0], cur_price)['2618']
+                        if (is_not_exceed):
+                            break
+    if glb['golden_line'][1] > 0:
+        log.info('golden_line 0%% 100%% values: %s, is_not_exceed: %s' % (glb['golden_line'], is_not_exceed))
         return data
     else:
         log.info('golden_line not ready')
