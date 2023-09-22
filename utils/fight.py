@@ -222,7 +222,7 @@ def draw_golden_line():
         log.info('golden_line 0%% 100%% values: %s, is_not_exceed: %s' % (glb['golden_line'], is_not_exceed))
         return data
     else:
-        log.info('golden_line not ready')
+        # log.info('golden_line not ready')
         return False
 
 
@@ -948,14 +948,14 @@ def pre_buy():
     # if glb['ticker_list'][-1][1][-2:] != '00':
     #     return False
     delta_price = glb['ticker_list'][-1].get('price') - glb['ticker_list'][0].get('price')
-    # 60秒内上涨点数比预设点数还要大，且最后的价格是最高的价格
-    if delta_price >= conf['DELTA_PRICE'] and glb['ticker_list'][-1].get('price') >= max(glb['price_list']):
+    # 60秒内上涨点数比预设点数还要大
+    if delta_price >= conf['DELTA_PRICE']:
         if conf['FOLLOW_TREND']:
             auto_buy('bull')
         else:
             auto_buy('bear')
-    # 60秒内下跌点数比预设点数还要小，且最后的价格是最低的价格
-    elif delta_price <= -conf['DELTA_PRICE'] and glb['ticker_list'][-1].get('price') <= min(glb['price_list']):
+    # 60秒内下跌点数比预设点数还要小
+    elif delta_price <= -conf['DELTA_PRICE']:
         if conf['FOLLOW_TREND']:
             auto_buy('bear')
         else:
