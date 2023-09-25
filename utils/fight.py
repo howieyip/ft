@@ -359,9 +359,9 @@ def _order_list_query(code='', status=''):
                 else:
                     if create_time > glb['last_filled_all_order'][code].get('create_time'):
                         glb['last_filled_all_order'][code] = {'create_time': create_time, 'price': price}
-            log.info('所有股票最近一次成交的订单价格为\n%s' % glb['last_filled_all_order'])
+            log.info('last_filled_all_order:\n%s' % glb['last_filled_all_order'])
         else:
-            log.info('还没有已全部成交的订单')
+            log.info('filled_all_data is empty')
     data = data[(data.order_status == ft.OrderStatus.SUBMITTED) | (data.order_status == ft.OrderStatus.FILLED_PART)]
     for i in range(0, len(data)):
         data2 = data.iloc[i]
@@ -410,7 +410,7 @@ def force_sell(code='', qty=''):
     if len(data) > 0:
         data0 = data.iloc[0]
         if data0.order_status == ft.OrderStatus.FILLED_PART:
-            log.info('订单部分成交，改单降低一格')
+            log.info('FILLED_PART, modify_order price - 0.001')
             modify_order(data0.order_id, data0.price - 0.001, data0.qty)
         else:
             log.info('force_sell success')
@@ -422,13 +422,13 @@ def sell_all(code='', qty='', stock_type=''):
         force_sell(code, qty)
         return True
     cancel_all() # 尽量调用撤销全部订单接口比较快
-    data = position_list_query(stock_type=stock_type)
+    data = _position_list_query(stock_type=stock_type)
     if data is False or data is None:
         return False
     if len(data) > 0:
         for i in range(0, len(data)):
             data2 = data.iloc[i]
-            log.info('准备清仓')
+            log.info('to sell all')
             if data2.qty > data2.can_sell_qty:
                 cancel_all(code=data2.code)
             force_sell(data2.code, data2.qty)
@@ -586,10 +586,10 @@ def _position_list_query(stock_type='', logging=True):
                 reset_submitted_buy(data2.code, data2.stock_name)
                 if conf['AUTO_PLACE_ORDER'] and round(data2.nominal_price, 3) > 0.021 and not glb['to_over']:
                     if data2.stock_name.find('熊') > -1 or (data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto'):
-                        log.info('存在买入的股票%s没自动挂卖单，现在重新自动挂卖单，现价%s，成本价%s' % (data2.code, data2.nominal_price, data2.cost_price))
+                        log.info('code: %s, not auto_place_order, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
                         auto_place_order(data2.code, data2.qty, max(data2.nominal_price, data2.cost_price))
             if round(data2.nominal_price, 3) <= 0.021:
-                log.info('存在买入的股票%s快被回收，现在开始自动换股，现价%s，成本价%s' % (data2.code, data2.nominal_price, data2.cost_price))
+                log.info('code: %s, force_replacing, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
                 glb['force_replacing'] = True
                 sell_all(code=data2.code, qty=data2.qty)
                 if data2.stock_name.find('熊') > -1:
@@ -846,10 +846,10 @@ def _get_stock_code(stock_type='all', cache_first=False):
             data = data.iloc[0]
             bid_ask_diff = data.ask_price - data.bid_price
             if data.ask_price != 0 and (bid_ask_diff < conf['BID_ASK_DIFF'] or math.isclose(bid_ask_diff, conf['BID_ASK_DIFF'])):
-                log.info('买一价%s和卖一价%s的价差%s小于等于%s元，允许买入' % (data.bid_price, data.ask_price, bid_ask_diff, conf['BID_ASK_DIFF']))
+                log.info('bid_price: %s, ask_price: %s, diff: %s <= %s, allow buy' % (data.bid_price, data.ask_price, bid_ask_diff, conf['BID_ASK_DIFF']))
                 cache['data'] = data
             else:
-                log.info('买一价%s和卖一价%s的价差%s大于%s元，不允许买入' % (data.bid_price, data.ask_price, bid_ask_diff, conf['BID_ASK_DIFF']))
+                log.info('bid_price: %s, ask_price: %s, diff: %s > %s, not allow buy' % (data.bid_price, data.ask_price, bid_ask_diff, conf['BID_ASK_DIFF']))
         else:
             log.info('_get_stock_code error, conditions not met')
     cache['last_time'] = time.time()
@@ -887,17 +887,17 @@ def to_buy(stock_type, volume=None, force=False):
                     return False
                 reference_price = glb['last_filled_all_order'].get(data0.code, {}).get('price')
                 if not reference_price:
-                    log.info('股票%s的最近一次成交价不存在，\n%s' % (data0.code, glb['last_filled_all_order']))
+                    log.info('code: %s, no last_filled_all_order，\n%s' % (data0.code, glb['last_filled_all_order']))
                     reference_price = data0.cost_price
                 add_price_diff = round(reference_price - data0.nominal_price, 3)
                 if add_price_diff < conf['ADD_PRICE_DIFF']:
-                    log.info('持仓股票%s的现价%s与最近一次成交价%s的价差%s小于%s元，不允许补仓' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
+                    log.info('code: %s, nominal_price: %s, reference_price: %s, diff: %s < %s, not allow add' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
                     # if stock_type == 'bull':
                     #     glb['pre_buy_bull_flag'] = False
                     # elif stock_type == 'bear':
                     #     glb['pre_buy_bear_flag'] = False
                     return False
-                log.info('持仓股票%s的现价%s与最近一次成交价%s的价差%s大于等于%s元，允许补仓' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
+                log.info('code: %s, nominal_price: %s, reference_price: %s, diff: %s >= %s, allow add' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
 
     if code == 'auto':
         data = get_stock_code(stock_type=stock_type)
@@ -994,7 +994,7 @@ class TickerTest(ft.TickerHandlerBase):
         if h < 9 or h == 9 and m < 30 or h >= 16:
             # print(data)
             if h == 9 and m == 15 and not glb['restarted']:
-                log.info('[%s]准备开盘，需要重置数据' % t)
+                log.info('[%s]soon to start, need to resetData' % t)
                 glb['restarted'] = True
                 resetData()
             elif h == 16 and m == 0 and s == 0:
@@ -1011,14 +1011,17 @@ class TickerTest(ft.TickerHandlerBase):
                     glb['almost_over'] = True
                     cancel_all()
                     position_list_query()
-                if m >= 58:
+                if m >= 59:
                     if not glb['to_over']:
                         glb['to_over'] = True
                         log.info('[%s]--------------------to_over--------------------' % t)
                         if not glb['over']:
-                            sell_all(stock_type='bear')
-                            if conf['BULL_CODE'] == 'auto':
+                            if conf['BULL_CODE'] != '' and conf['BEAR_CODE'] != '':
+                                sell_all()
+                            elif conf['BULL_CODE'] != '':
                                 sell_all(stock_type='bull')
+                            elif conf['BEAR_CODE'] != '':
+                                sell_all(stock_type='bear')
                 return ret, data
 
         if glb['to_over']:
@@ -1057,13 +1060,13 @@ def request_trading_days():
     else:
         last_day = datetime.date(today.year + 1, 1, 1) - datetime.timedelta(days=1)
     ret, data = quote_ctx.request_trading_days(ft.Market.HK, start=today.strftime('%Y-%m-%d'), end=last_day.strftime('%Y-%m-%d'))
-    log.info('获取交易日，ret: %s, data:%s' % (ret, data))
+    log.info('request_trading_days, ret: %s, data:%s' % (ret, data))
     if ret != ft.RET_OK:
         glb['restarted'] = False
-        log.info('获取交易日er ro r')
+        log.info('request_trading_days error')
         return False
     if len(data) == 0 or data[0]['time'] != today.strftime('%Y-%m-%d'):
-        log.info('今天不是交易日')
+        log.info('not trading day')
         return False
     glb['trade_date'] = data[0]
     return glb['trade_date']
@@ -1121,7 +1124,7 @@ def start(config=None):
     if quote_ctx is not None:
         temp_quote_ctx = quote_ctx
         temp_trade_ctx = trade_ctx
-        log.info('开始重启新的程序')
+        log.info('restart new')
     quote_ctx = ft.OpenQuoteContext(host=conf['HOST'], port=conf['PORT'])
     trade_ctx = ft.OpenSecTradeContext(filter_trdmarket=ft.TrdMarket.HK, host=conf['HOST'], port=conf['PORT'])
     resetData()
