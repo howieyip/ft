@@ -6,6 +6,7 @@ import datetime
 start({
     'log_file': '303698/logs/fight.' + datetime.date.today().strftime('%Y-%m-%d') + '.log',
     'PORT' : 11111,
+    'BULL_CODE': 'auto',
     'BUY_VOLUME' : 300e3,
     'MAX_VOLUME' : 500e3,
     'ADJUST_BUY_DICT' : {

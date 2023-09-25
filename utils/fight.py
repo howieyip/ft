@@ -126,9 +126,10 @@ glb = {
 # 节流函数
 def throttle(fn, wait):
     last_call_time = None
+    logged = False
 
     def throttled(*args, **kwargs):
-        nonlocal last_call_time
+        nonlocal last_call_time, logged
         current_time = time.time()
 
         if last_call_time is not None:
@@ -138,9 +139,12 @@ def throttle(fn, wait):
 
         if countdown <= 0:
             last_call_time = current_time
+            logged = False
             return fn(*args, **kwargs)
         else:
-            log.info(f'{fn.__name__} call throttling, {countdown} remaining')
+            if not logged:
+                log.info(f'{fn.__name__} call throttling, {countdown} remaining')
+                logged = True
 
     return throttled
 
@@ -195,7 +199,6 @@ def draw_golden_line():
     max_index = data_max.index.tolist()[0]
     data_min = data_min.iloc[0]
     data_max = data_max.iloc[0]
-    is_not_exceed = False
     if data_max.opened_mins > data_min.opened_mins:
         glb['golden_line'][0] = data_min.cur_price
         for i in range(min_index, max_index):
@@ -219,14 +222,14 @@ def draw_golden_line():
                         if (is_not_exceed):
                             break
     if glb['golden_line'][1] > 0:
-        log.info('golden_line 0%% 100%% values: %s, is_not_exceed: %s' % (glb['golden_line'], is_not_exceed))
+        log.info('golden_line 0%% 100%% values: %s' % (glb['golden_line']))
         return data
     else:
         # log.info('golden_line not ready')
         return False
 
 
-def check_golden_line():
+def _check_golden_line():
     data = draw_golden_line()
     if data is False:
         return 'null'
@@ -639,7 +642,7 @@ class OrderBookTest(ft.OrderBookHandlerBase):
 
 def auto_place_order(code, volume, price):
     if glb['auto_place_order_flag']:
-        log.info('已经开始自动挂单，不要重复了')
+        log.info('auto_place_order_flag True')
         return False
     if price > conf['CUR_PRICE_MAX']:
         return False
@@ -772,13 +775,13 @@ def auto_adjust(delta_price, i, adjust_dict, submitted_type):
     if rise_condition and submitted_type.find('buy') > -1:
         delta_seconds = datestr_to_timestamp(glb['adjust_ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['adjust_ticker_list'][i].get('time'))
         if delta_seconds <= adjust_dict['rise'][0] and data.price < rise_price:
-            log.info('订单价为%s，调整价为%s，准备升档' % (data.price, rise_price))
+            log.info('order price: %s, rise_price: %s' % (data.price, rise_price))
             data.price = rise_price
             modify_order(data.order_id, rise_price, data.qty)
     elif fall_condition:
         delta_seconds = datestr_to_timestamp(glb['adjust_ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['adjust_ticker_list'][i].get('time'))
         if delta_seconds <= adjust_dict['fall'][0] and data.price > fall_price:
-            log.info('订单价为%s，调整价为%s，准备降档' % (data.price, fall_price))
+            log.info('order price: %s, fall_price: %s' % (data.price, fall_price))
             data.price = fall_price
             modify_order(data.order_id, fall_price, data.qty)
 
@@ -922,7 +925,7 @@ def auto_buy(stock_type):
         if conf['BULL_CODE'] == '':
             return False
         if not glb['pre_buy_bull_flag']:
-            log.info('just bought, not pre_buy_bull_flag')
+            # log.info('not pre_buy_bull_flag')
             return False
         if not conf['CHECK_GOLDEN_LINE'] or check_golden_line() == 'bull':
             log.info('to buy bull')
@@ -932,7 +935,7 @@ def auto_buy(stock_type):
         if conf['BEAR_CODE'] == '':
             return False
         if not glb['pre_buy_bear_flag']:
-            log.info('just bought, not pre_buy_bear_flag')
+            # log.info('not pre_buy_bear_flag')
             return False
         if not conf['CHECK_GOLDEN_LINE'] or check_golden_line() == 'bear':
             log.info('to buy bear')
@@ -1078,6 +1081,8 @@ def resetData():
     request_trading_days()
 
 
+# 限制3秒内最多查1次足够
+check_golden_line = throttle(_check_golden_line, 3)
 # 每 30 秒内最多请求 10 次查询持仓接口
 position_list_query = throttle(_position_list_query, 3)
 # 每 30 秒内最多请求 15 次下单接口，且连续两次请求的间隔不可小于 0.02 秒
