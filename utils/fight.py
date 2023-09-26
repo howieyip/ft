@@ -225,7 +225,7 @@ def draw_golden_line():
         log.info('golden_line 0%% 100%% values: %s' % (glb['golden_line']))
         return data
     else:
-        # log.info('golden_line not ready')
+        log.info('golden_line not ready')
         return False
 
 
