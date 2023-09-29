@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-import os
-import re
 import time
 import datetime
 import math
@@ -753,7 +751,7 @@ def auto_adjust(delta_price, i, adjust_dict, submitted_type):
     order_book = glb['order_book'].get(data.code)
     bid_price = order_book['Bid'][0][0]
     ask_price = order_book['Ask'][0][0]
-    if bid_price >= 0.25:
+    if bid_price >= conf['CUR_PRICE_MAX']:
         return False
     rise_price = 0
     fall_price = 0
