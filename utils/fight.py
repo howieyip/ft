@@ -131,7 +131,7 @@ def throttle(fn, wait):
         current_time = time.time()
 
         if last_call_time is not None:
-            countdown = wait - (current_time - last_call_time)
+            countdown = round(wait - (current_time - last_call_time), 3)
         else:
             countdown = 0
 
@@ -141,7 +141,7 @@ def throttle(fn, wait):
             return fn(*args, **kwargs)
         else:
             if not logged:
-                log.info(f'{fn.__name__} call throttling, {countdown} remaining')
+                log.info(f'{fn.__name__} call throttling, {countdown}s remaining')
                 logged = True
 
     return throttled
@@ -432,10 +432,10 @@ def sell_all(code='', qty='', stock_type=''):
             force_sell(data2.code, data2.qty)
 
 
-def subscribe(code_list, subtype_list):
+def subscribe(code_list, subtype_list, subscribe_push=True):
     if len(code_list) == 0:
         return False
-    ret, data = quote_ctx.subscribe(code_list, subtype_list)
+    ret, data = quote_ctx.subscribe(code_list, subtype_list, subscribe_push=subscribe_push)
     log.info('subscribe %s %s, ret: %s, data: %s' % (code_list, subtype_list, ret, data))
     if ret != ft.RET_OK:
         log.info('subscribe %s %s error' % (code_list, subtype_list))
@@ -463,19 +463,19 @@ def set_has(code, stock_name):
     elif stock_name.find('熊') > -1:
         # log.info('持仓熊证：%s' % code)
         glb['has_bear_list'].append(code)
-    subscribe(code, ft.SubType.ORDER_BOOK)
+    subscribe([code], [ft.SubType.ORDER_BOOK])
 
 
 def reset_has(stock_name='', real=False):
     if stock_name == '' or stock_name.find('牛') > -1:
         if real:
             glb['bull_stop_price'] = 0
-            unsubscribe(glb['has_bull_list'], ft.SubType.ORDER_BOOK)
+            unsubscribe(glb['has_bull_list'], [ft.SubType.ORDER_BOOK])
         glb['has_bull_list'] = []
     if stock_name == '' or stock_name.find('熊') > -1:
         if real:
             glb['bear_stop_price'] = 0
-            unsubscribe(glb['has_bear_list'], ft.SubType.ORDER_BOOK)
+            unsubscribe(glb['has_bear_list'], [ft.SubType.ORDER_BOOK])
         glb['has_bear_list'] = []
 
 
@@ -490,7 +490,7 @@ def set_submitted_buy(code, stock_name, data=None):
         if data is not None:
             glb['submitted_buy_bear'] = data
         log.info('set_submitted_buy bear: %s' % code)
-    subscribe(code, ft.SubType.ORDER_BOOK)
+    subscribe([code], [ft.SubType.ORDER_BOOK])
 
 
 def reset_submitted_buy(code, stock_name=''):
@@ -1133,7 +1133,7 @@ def start(config=None):
             glb['restarted'] = False
             log.info('unlock_trade error')
             return False
-    data = subscribe(MHI_CODE, ft.SubType.TICKER)
+    data = subscribe([MHI_CODE], [ft.SubType.TICKER])
     if data is False:
         glb['restarted'] = False
         return False
@@ -1146,7 +1146,7 @@ def start(config=None):
     order_list_query(status=ft.OrderStatus.FILLED_ALL)
     # get_stock_code('熊')
     if conf['CHECK_GOLDEN_LINE']:
-        data = subscribe(HSI_CODE, ft.SubType.RT_DATA)
+        data = subscribe([HSI_CODE], [ft.SubType.RT_DATA], subscribe_push=False)
         if data is False:
             glb['restarted'] = False
             return False
