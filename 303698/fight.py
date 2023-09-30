@@ -10,5 +10,5 @@ start({
     'BUY_VOLUME' : 400e3,
     'MAX_VOLUME' : 600e3,
     'ALLOW_ADD': True,
-    'ADD_PRICE_DIFF': 0.004
+    'ADD_PRICE_DIFF': 0.005
 })

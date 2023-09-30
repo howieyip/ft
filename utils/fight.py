@@ -72,7 +72,7 @@ glb = {
     'golden_line': [0, 0],
     'today_pl_val_bull': 0,
     'today_pl_val_bear': 0,
-    'trade_date': None,
+    'trade_date': {},
     'restarted': False,
     'soon_over': False,
     'almost_over': False,
@@ -172,12 +172,15 @@ def datestr_to_timestamp(time_str, format_str="%Y-%m-%d %H:%M:%S", pattern=r'\d{
     #     return time.time()
 
 
-def get_golden_line(a, b):
+def get_golden_line(lines=None):
+    if lines is None:
+        lines = glb['golden_line']
     d = dict()
-    d['0'] = a
-    d['100'] = b
-    d['200'] = a + (b - a) * 2
-    d['2618'] = a + (b - a) * 2.618
+    d['0'] = lines[0]
+    d['100'] = lines[1]
+    delta = d['100'] - d['0']
+    d['200'] = d['0'] + delta * 2
+    d['2618'] = d['0'] + delta * 2.618
     return d
 
 
@@ -195,47 +198,45 @@ def draw_golden_line():
     data_max = data[data.cur_price == max(data.cur_price)]
     min_index = data_min.index.tolist()[0]
     max_index = data_max.index.tolist()[0]
+    cur_index = data.shape[0] - 1
     data_min = data_min.iloc[0]
     data_max = data_max.iloc[0]
+    golden_line = None
     if data_max.opened_mins > data_min.opened_mins:
         glb['golden_line'][0] = data_min.cur_price
-        for i in range(min_index, max_index):
+        for i in range(min_index, cur_index):
             if i >= 2:
                 cur_price = data.iloc[i - 1].cur_price
                 if ((data.iloc[i - 2].cur_price < cur_price > data.iloc[i].cur_price) and
                     (cur_price - glb['golden_line'][0] > conf['GOLDEN_LINE_DIFF'])):
                         glb['golden_line'][1] = cur_price
-                        is_not_exceed = data_max.cur_price <= get_golden_line(glb['golden_line'][0], cur_price)['2618']
-                        if (is_not_exceed):
+                        golden_line = get_golden_line()
+                        if (data_max.cur_price <= golden_line['2618']):
                             break
     else:
         glb['golden_line'][0] = data_max.cur_price
-        for i in range(max_index, min_index):
+        for i in range(max_index, cur_index):
             if i >= 2:
                 cur_price = data.iloc[i - 1].cur_price
                 if ((data.iloc[i - 2].cur_price > cur_price < data.iloc[i].cur_price) and
                     (glb['golden_line'][0] - cur_price > conf['GOLDEN_LINE_DIFF'])):
                         glb['golden_line'][1] = cur_price
-                        is_not_exceed = data_min.cur_price >= get_golden_line(glb['golden_line'][0], cur_price)['2618']
-                        if (is_not_exceed):
+                        golden_line = get_golden_line()
+                        if (data_min.cur_price >= golden_line['2618']):
                             break
-    if glb['golden_line'][1] > 0:
-        log.info('golden_line 0%% 100%% values: %s' % (glb['golden_line']))
-        return data
-    else:
+    if golden_line is None:
         log.info('golden_line not ready')
         return False
-
+    log.info('golden_line 0%% 100%% values: %s' % (glb['golden_line']))
+    return golden_line
 
 def _check_golden_line():
-    data = draw_golden_line()
-    if data is False:
+    golden_line = draw_golden_line()
+    if golden_line is False:
         return 'null'
-    data = data.iloc[-1]
-    golden_line = get_golden_line(glb['golden_line'][0], glb['golden_line'][1])
-    if glb['golden_line'][1] < glb['golden_line'][0]:
+    if golden_line['100'] < golden_line['0']:
         value = 'bear'
-        # if data.cur_price > glb['golden_line'][1]:
+        # if data.cur_price > golden_line['100']:
         #     log.info('当前价格位于黄金分割0%和100%之间，适合买熊')
         #     value = 'bear'
         # elif data.cur_price > golden_line['200']:
@@ -250,7 +251,7 @@ def _check_golden_line():
         #     value = 'null'
     else:
         value = 'bull'
-        # if data.cur_price < glb['golden_line'][1]:
+        # if data.cur_price < golden_line['100']:
         #     log.info('当前价格位于黄金分割0%和100%之间，适合买牛')
         #     value = 'bull'
         # elif data.cur_price < golden_line['200']:
