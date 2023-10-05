@@ -79,12 +79,10 @@ glb = {
     'to_over': False,
     'over': False,
     'ticker_list': [],
-    'price_list': [],
     'cur_price': 0,
     'last_price': 0,
     'last_filled_all_order': {},
     'adjust_ticker_list': [],
-    'adjust_price_list': [],
     'submitted_buy_bull': None,
     'submitted_buy_bear': None,
     'submitted_sell_bull': None,
@@ -765,11 +763,11 @@ def auto_adjust(delta_price, i, adjust_dict, submitted_type):
     rise_condition = False
     fall_condition = False
     if submitted_type.find('bull') > -1:
-        rise_condition = delta_price >= adjust_dict['rise'][1] and glb['adjust_ticker_list'][-1].get('price') >= max(glb['adjust_price_list'])
-        fall_condition = delta_price <= -adjust_dict['fall'][1] and glb['adjust_ticker_list'][-1].get('price') <= min(glb['adjust_price_list'])
+        rise_condition = delta_price >= adjust_dict['rise'][1]
+        fall_condition = delta_price <= -adjust_dict['fall'][1]
     elif submitted_type.find('bear') > -1:
-        rise_condition = delta_price <= -adjust_dict['rise'][1] and glb['adjust_ticker_list'][-1].get('price') <= min(glb['adjust_price_list'])
-        fall_condition = delta_price >= adjust_dict['fall'][1] and glb['adjust_ticker_list'][-1].get('price') >= max(glb['adjust_price_list'])
+        rise_condition = delta_price <= -adjust_dict['rise'][1]
+        fall_condition = delta_price >= adjust_dict['fall'][1]
     # 要买入的时候才考虑升档，要卖出的时候只考虑降档
     if rise_condition and submitted_type.find('buy') > -1:
         delta_seconds = datestr_to_timestamp(glb['adjust_ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['adjust_ticker_list'][i].get('time'))
@@ -792,7 +790,6 @@ def pre_adjust():
     # }
     while datestr_to_timestamp(glb['adjust_ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['adjust_ticker_list'][0].get('time')) > conf['MAX_ADJUST_DELTA_SECONDS']:
         glb['adjust_ticker_list'].pop(0)
-        glb['adjust_price_list'].pop(0)
     # i 从逐笔列表的倒数第二项开始，依次递减1，直到0为止，要遍历的前提是预设的多少秒内是不统一的
     # for i in range(len(glb['adjust_ticker_list']) - 2, -1, -1):
     i = 0
@@ -946,7 +943,6 @@ def pre_buy():
     # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
     while datestr_to_timestamp(glb['ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['ticker_list'][0].get('time')) > conf['DELTA_SECONDS']:
         glb['ticker_list'].pop(0)
-        glb['price_list'].pop(0)
     # if glb['ticker_list'][-1][1][-2:] != '00':
     #     return False
     delta_price = glb['ticker_list'][-1].get('price') - glb['ticker_list'][0].get('price')
@@ -1037,10 +1033,8 @@ class TickerTest(ft.TickerHandlerBase):
             for index, row in data.iterrows():
                 if conf['AUTO_BUY'] and not glb['soon_over']:
                     glb['ticker_list'].append(row)
-                    glb['price_list'].append(row.price)
                 if conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']:
                     glb['adjust_ticker_list'].append(row)
-                    glb['adjust_price_list'].append(row.price)
             # 尾盘就不买了
             if conf['AUTO_BUY'] and not glb['soon_over']:
                 pre_buy()
