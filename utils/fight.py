@@ -90,6 +90,7 @@ glb = {
     'submitted_sell_bull_list': [],
     'submitted_sell_bear_list': [],
     'order_book': {},
+    'auto_buy_list': [],
     'has_bull_list': [],
     'has_bear_list': [],
     'auto_place_order_flag': False,
@@ -117,6 +118,13 @@ glb = {
         'bear': '熊'
     }
 }
+
+
+# 添加数组元素，不重复
+def add_unique_element(arr, element):
+    if element not in arr:
+        arr.append(element)
+    return arr
 
 
 # 节流函数
@@ -744,9 +752,9 @@ class TradeOrderTest(ft.TradeOrderHandlerBase):
 
 
 def auto_adjust(delta_price, i, adjust_dict, submitted_type):
-    if glb[submitted_type] is None or glb[submitted_type].code not in glb['order_book']:
-        return False
     data = glb[submitted_type]
+    if data is None or data.code not in glb['order_book'] or (submitted_type.find('buy') > -1 and data.code not in glb['auto_buy_list']):
+        return False
     order_book = glb['order_book'].get(data.code)
     bid_price = order_book['Bid'][0][0]
     ask_price = order_book['Ask'][0][0]
@@ -907,6 +915,7 @@ def to_buy(stock_type, volume=None, force=False):
     if data is False or data is None:
         reset_submitted_buy(code, glb['stock_name'][stock_type])
     else:
+        add_unique_element(glb['auto_buy_list'], code)
         # 刚买入，先设置别追买，要等待时机才买
         if stock_type == 'bull':
             glb['pre_buy_bull_flag'] = False
