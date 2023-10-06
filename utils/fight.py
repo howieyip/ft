@@ -888,10 +888,11 @@ def to_buy(stock_type, volume=None, force=False):
                 add_price_diff = round(reference_price - data0.nominal_price, 3)
                 if add_price_diff < conf['ADD_PRICE_DIFF']:
                     log.info('code: %s, nominal_price: %s, reference_price: %s, diff: %s < %s, not allow add' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
-                    # if stock_type == 'bull':
-                    #     glb['pre_buy_bull_flag'] = False
-                    # elif stock_type == 'bear':
-                    #     glb['pre_buy_bear_flag'] = False
+                    if conf['FOLLOW_TREND']:
+                        if stock_type == 'bull':
+                            glb['pre_buy_bull_flag'] = False
+                        elif stock_type == 'bear':
+                            glb['pre_buy_bear_flag'] = False
                     return False
                 log.info('code: %s, nominal_price: %s, reference_price: %s, diff: %s >= %s, allow add' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
 
@@ -1072,8 +1073,14 @@ def resetData():
     glb['almost_over'] = False
     glb['to_over'] = False
     glb['over'] = False
-    glb['pre_buy_bull_flag'] = True
-    glb['pre_buy_bear_flag'] = True
+    if conf['FOLLOW_TREND']:
+        glb['pre_buy_bull_flag'] = False
+        glb['pre_buy_bear_flag'] = False
+        conf['ADJUST_BUY_DICT']['rise'][2] = 0
+    else:
+        glb['pre_buy_bull_flag'] = True
+        glb['pre_buy_bear_flag'] = True
+        conf['ADJUST_BUY_DICT']['rise'][2] = 1
     request_trading_days()
 
 
