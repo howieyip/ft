@@ -74,6 +74,7 @@ glb = {
     'today_pl_val_bear': 0,
     'trade_date': {},
     'restarted': False,
+    'afternoon': False,
     'soon_over': False,
     'almost_over': False,
     'to_over': False,
@@ -837,6 +838,8 @@ def _get_stock_code(stock_type='all', cache_first=False):
 def to_buy(stock_type, volume=None, force=False):
     if volume is None:
         volume = conf['BUY_VOLUME']
+        if glb['afternoon']:
+            volume /= 2
     code = ''
     if stock_type == 'bull':
         code = conf['BULL_CODE']
@@ -983,8 +986,13 @@ class TickerTest(ft.TickerHandlerBase):
         if h == 9 and m == 30 and glb['restarted']:
             log.info('[%s]--------------------start--------------------' % t)
             glb['restarted'] = False
-        elif (glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15) and m >= 30:
-            glb['soon_over'] = True
+        elif h >= 13 and not glb['afternoon']:
+            glb['afternoon'] = True
+        elif glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15:
+            if (len(glb['has_bull_list']) == 0 and len(glb['has_bear_list']) == 0):
+                glb['soon_over'] = True
+            elif m >= 30:
+                glb['soon_over'] = True
             if m >= 55:
                 if not glb['almost_over']:
                     glb['almost_over'] = True
@@ -1052,6 +1060,7 @@ def request_trading_days():
 # 重置数据
 def resetData():
     log.info('--------------------resetData--------------------')
+    glb['afternoon'] = False
     glb['soon_over'] = False
     glb['almost_over'] = False
     glb['to_over'] = False
