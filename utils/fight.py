@@ -888,7 +888,10 @@ def to_buy(stock_type, volume=None, force=False):
         code = data.stock
 
     set_submitted_buy(code, glb['stock_name'][stock_type])
-    data = smart_buy(code, volume)
+    if force:
+        data = smart_buy(code, volume, type='Ask')
+    else:
+        data = smart_buy(code, volume)
     if data is False or data is None:
         reset_submitted_buy(code, glb['stock_name'][stock_type])
     else:
