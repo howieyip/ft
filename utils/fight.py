@@ -186,8 +186,15 @@ def get_golden_line(line=None):
     d['0'] = line['0']
     d['100'] = line['100']
     d['diff'] = d['100'] - d['0']
+    glb['golden_line']['diff'] = glb['golden_line']['100'] - glb['golden_line']['0']
+    d['reverse'] = ''
+    if d['diff'] > 0 and glb['golden_line']['diff'] < 0:
+        d['reverse'] = 'bull'
+    elif d['diff'] < 0 and glb['golden_line']['diff'] > 0:
+        d['reverse'] = 'bear'
     # d['200'] = d['0'] + d['diff'] * 2
     d['2618'] = d['0'] + d['diff'] * 2.618
+    glb['golden_line'] = d
     return d
 
 
@@ -210,7 +217,7 @@ def draw_golden_line():
     golden_line = {'0': 0, '100': 0}
     if data_max.opened_mins > data_min.opened_mins:
         golden_line['0'] = data_min.cur_price
-        for i in range(min_index, cur_index):
+        for i in range(min_index, max_index): # 分割线向上，但买牛要谨慎，需最大值和最小值之间有拐点
             if i >= 2:
                 cur_price = data.iloc[i - 1].cur_price
                 if ((data.iloc[i - 2].cur_price < cur_price > data.iloc[i].cur_price) and
@@ -233,8 +240,7 @@ def draw_golden_line():
     if golden_line['100'] == 0:
         log.info('golden_line not ready')
         return False
-    glb['golden_line'] = golden_line
-    log.info('golden_line: %s' % (glb['golden_line']))
+    log.info('golden_line: %s' % golden_line)
     return golden_line
 
 def _check_golden_line():
@@ -991,9 +997,12 @@ class TickerTest(ft.TickerHandlerBase):
             glb['restarted'] = False
         elif h >= 13 and not glb['afternoon']:
             glb['afternoon'] = True
-        elif glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15:
-            if (len(glb['has_bull_list']) == 0 and len(glb['has_bear_list']) == 0):
-                glb['soon_over'] = True
+
+        if glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15:
+            if ((len(glb['has_bull_list']) == 0 and len(glb['has_bear_list']) == 0) or
+                (glb['golden_line']['reverse'] == 'bull' and len(glb['has_bull_list']) == 0) or
+                (glb['golden_line']['reverse'] == 'bear' and len(glb['has_bear_list']) == 0)):
+                    glb['soon_over'] = True
             elif m >= 30:
                 glb['soon_over'] = True
             if m >= 55:
