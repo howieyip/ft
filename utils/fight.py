@@ -69,7 +69,7 @@ log = None
 quote_ctx = None
 trade_ctx = None
 glb = {
-    'golden_line': {'0': 0, '100': 0},
+    'golden_line': {'0': 0, '100': 0, 'diff': 0, 'reverse': ''},
     'today_pl_val_bull': 0,
     'today_pl_val_bear': 0,
     'trade_date': {},
@@ -187,7 +187,7 @@ def get_golden_line(line=None):
     d['100'] = line['100']
     d['diff'] = d['100'] - d['0']
     glb['golden_line']['diff'] = glb['golden_line']['100'] - glb['golden_line']['0']
-    d['reverse'] = ''
+    d['reverse'] = glb['golden_line']['reverse']
     if d['diff'] > 0 and glb['golden_line']['diff'] < 0:
         d['reverse'] = 'bull'
     elif d['diff'] < 0 and glb['golden_line']['diff'] > 0:
@@ -211,13 +211,13 @@ def draw_golden_line():
     data_max = data[data.cur_price == max(data.cur_price)]
     min_index = data_min.index.tolist()[0]
     max_index = data_max.index.tolist()[0]
-    cur_index = data.shape[0] - 1
+    # cur_index = data.shape[0] - 1
     data_min = data_min.iloc[0]
     data_max = data_max.iloc[0]
     golden_line = {'0': 0, '100': 0}
     if data_max.opened_mins > data_min.opened_mins:
         golden_line['0'] = data_min.cur_price
-        for i in range(min_index, max_index): # 分割线向上，但买牛要谨慎，需最大值和最小值之间有拐点
+        for i in range(min_index, max_index): # 买入要谨慎，需最大值和最小值之间有拐点
             if i >= 2:
                 cur_price = data.iloc[i - 1].cur_price
                 if ((data.iloc[i - 2].cur_price < cur_price > data.iloc[i].cur_price) and
@@ -228,7 +228,7 @@ def draw_golden_line():
                             break
     else:
         golden_line['0'] = data_max.cur_price
-        for i in range(max_index, cur_index):
+        for i in range(max_index, min_index):
             if i >= 2:
                 cur_price = data.iloc[i - 1].cur_price
                 if ((data.iloc[i - 2].cur_price > cur_price < data.iloc[i].cur_price) and
