@@ -15,7 +15,7 @@ def sum(name, line):
     if bear_re:
         bear_number = float(bear_re.group(1))
         total_bear += bear_number
-    if bull_number > 0 or bear_number > 0:
+    if bull_number != 0 or bear_number != 0:
         print(f'{name}: {line}', end='')
 
 
