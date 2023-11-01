@@ -7,13 +7,16 @@ total_bear = 0
 # 求和
 def sum(name, line):
     global total_bull, total_bear
-    print(f'{name}: {line}', end='')
-    bull_number = re.search(r'today bull: (-?\d+\.?\d*)', line)
-    bear_number = re.search(r'today bear: (-?\d+\.?\d*)', line)
-    if bull_number:
-        total_bull += float(bull_number.group(1))
-    if bear_number:
-        total_bear += float(bear_number.group(1))
+    bull_re = re.search(r'today bull: (-?\d+\.?\d*)', line)
+    bear_re = re.search(r'today bear: (-?\d+\.?\d*)', line)
+    if bull_re:
+        bull_number = float(bull_re.group(1))
+        total_bull += bull_number
+    if bear_re:
+        bear_number = float(bear_re.group(1))
+        total_bear += bear_number
+    if bull_number > 0 or bear_number > 0:
+        print(f'{name}: {line}', end='')
 
 
 # 遍历指定目录下的所有log文件

@@ -207,6 +207,16 @@ def draw_golden_line():
     if data.iloc[-1].time[0:10] != glb['trade_date'].get('time'):
         log.info('get_rt_data not today')
         # return False
+
+    #       code                 time  is_blank  opened_mins  cur_price  last_close     avg_price  volume      turnover
+    # 0    HK.800000  2023-10-31 09:30:00     False          570   17337.70    17406.36  17337.700000       0  1.682861e+09
+    # 1    HK.800000  2023-10-31 09:31:00     False          571   17214.94    17406.36  17276.320000       0  1.822654e+09
+    # 2    HK.800000  2023-10-31 09:32:00     False          572   17223.84    17406.36  17258.826667       0  8.516341e+08
+    # 3    HK.800000  2023-10-31 09:33:00     False          573   17224.69    17406.36  17250.292500       0  7.468972e+08
+    # ret, data = (0, {'opened_mins': [570, 571, 572, 573],
+    # 'cur_price': [17337.70, 17214.94, 17223.84, 17212.21]})
+    # data = pd.DataFrame(data)
+
     data_min = data[data.cur_price == min(data.cur_price)]
     data_max = data[data.cur_price == max(data.cur_price)]
     min_index = data_min.index.tolist()[0]
@@ -218,7 +228,7 @@ def draw_golden_line():
     if data_max.opened_mins > data_min.opened_mins:
         golden_line['0'] = data_min.cur_price
         for i in range(min_index, max_index): # 买入要谨慎，需最大值和最小值之间有拐点
-            if i >= 2:
+            if i >= 3:
                 cur_price = data.iloc[i - 1].cur_price
                 if ((data.iloc[i - 2].cur_price < cur_price > data.iloc[i].cur_price) and
                     (cur_price - golden_line['0'] > conf['GOLDEN_LINE_DIFF'])):
@@ -229,7 +239,7 @@ def draw_golden_line():
     else:
         golden_line['0'] = data_max.cur_price
         for i in range(max_index, min_index):
-            if i >= 2:
+            if i >= 3:
                 cur_price = data.iloc[i - 1].cur_price
                 if ((data.iloc[i - 2].cur_price > cur_price < data.iloc[i].cur_price) and
                     (golden_line['0'] - cur_price > conf['GOLDEN_LINE_DIFF'])):
