@@ -36,8 +36,8 @@ conf = {
 
     'AUTO_ADJUST_BUY': True,                        # 是否自动调整挂的买单的价格，若是则下面的ADJUST_BUY_DICT有效
     'ADJUST_BUY_DICT': {
-        'rise': [2, 3, 1],                          # 最近多少秒内，往持仓股票方向波动多少点，调整买单为第几档
-        'fall': [2, 3, 2]                           # 最近多少秒内，往持仓股票反向波动多少点，调整买单为第几档
+        'rise': [60, 1, 1],                          # 最近多少秒内，往持仓股票方向波动多少点，调整买单为第几档
+        'fall': [60, 1, 2]                           # 最近多少秒内，往持仓股票反向波动多少点，调整买单为第几档
     },
 
     'ALLOW_ADD': True,                              # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
@@ -584,6 +584,12 @@ def _position_list_query(stock_type='', logging=True):
                     if data2.stock_name.find('熊') > -1 or (data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto'):
                         log.info('code: %s, not auto_place_order, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
                         auto_place_order(data2.code, data2.qty, max(data2.nominal_price, data2.cost_price))
+            if (((glb['golden_line']['reverse'] == 'bull' and data2.stock_name.find('熊') > -1) or
+                (glb['golden_line']['reverse'] == 'bear' and data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto')) and
+                data2.qty >= conf['BUY_VOLUME']):
+                    log.info('code: %s, reverse_sell, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
+                    sell_all(code=data2.code, qty=data2.qty / 2)
+                    auto_place_order(data2.code, data2.qty / 2, data2.nominal_price)
             if round(data2.nominal_price, 3) <= 0.021:
                 log.info('code: %s, force_replacing, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
                 glb['force_replacing'] = True
