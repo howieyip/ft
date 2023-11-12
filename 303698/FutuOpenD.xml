@@ -24,6 +24,9 @@
 		<!-- FutuOpenD日志等级，no, debug, info, warning, error, fatal --> 
 		<!-- FutuOpenD log level: no, debug, info, warning, error, fatal --> 
 		<log_level>info</log_level>
+		<!-- FutuOpenD日志路径，指定生成日志的路径，不设置时使用默认路径 --> 
+		<!-- FutuOpenD Log path, Specify the path to generate logs, Use default path if not set --> 
+		<!-- <log_path>D:\log</log_path> -->
 		<!-- API推送协议格式，0：pb, 1：json -->
 		<!-- API push protocol format. 0: pb, 1: json -->
 		<push_proto_type>0</push_proto_type>
