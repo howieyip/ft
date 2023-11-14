@@ -588,8 +588,7 @@ def _position_list_query(stock_type='', logging=True):
                 (glb['golden_line']['reverse'] == 'bear' and data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto')) and
                 data2.qty >= conf['BUY_VOLUME']):
                     log.info('code: %s, reverse_sell, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
-                    sell_all(code=data2.code, qty=data2.qty / 2)
-                    auto_place_order(data2.code, data2.qty / 2, data2.nominal_price)
+                    sell_all(code=data2.code, qty=conf['BUY_VOLUME'])
             if round(data2.nominal_price, 3) <= 0.021:
                 log.info('code: %s, force_replacing, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
                 glb['force_replacing'] = True
@@ -1042,11 +1041,14 @@ class TickerTest(ft.TickerHandlerBase):
         if glb['to_over']:
             return ret, data
 
-        # 有持仓的时候，每波动10点查询持仓列表
+        # 有持仓的时候，每一分钟查询分割线，每波动10点查询持仓列表
         glb['cur_price'] = data0.price
-        if (len(glb['has_bull_list']) > 0 or len(glb['has_bear_list']) > 0) and abs(glb['cur_price'] - glb['last_price']) >= 10:
-            glb['last_price'] = glb['cur_price']
-            position_list_query(logging=False)
+        if (len(glb['has_bull_list']) > 0 or len(glb['has_bear_list']) > 0):
+            if data0.get('time')[-2:] == '00' and conf['CHECK_GOLDEN_LINE']:
+                check_golden_line()
+            if abs(glb['cur_price'] - glb['last_price']) >= 10:
+                glb['last_price'] = glb['cur_price']
+                position_list_query(logging=False)
 
         # 自动买入和自动调价
         if conf['AUTO_BUY'] or conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']:
