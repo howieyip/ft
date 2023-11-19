@@ -569,11 +569,11 @@ def _position_list_query(stock_type='', logging=True):
             glb['today_pl_val_bull'] += data2.today_pl_val
         elif data2.stock_name.find('熊') > -1:
             glb['today_pl_val_bear'] += data2.today_pl_val
-        if data2.qty > 0 and data2.qty != data2.today_buy_qty - data2.today_sell_qty and data2.today_buy_qty > data2.today_sell_qty:
-            log.info('position_list_query qty error, ret: %s, data:\n%s' % (ret, data))
+        if data2.qty > 0 and data2.qty != data2.today_buy_qty - data2.today_sell_qty:
+            log.info('position_list_query not today buy, data:\n%s' % data2)
     log.info('current price: %s, today bull: %s, today bear: %s' % (glb['cur_price'], glb['today_pl_val_bull'], glb['today_pl_val_bear']))
 
-    data = data[data.qty > 0]
+    data = data[(data.qty > 0) & (data.qty == data.today_buy_qty - data.today_sell_qty)]
     if len(data) > 0:
         for i in range(0, len(data)):
             data2 = data.iloc[i]
@@ -584,11 +584,10 @@ def _position_list_query(stock_type='', logging=True):
                     if data2.stock_name.find('熊') > -1 or (data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto'):
                         log.info('code: %s, not auto_place_order, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
                         auto_place_order(data2.code, data2.qty, max(data2.nominal_price, data2.cost_price))
-            if (((glb['golden_line']['reverse'] == 'bull' and data2.stock_name.find('熊') > -1) or
-                (glb['golden_line']['reverse'] == 'bear' and data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto')) and
-                data2.qty >= conf['BUY_VOLUME']):
+            if ((glb['golden_line']['reverse'] == 'bull' and data2.stock_name.find('熊') > -1) or
+                (glb['golden_line']['reverse'] == 'bear' and data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto')):
                     log.info('code: %s, reverse_sell, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
-                    sell_all(code=data2.code, qty=conf['BUY_VOLUME'])
+                    sell_all(code=data2.code, qty=data2.qty)
             if round(data2.nominal_price, 3) <= 0.021:
                 log.info('code: %s, force_replacing, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
                 glb['force_replacing'] = True
