@@ -27,7 +27,7 @@ conf = {
     'GOLDEN_LINE_DIFF': 80,                         # 黄金分割线0-100之间要间隔多少点
     'BID_ASK_DIFF': 0.002,                          # 买一价和卖一价的价差小于等于多少元，才允许买入
     'CUR_PRICE_MIN': 0.04,
-    'CUR_PRICE_MAX': 0.15,
+    'CUR_PRICE_MAX': 0.12,
 
     'DELTA_SECONDS': 60,                            # 多少秒内
     'DELTA_PRICE': 15,                              # 波动多少点
