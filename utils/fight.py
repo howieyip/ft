@@ -54,9 +54,10 @@ conf = {
     ],                                              # 下单多少股以上（大的写前面），每单挂多少股，一单挂高几格，下一单挂高几格
 
     'AUTO_ADJUST_SELL': True,                       # 是否自动调整挂的卖单的价格，若是则下面的ADJUST_SELL_DICT有效
+    'AUTO_ADJUST_SELL_ALMOST_OVER': True,           # 尾盘是否自动调整挂的卖单的价格，只降不升
     'ADJUST_SELL_DICT': {
-        'rise': [2, 3, 2],                          # 最近多少秒内，往持仓股票方向波动多少点，调整卖单为第几档
-        'fall': [2, 3, 1]                           # 最近多少秒内，往持仓股票反向波动多少点，调整卖单为第几档
+        'rise': [60, 1, 2],                          # 最近多少秒内，往持仓股票方向波动多少点，调整卖单为第几档
+        'fall': [60, 1, 0]                           # 最近多少秒内，往持仓股票反向波动多少点，调整卖单为第几档
     }
 }
 
@@ -90,6 +91,7 @@ glb = {
     'submitted_buy_bear': None,
     'submitted_sell_bull': None,
     'submitted_sell_bear': None,
+    'submitted_sell_price': 0,
     'submitted_sell_bull_list': [],
     'submitted_sell_bear_list': [],
     'order_book': {},
@@ -528,11 +530,14 @@ def set_submitted_sell(code, stock_name, data):
     if stock_name.find('牛') > -1:
         append_data(glb['submitted_sell_bull_list'], 'order_id', data)
         glb['submitted_sell_bull'] = glb['submitted_sell_bull_list'][-1]
-        log.info('set_submitted_sell bull: %s, price: %s' % (code, glb['submitted_sell_bull'].price))
+        price = glb['submitted_sell_bull'].price
+        log.info('set_submitted_sell bull: %s, price: %s' % (code, price))
     elif stock_name.find('熊') > -1:
         append_data(glb['submitted_sell_bear_list'], 'order_id', data)
         glb['submitted_sell_bear'] = glb['submitted_sell_bear_list'][-1]
-        log.info('set_submitted_sell bear: %s, price: %s' % (code, glb['submitted_sell_bear'].price))
+        price = glb['submitted_sell_bear'].price
+        log.info('set_submitted_sell bear: %s, price: %s' % (code, price))
+    glb['submitted_sell_price'] = price
 
 
 def reset_submitted_sell(code, stock_name='', data=None):
@@ -764,7 +769,10 @@ def auto_adjust(delta_price, i, adjust_dict, submitted_type):
         fall_price = round(bid_price - (adjust_dict['fall'][2] - 1) * 0.001, 3)
     elif submitted_type.find('sell') > -1:
         rise_price = round(ask_price + (adjust_dict['rise'][2] - 1) * 0.001, 3)
-        fall_price = round(ask_price + (adjust_dict['fall'][2] - 1) * 0.001, 3)
+        if conf['AUTO_ADJUST_SELL'] and not glb['almost_over']:
+            fall_price = max(glb['submitted_sell_price'], round(ask_price + (adjust_dict['fall'][2] - 1) * 0.001, 3))
+        else:
+            fall_price = round(ask_price + (adjust_dict['fall'][2] - 1) * 0.001, 3)
     rise_condition = False
     fall_condition = False
     if submitted_type.find('bull') > -1:
@@ -773,8 +781,8 @@ def auto_adjust(delta_price, i, adjust_dict, submitted_type):
     elif submitted_type.find('bear') > -1:
         rise_condition = delta_price <= -adjust_dict['rise'][1]
         fall_condition = delta_price >= adjust_dict['fall'][1]
-    # 要买入的时候才考虑升档，要卖出的时候只考虑降档
-    if rise_condition and submitted_type.find('buy') > -1:
+    # 如果没开启AUTO_ADJUST_SELL，那么买入的时候才考虑升档，尾盘要卖出的时候只考虑降档
+    if rise_condition and ((conf['AUTO_ADJUST_SELL'] and not glb['almost_over']) or submitted_type.find('buy') > -1):
         delta_seconds = datestr_to_timestamp(glb['adjust_ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['adjust_ticker_list'][i].get('time'))
         if delta_seconds <= adjust_dict['rise'][0] and data.price < rise_price:
             log.info('order price: %s, rise_price: %s' % (data.price, rise_price))
@@ -804,8 +812,7 @@ def pre_adjust():
     if conf['AUTO_ADJUST_BUY']:
         auto_adjust(delta_price, i, conf['ADJUST_BUY_DICT'], 'submitted_buy_bear')
         auto_adjust(delta_price, i, conf['ADJUST_BUY_DICT'], 'submitted_buy_bull')
-    # 快收盘清仓的时候才自动调价卖出
-    if conf['AUTO_ADJUST_SELL'] and glb['almost_over']:
+    if conf['AUTO_ADJUST_SELL'] or (conf['AUTO_ADJUST_SELL_ALMOST_OVER'] and glb['almost_over']):
         auto_adjust(delta_price, i, conf['ADJUST_SELL_DICT'], 'submitted_sell_bear')
         auto_adjust(delta_price, i, conf['ADJUST_SELL_DICT'], 'submitted_sell_bull')
 
@@ -1052,17 +1059,17 @@ class TickerTest(ft.TickerHandlerBase):
                 position_list_query(logging=False)
 
         # 自动买入和自动调价
-        if conf['AUTO_BUY'] or conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']:
+        if conf['AUTO_BUY'] or conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL'] or conf['AUTO_ADJUST_SELL_ALMOST_OVER']:
             for index, row in data.iterrows():
                 if conf['AUTO_BUY'] and not glb['soon_over']:
                     glb['ticker_list'].append(row)
-                if conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']:
+                if conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL'] or conf['AUTO_ADJUST_SELL_ALMOST_OVER']:
                     glb['adjust_ticker_list'].append(row)
             # 尾盘就不买了
             if conf['AUTO_BUY'] and not glb['soon_over']:
                 pre_buy()
             # 自动调价
-            if conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']:
+            if conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL'] or conf['AUTO_ADJUST_SELL_ALMOST_OVER']:
                 pre_adjust()
 
         return ret, data
@@ -1165,7 +1172,7 @@ def start(config=None):
     quote_ctx.set_handler(SysNotifyTest())
     quote_ctx.set_handler(TickerTest())
     trade_ctx.set_handler(TradeOrderTest())
-    if conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']:
+    if conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL'] or conf['AUTO_ADJUST_SELL_ALMOST_OVER']:
         quote_ctx.set_handler(OrderBookTest())
     position_list_query()
     order_list_query(status=ft.OrderStatus.FILLED_ALL)
