@@ -91,7 +91,6 @@ glb = {
     'submitted_buy_bear': None,
     'submitted_sell_bull': None,
     'submitted_sell_bear': None,
-    'submitted_sell_price': 0,
     'submitted_sell_bull_list': [],
     'submitted_sell_bear_list': [],
     'order_book': {},
@@ -353,12 +352,12 @@ def _order_list_query(code='', status=''):
         filled_all_data = data[data.order_status == ft.OrderStatus.FILLED_ALL]
         if not filled_all_data.empty:
             for index, row in filled_all_data.iterrows():
-                code, create_time, price = row.code, row.create_time, row.price
-                if code not in glb['last_filled_all_order']:
-                    glb['last_filled_all_order'][code] = {'create_time': create_time, 'price': price}
+                # code, create_time, price = row.code, row.create_time, row.price
+                if row.code not in glb['last_filled_all_order']:
+                    glb['last_filled_all_order'][row.code] = {'create_time': row.create_time, 'price': row.price, 'trd_side': row.trd_side}
                 else:
-                    if create_time > glb['last_filled_all_order'][code].get('create_time'):
-                        glb['last_filled_all_order'][code] = {'create_time': create_time, 'price': price}
+                    if row.create_time > glb['last_filled_all_order'][row.code].get('create_time'):
+                        glb['last_filled_all_order'][row.code] = {'create_time': row.create_time, 'price': row.price, 'trd_side': row.trd_side}
             log.info('last_filled_all_order:\n%s' % glb['last_filled_all_order'])
         else:
             log.info('filled_all_data is empty')
@@ -530,14 +529,11 @@ def set_submitted_sell(code, stock_name, data):
     if stock_name.find('牛') > -1:
         append_data(glb['submitted_sell_bull_list'], 'order_id', data)
         glb['submitted_sell_bull'] = glb['submitted_sell_bull_list'][-1]
-        price = glb['submitted_sell_bull'].price
-        log.info('set_submitted_sell bull: %s, price: %s' % (code, price))
+        log.info('set_submitted_sell bull: %s, price: %s' % (code, glb['submitted_sell_bull'].price))
     elif stock_name.find('熊') > -1:
         append_data(glb['submitted_sell_bear_list'], 'order_id', data)
         glb['submitted_sell_bear'] = glb['submitted_sell_bear_list'][-1]
-        price = glb['submitted_sell_bear'].price
-        log.info('set_submitted_sell bear: %s, price: %s' % (code, price))
-    glb['submitted_sell_price'] = price
+        log.info('set_submitted_sell bear: %s, price: %s' % (code, glb['submitted_sell_bear'].price))
 
 
 def reset_submitted_sell(code, stock_name='', data=None):
@@ -699,7 +695,7 @@ class TradeOrderTest(ft.TradeOrderHandlerBase):
             log.info('TradeOrder not TRADE_ENV')
             return ret, data
         if data.order_status == ft.OrderStatus.FILLED_ALL:
-            glb['last_filled_all_order'][data.code] = {'create_time': data.create_time, 'price': data.price}
+            glb['last_filled_all_order'][data.code] = {'create_time': data.create_time, 'price': data.price, 'trd_side': data.trd_side}
             if data.trd_side == ft.TrdSide.BUY:
                 log.info('TradeOrder FILLED_ALL buy')
                 reset_submitted_buy(data.code, data.stock_name)
@@ -769,10 +765,13 @@ def auto_adjust(delta_price, i, adjust_dict, submitted_type):
         fall_price = round(bid_price - (adjust_dict['fall'][2] - 1) * 0.001, 3)
     elif submitted_type.find('sell') > -1:
         rise_price = round(ask_price + (adjust_dict['rise'][2] - 1) * 0.001, 3)
+        fall_price = round(ask_price + (adjust_dict['fall'][2] - 1) * 0.001, 3)
         if conf['AUTO_ADJUST_SELL'] and not glb['almost_over']:
-            fall_price = max(glb['submitted_sell_price'], round(ask_price + (adjust_dict['fall'][2] - 1) * 0.001, 3))
-        else:
-            fall_price = round(ask_price + (adjust_dict['fall'][2] - 1) * 0.001, 3)
+            last_filled_all_order = glb['last_filled_all_order'].get(data.code, {})
+            if last_filled_all_order.get('trd_side') == ft.TrdSide.BUY:
+                fall_price = max(last_filled_all_order.get('price') + 0.003, fall_price)
+            elif last_filled_all_order.get('trd_side') == ft.TrdSide.SELL:
+                fall_price = max(last_filled_all_order.get('price') + 0.001, fall_price)
     rise_condition = False
     fall_condition = False
     if submitted_type.find('bull') > -1:
