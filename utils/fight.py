@@ -546,11 +546,11 @@ def del_data(dict_list, key, data):
 def set_submitted_sell(code, stock_name, data):
     if stock_name.find('牛') > -1:
         append_data(glb['submitted_sell_bull_list'], 'order_id', data)
-        glb['submitted_sell_bull'] = glb['submitted_sell_bull_list'][-1]
+        glb['submitted_sell_bull'] = glb['submitted_sell_bull_list'][-1].copy() # 避免在find_buy_price里修改原始df数据出现警告
         log.info('set_submitted_sell bull: %s, price: %s' % (code, glb['submitted_sell_bull'].price))
     elif stock_name.find('熊') > -1:
         append_data(glb['submitted_sell_bear_list'], 'order_id', data)
-        glb['submitted_sell_bear'] = glb['submitted_sell_bear_list'][-1]
+        glb['submitted_sell_bear'] = glb['submitted_sell_bear_list'][-1].copy()
         log.info('set_submitted_sell bear: %s, price: %s' % (code, glb['submitted_sell_bear'].price))
 
 
@@ -558,14 +558,14 @@ def reset_submitted_sell(code, stock_name='', data=None):
     if stock_name == '' or stock_name.find('牛') > -1:
         del_data(glb['submitted_sell_bull_list'], 'order_id', data)
         if len(glb['submitted_sell_bull_list']) > 0:
-            glb['submitted_sell_bull'] = glb['submitted_sell_bull_list'][-1]
+            glb['submitted_sell_bull'] = glb['submitted_sell_bull_list'][-1].copy()
         else:
             glb['submitted_sell_bull'] = None
         log.info('reset_submitted_sell bull: %s' % code)
     if stock_name == '' or stock_name.find('熊') > -1:
         del_data(glb['submitted_sell_bear_list'], 'order_id', data)
         if len(glb['submitted_sell_bear_list']) > 0:
-            glb['submitted_sell_bear'] = glb['submitted_sell_bear_list'][-1]
+            glb['submitted_sell_bear'] = glb['submitted_sell_bear_list'][-1].copy()
         else:
             glb['submitted_sell_bear'] = None
         log.info('reset_submitted_sell bear: %s' % code)
