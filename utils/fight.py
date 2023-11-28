@@ -338,6 +338,24 @@ def _modify_order(order_id, price, qty):
         return data
 
 
+def find_buy_price(order):
+    if order.get('buy_price'):
+        return order.get('buy_price')
+    else:
+        data = order_list_query(order.code, ft.OrderStatus.FILLED_ALL)
+        filled_all_buy_data = data[(data.order_status == ft.OrderStatus.FILLED_ALL) & (data.trd_side == ft.TrdSide.BUY)]
+        buy_order = None
+        for index, row in filled_all_buy_data.iterrows():
+            if buy_order is None:
+                buy_order = {'create_time': row.create_time, 'price': row.price}
+            else:
+                if row.create_time > buy_order.get('create_time') and row.create_time <= order.get('create_time'):
+                    buy_order = {'create_time': row.create_time, 'price': row.price}
+        order['buy_price'] = buy_order.get('price')
+        log.info('order code: %s, buy_price: %s' % (order.code, order.get('buy_price')))
+        return order.get('buy_price')
+
+
 def _order_list_query(code='', status=''):
     status_filter_list = [ft.OrderStatus.SUBMITTED, ft.OrderStatus.FILLED_PART]
     if status != '':
@@ -729,8 +747,12 @@ class TradeOrderTest(ft.TradeOrderHandlerBase):
                 set_submitted_buy(data.code, data.stock_name, data)
             elif data.trd_side == ft.TrdSide.SELL:
                 set_submitted_sell(data.code, data.stock_name, data)
+        elif data.order_status == ft.OrderStatus.DISABLED:
+            log.info('TradeOrder %s DISABLED' % data.trd_side)
+            # 需要重新获取订单以重置一些全局变量
+            order_list_query(status=ft.OrderStatus.FILLED_ALL)
         else:
-            log.info('TradeOrder %s' % data.order_status)
+            log.info('else TradeOrder %s' % data.order_status)
 
         return ret, data
 
@@ -767,11 +789,7 @@ def auto_adjust(delta_price, i, adjust_dict, submitted_type):
         rise_price = round(ask_price + (adjust_dict['rise'][2] - 1) * 0.001, 3)
         fall_price = round(ask_price + (adjust_dict['fall'][2] - 1) * 0.001, 3)
         if conf['AUTO_ADJUST_SELL'] and not glb['almost_over']:
-            last_filled_all_order = glb['last_filled_all_order'].get(data.code, {})
-            if last_filled_all_order.get('trd_side') == ft.TrdSide.BUY:
-                fall_price = max(last_filled_all_order.get('price') + 0.003, fall_price)
-            elif last_filled_all_order.get('trd_side') == ft.TrdSide.SELL:
-                fall_price = max(last_filled_all_order.get('price') + 0.001, fall_price)
+            fall_price = max(find_buy_price(data) + 0.003, fall_price)
     rise_condition = False
     fall_condition = False
     if submitted_type.find('bull') > -1:
