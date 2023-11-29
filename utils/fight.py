@@ -343,7 +343,9 @@ def find_buy_price(order):
         return order.get('buy_price')
     else:
         data = order_list_query(order.code, ft.OrderStatus.FILLED_ALL)
-        filled_all_buy_data = data[(data.order_status == ft.OrderStatus.FILLED_ALL) & (data.trd_side == ft.TrdSide.BUY)]
+        if data is None:
+            return order.get('price')
+        filled_all_buy_data = data[data.trd_side == ft.TrdSide.BUY]
         buy_order = None
         for index, row in filled_all_buy_data.iterrows():
             if buy_order is None:
@@ -386,6 +388,8 @@ def _order_list_query(code='', status=''):
             set_submitted_buy(data2.code, data2.stock_name, data2)
         elif data2.trd_side == ft.TrdSide.SELL:
             set_submitted_sell(data2.code, data2.stock_name, data2)
+    if ft.OrderStatus.FILLED_ALL in status_filter_list:
+        return filled_all_data
     return data
 
 
