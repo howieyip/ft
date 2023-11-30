@@ -343,7 +343,7 @@ def find_buy_price(order):
         return order.get('buy_price')
     else:
         data = order_list_query(order.code, ft.OrderStatus.FILLED_ALL)
-        if data is None:
+        if data is False or data is None:
             return order.get('price')
         filled_all_buy_data = data[data.trd_side == ft.TrdSide.BUY]
         buy_order = None
