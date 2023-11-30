@@ -583,7 +583,8 @@ def _position_list_query(stock_type='', logging=True):
         log.info('position_list_query error, ret: %s, data:\n%s' % (ret, data))
         return False
     reset_has()
-    data = data[(data.today_buy_qty > 0) & data.stock_name.str.contains('恒指') & (data.nominal_price < conf['CUR_PRICE_MAX'])]
+    data = data[data.stock_name.str.contains('恒指') & (data.nominal_price < conf['CUR_PRICE_MAX']) &
+            (data.today_buy_qty > 0)  & (data.qty == data.today_buy_qty - data.today_sell_qty)]
 
     # 统计今日盈亏
     glb['today_pl_val_bull'] = 0
@@ -594,11 +595,9 @@ def _position_list_query(stock_type='', logging=True):
             glb['today_pl_val_bull'] += data2.today_pl_val
         elif data2.stock_name.find('熊') > -1:
             glb['today_pl_val_bear'] += data2.today_pl_val
-        if data2.qty > 0 and data2.qty != data2.today_buy_qty - data2.today_sell_qty:
-            log.info('position_list_query not today buy, data:\n%s' % data2)
     log.info('current price: %s, today bull: %s, today bear: %s' % (glb['cur_price'], glb['today_pl_val_bull'], glb['today_pl_val_bear']))
 
-    data = data[(data.qty > 0) & (data.qty == data.today_buy_qty - data.today_sell_qty)]
+    data = data[data.qty > 0]
     if len(data) > 0:
         for i in range(0, len(data)):
             data2 = data.iloc[i]
@@ -806,13 +805,13 @@ def auto_adjust(delta_price, i, adjust_dict, submitted_type):
     if rise_condition and ((conf['AUTO_ADJUST_SELL'] and not glb['almost_over']) or submitted_type.find('buy') > -1):
         delta_seconds = datestr_to_timestamp(glb['adjust_ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['adjust_ticker_list'][i].get('time'))
         if delta_seconds <= adjust_dict['rise'][0] and data.price < rise_price:
-            log.info('order price: %s, rise_price: %s' % (data.price, rise_price))
+            log.info('%s order price: %s, rise_price: %s' % (submitted_type, data.price, rise_price))
             data.price = rise_price
             modify_order(data.order_id, rise_price, data.qty)
     elif fall_condition:
         delta_seconds = datestr_to_timestamp(glb['adjust_ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['adjust_ticker_list'][i].get('time'))
         if delta_seconds <= adjust_dict['fall'][0] and data.price > fall_price:
-            log.info('order price: %s, fall_price: %s' % (data.price, fall_price))
+            log.info('%s order price: %s, fall_price: %s' % (submitted_type, data.price, fall_price))
             data.price = fall_price
             modify_order(data.order_id, fall_price, data.qty)
 
