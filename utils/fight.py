@@ -85,7 +85,8 @@ glb = {
     'ticker_list': [],
     'cur_price': 0,
     'last_price': 0,
-    'last_filled_all_order': {},
+    'filled_all_last_order': {},
+    'filled_all_buy_order': {},
     'adjust_ticker_list': [],
     'submitted_buy_bull': None,
     'submitted_buy_bear': None,
@@ -339,23 +340,26 @@ def _modify_order(order_id, price, qty):
 
 
 def find_buy_price(order):
-    if order.get('buy_price'):
-        return order.get('buy_price')
+    buy_order = glb['filled_all_buy_order']
+    if buy_order.get(order.order_id):
+        return buy_order.get(order.order_id).get('price')
     else:
         data = order_list_query(order.code, ft.OrderStatus.FILLED_ALL)
         if data is False or data is None:
-            return order.get('price')
-        filled_all_buy_data = data[data.trd_side == ft.TrdSide.BUY]
-        buy_order = None
+            log.info('order_list_query data is False or data is None')
+            return order.price
+        filled_all_buy_data = data[(data.order_status == ft.OrderStatus.FILLED_ALL) & (data.trd_side == ft.TrdSide.BUY)]
+        if filled_all_buy_data.empty:
+            log.info('error: filled_all_buy_data is empty')
+            return order.price
         for index, row in filled_all_buy_data.iterrows():
-            if buy_order is None:
-                buy_order = {'create_time': row.create_time, 'price': row.price}
+            if buy_order.get(row.order_id) is None:
+                buy_order[row.order_id] = {'create_time': row.create_time, 'price': row.price, 'code': row.code}
             else:
-                if row.create_time > buy_order.get('create_time') and row.create_time <= order.get('create_time'):
-                    buy_order = {'create_time': row.create_time, 'price': row.price}
-        order['buy_price'] = buy_order.get('price')
-        log.info('order code: %s, buy_price: %s' % (order.code, order.get('buy_price')))
-        return order.get('buy_price')
+                if row.create_time > buy_order[row.order_id].get('create_time') and row.create_time <= order.get('create_time'):
+                    buy_order[row.order_id] = {'create_time': row.create_time, 'price': row.price, 'code': row.code}
+        log.info('filled_all_buy_order:\n%s' % buy_order)
+        return buy_order.get(order.order_id).get('price')
 
 
 def _order_list_query(code='', status=''):
@@ -369,16 +373,17 @@ def _order_list_query(code='', status=''):
         return False
     log.info('order_list_query success, code: %s' % code)
     if ft.OrderStatus.FILLED_ALL in status_filter_list:
+        last_order = glb['filled_all_last_order']
         filled_all_data = data[data.order_status == ft.OrderStatus.FILLED_ALL]
         if not filled_all_data.empty:
             for index, row in filled_all_data.iterrows():
                 # code, create_time, price = row.code, row.create_time, row.price
-                if row.code not in glb['last_filled_all_order']:
-                    glb['last_filled_all_order'][row.code] = {'create_time': row.create_time, 'price': row.price, 'trd_side': row.trd_side}
+                if row.code not in last_order:
+                    last_order[row.code] = {'create_time': row.create_time, 'price': row.price, 'trd_side': row.trd_side}
                 else:
-                    if row.create_time > glb['last_filled_all_order'][row.code].get('create_time'):
-                        glb['last_filled_all_order'][row.code] = {'create_time': row.create_time, 'price': row.price, 'trd_side': row.trd_side}
-            log.info('last_filled_all_order:\n%s' % glb['last_filled_all_order'])
+                    if row.create_time > last_order[row.code].get('create_time'):
+                        last_order[row.code] = {'create_time': row.create_time, 'price': row.price, 'trd_side': row.trd_side}
+            log.info('filled_all_last_order:\n%s' % last_order)
         else:
             log.info('filled_all_data is empty')
     data = data[(data.order_status == ft.OrderStatus.SUBMITTED) | (data.order_status == ft.OrderStatus.FILLED_PART)]
@@ -550,11 +555,11 @@ def del_data(dict_list, key, data):
 def set_submitted_sell(code, stock_name, data):
     if stock_name.find('牛') > -1:
         append_data(glb['submitted_sell_bull_list'], 'order_id', data)
-        glb['submitted_sell_bull'] = glb['submitted_sell_bull_list'][-1].copy() # 避免在find_buy_price里修改原始df数据出现警告
+        glb['submitted_sell_bull'] = glb['submitted_sell_bull_list'][-1]
         log.info('set_submitted_sell bull: %s, price: %s' % (code, glb['submitted_sell_bull'].price))
     elif stock_name.find('熊') > -1:
         append_data(glb['submitted_sell_bear_list'], 'order_id', data)
-        glb['submitted_sell_bear'] = glb['submitted_sell_bear_list'][-1].copy()
+        glb['submitted_sell_bear'] = glb['submitted_sell_bear_list'][-1]
         log.info('set_submitted_sell bear: %s, price: %s' % (code, glb['submitted_sell_bear'].price))
 
 
@@ -562,14 +567,14 @@ def reset_submitted_sell(code, stock_name='', data=None):
     if stock_name == '' or stock_name.find('牛') > -1:
         del_data(glb['submitted_sell_bull_list'], 'order_id', data)
         if len(glb['submitted_sell_bull_list']) > 0:
-            glb['submitted_sell_bull'] = glb['submitted_sell_bull_list'][-1].copy()
+            glb['submitted_sell_bull'] = glb['submitted_sell_bull_list'][-1]
         else:
             glb['submitted_sell_bull'] = None
         log.info('reset_submitted_sell bull: %s' % code)
     if stock_name == '' or stock_name.find('熊') > -1:
         del_data(glb['submitted_sell_bear_list'], 'order_id', data)
         if len(glb['submitted_sell_bear_list']) > 0:
-            glb['submitted_sell_bear'] = glb['submitted_sell_bear_list'][-1].copy()
+            glb['submitted_sell_bear'] = glb['submitted_sell_bear_list'][-1]
         else:
             glb['submitted_sell_bear'] = None
         log.info('reset_submitted_sell bear: %s' % code)
@@ -716,7 +721,7 @@ class TradeOrderTest(ft.TradeOrderHandlerBase):
             log.info('TradeOrder not TRADE_ENV')
             return ret, data
         if data.order_status == ft.OrderStatus.FILLED_ALL:
-            glb['last_filled_all_order'][data.code] = {'create_time': data.create_time, 'price': data.price, 'trd_side': data.trd_side}
+            glb['filled_all_last_order'][data.code] = {'create_time': data.create_time, 'price': data.price, 'trd_side': data.trd_side}
             if data.trd_side == ft.TrdSide.BUY:
                 log.info('TradeOrder FILLED_ALL buy')
                 reset_submitted_buy(data.code, data.stock_name)
@@ -915,9 +920,9 @@ def to_buy(stock_type, volume=None, force=False):
                 if not conf['ALLOW_ADD']:
                     log.info('not allow add')
                     return False
-                reference_price = glb['last_filled_all_order'].get(data0.code, {}).get('price')
+                reference_price = glb['filled_all_last_order'].get(data0.code, {}).get('price')
                 if not reference_price:
-                    log.info('code: %s, no last_filled_all_order，\n%s' % (data0.code, glb['last_filled_all_order']))
+                    log.info('code: %s, no filled_all_last_order，\n%s' % (data0.code, glb['filled_all_last_order']))
                     reference_price = data0.cost_price
                 add_price_diff = round(reference_price - data0.nominal_price, 3)
                 if add_price_diff < conf['ADD_PRICE_DIFF']:
