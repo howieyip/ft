@@ -353,11 +353,11 @@ def find_buy_price(order):
             log.info('error: filled_all_buy_data is empty')
             return order.price
         for index, row in filled_all_buy_data.iterrows():
-            if buy_order.get(row.order_id) is None:
-                buy_order[row.order_id] = {'create_time': row.create_time, 'price': row.price, 'code': row.code}
+            if buy_order.get(order.order_id) is None:
+                buy_order[order.order_id] = {'create_time': row.create_time, 'price': row.price, 'code': row.code}
             else:
-                if row.create_time > buy_order[row.order_id].get('create_time') and row.create_time <= order.get('create_time'):
-                    buy_order[row.order_id] = {'create_time': row.create_time, 'price': row.price, 'code': row.code}
+                if row.create_time > buy_order[order.order_id].get('create_time') and row.create_time <= order.get('create_time'):
+                    buy_order[order.order_id] = {'create_time': row.create_time, 'price': row.price, 'code': row.code}
         log.info('filled_all_buy_order:\n%s' % buy_order)
         return buy_order.get(order.order_id).get('price')
 
