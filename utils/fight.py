@@ -608,7 +608,7 @@ def _position_list_query(stock_type='', logging=True):
             data2 = data.iloc[i]
             set_has(data2.code, data2.stock_name)
             if data2.qty == data2.can_sell_qty:
-                reset_submitted_buy(data2.code, data2.stock_name)
+                # reset_submitted_buy(data2.code, data2.stock_name)
                 if conf['AUTO_PLACE_ORDER'] and round(data2.nominal_price, 3) > 0.021 and not glb['to_over']:
                     if data2.stock_name.find('熊') > -1 or (data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto'):
                         log.info('code: %s, not auto_place_order, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
