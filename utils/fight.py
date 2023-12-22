@@ -619,6 +619,10 @@ def _position_list_query(stock_type='', logging=True):
                 (glb['golden_line']['reverse'] == 'bear' and data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto')):
                     log.info('code: %s, reverse_sell, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
                     sell_all(code=data2.code, qty=data2.qty)
+                    if glb['golden_line']['reverse'] == 'bear':
+                        to_buy('bear', data2.qty, force=True)
+                    else:
+                        to_buy('bull', data2.qty, force=True)
             if round(data2.nominal_price, 3) <= 0.021:
                 log.info('code: %s, force_replacing, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
                 glb['force_replacing'] = True
