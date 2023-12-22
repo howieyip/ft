@@ -232,9 +232,10 @@ def draw_golden_line():
     if data_max.opened_mins > data_min.opened_mins:
         golden_line['0'] = data_min.cur_price
         for i in range(min_index, max_index): # 买入要谨慎，需最大值和最小值之间有拐点
-            if i >= 3:
-                cur_price = data.iloc[i - 1].cur_price
-                if ((data.iloc[i - 2].cur_price < cur_price > data.iloc[i].cur_price) and
+            if i >= 4:
+                cur_price = data.iloc[i - 2].cur_price
+                if ((data.iloc[i - 3].cur_price < cur_price > data.iloc[i - 1].cur_price) and
+                    (cur_price > data.iloc[i].cur_price or cur_price - data.iloc[i - 1].cur_price >= conf['DELTA_PRICE']) and
                     (cur_price - golden_line['0'] > conf['GOLDEN_LINE_DIFF'])):
                         golden_line['100'] = cur_price
                         golden_line = get_golden_line(golden_line)
@@ -243,9 +244,10 @@ def draw_golden_line():
     else:
         golden_line['0'] = data_max.cur_price
         for i in range(max_index, min_index):
-            if i >= 3:
-                cur_price = data.iloc[i - 1].cur_price
-                if ((data.iloc[i - 2].cur_price > cur_price < data.iloc[i].cur_price) and
+            if i >= 4:
+                cur_price = data.iloc[i - 2].cur_price
+                if ((data.iloc[i - 3].cur_price > cur_price < data.iloc[i - 1].cur_price) and
+                    (cur_price < data.iloc[i].cur_price or cur_price - data.iloc[i - 1].cur_price <= -conf['DELTA_PRICE']) and
                     (golden_line['0'] - cur_price > conf['GOLDEN_LINE_DIFF'])):
                         golden_line['100'] = cur_price
                         golden_line = get_golden_line(golden_line)
