@@ -380,13 +380,14 @@ def _order_list_query(code='', status=''):
         last_order = glb['filled_all_last_order']
         filled_all_data = data[data.order_status == ft.OrderStatus.FILLED_ALL]
         if not filled_all_data.empty:
+            last_order['last'] = filled_all_data[filled_all_data.updated_time == max(filled_all_data.updated_time)].iloc[0]
             for index, row in filled_all_data.iterrows():
-                # code, create_time, price = row.code, row.create_time, row.price
+                # code, updated_time, price = row.code, row.updated_time, row.price
                 if row.code not in last_order:
-                    last_order[row.code] = {'create_time': row.create_time, 'price': row.price, 'trd_side': row.trd_side}
+                    last_order[row.code] = {'updated_time': row.updated_time, 'price': row.price, 'trd_side': row.trd_side}
                 else:
-                    if row.create_time > last_order[row.code].get('create_time'):
-                        last_order[row.code] = {'create_time': row.create_time, 'price': row.price, 'trd_side': row.trd_side}
+                    if row.updated_time > last_order[row.code].get('updated_time'):
+                        last_order[row.code] = {'updated_time': row.updated_time, 'price': row.price, 'trd_side': row.trd_side}
             log.info('filled_all_last_order:\n%s' % last_order)
         else:
             log.info('filled_all_data is empty')
@@ -729,7 +730,7 @@ class TradeOrderTest(ft.TradeOrderHandlerBase):
             log.info('TradeOrder not TRADE_ENV')
             return ret, data
         if data.order_status == ft.OrderStatus.FILLED_ALL:
-            glb['filled_all_last_order'][data.code] = {'create_time': data.create_time, 'price': data.price, 'trd_side': data.trd_side}
+            glb['filled_all_last_order'][data.code] = {'updated_time': data.updated_time, 'price': data.price, 'trd_side': data.trd_side}
             if data.trd_side == ft.TrdSide.BUY:
                 log.info('TradeOrder FILLED_ALL buy')
                 reset_submitted_buy(data.code, data.stock_name)
@@ -997,6 +998,10 @@ def pre_buy():
         glb['ticker_list'].pop(0)
     # if glb['ticker_list'][-1][1][-2:] != '00':
     #     return False
+    filled_all_last_order_time = glb['filled_all_last_order'].get('last', {}).get('updated_time')
+    if filled_all_last_order_time and datestr_to_timestamp(glb['ticker_list'][-1].get('time')) - datestr_to_timestamp(filled_all_last_order_time) <= conf['DELTA_SECONDS']:
+        # log.info('filled_all_last_order_time: %s' % filled_all_last_order_time)
+        return False
     delta_price = glb['ticker_list'][-1].get('price') - glb['ticker_list'][0].get('price')
     # 60秒内上涨点数比预设点数还要大
     if delta_price >= conf['DELTA_PRICE']:
