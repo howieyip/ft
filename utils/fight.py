@@ -33,6 +33,7 @@ conf = {
     'DELTA_PRICE': 15,                              # 波动多少点
     'BUY_VOLUME': 100e3,                            # 下单多少股
     'MAX_VOLUME': 300e3,                            # 最大持仓股数，若超过则不会再买入
+    'LOSS_PRICE_DIFF': 0.01,                        # 止损价差，买入后单价亏多少元要强制止损
 
     'AUTO_ADJUST_BUY': True,                        # 是否自动调整挂的买单的价格，若是则下面的ADJUST_BUY_DICT有效
     'ADJUST_BUY_DICT': {
@@ -41,7 +42,7 @@ conf = {
     },
 
     'ALLOW_ADD': True,                              # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
-    'ADD_PRICE_DIFF': 0.003,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
+    'ADD_PRICE_DIFF': 0.005,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
 
     'AUTO_PLACE_ORDER': True,                       # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
     'ORDER_LIST': [
@@ -606,6 +607,15 @@ def _position_list_query(stock_type='', logging=True):
         elif data2.stock_name.find('熊') > -1:
             glb['today_pl_val_bear'] += data2.today_pl_val
     log.info('current price: %s, today bull: %s, today bear: %s' % (glb['cur_price'], glb['today_pl_val_bull'], glb['today_pl_val_bear']))
+    loss_val = -(conf['BUY_VOLUME'] * conf['LOSS_PRICE_DIFF'] + (conf['MAX_VOLUME'] - conf['BUY_VOLUME']) * conf['ADD_PRICE_DIFF'])
+    if glb['today_pl_val_bull'] <= loss_val and conf['BULL_CODE'] != '':
+        conf['BULL_CODE'] = ''
+        sell_all(stock_type='bull')
+        return data
+    if glb['today_pl_val_bear'] <= loss_val and conf['BEAR_CODE'] != '':
+        conf['BEAR_CODE'] = ''
+        sell_all(stock_type='bear')
+        return data
 
     data = data[data.qty > 0]
     if len(data) > 0:
