@@ -180,6 +180,8 @@ def timestamp_to_datestr(time_stamp, format_string="%Y-%m-%d %H:%M:%S"):
 
 # 将时间字符串转换为10位时间戳，时间字符串默认为2017-10-01 13:37:04格式
 def datestr_to_timestamp(time_str, format_str="%Y-%m-%d %H:%M:%S", pattern=r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}'):
+    # 去掉小数部分
+    time_str = time_str.split('.')[0]
     # if re.fullmatch(pattern, time_str):
     return datetime.datetime.strptime(time_str, format_str).timestamp()
     # else:
