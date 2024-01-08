@@ -609,13 +609,15 @@ def _position_list_query(stock_type='', logging=True):
     log.info('current price: %s, today bull: %s, today bear: %s' % (glb['cur_price'], glb['today_pl_val_bull'], glb['today_pl_val_bear']))
     loss_val = -(conf['BUY_VOLUME'] * conf['LOSS_PRICE_DIFF'] + (conf['MAX_VOLUME'] - conf['BUY_VOLUME']) * conf['ADD_PRICE_DIFF'])
     if glb['today_pl_val_bull'] <= loss_val and conf['BULL_CODE'] != '':
+        log.info('loss_val: %s' % loss_val)
         conf['BULL_CODE'] = ''
         sell_all(stock_type='bull')
-        return data
+        return False
     if glb['today_pl_val_bear'] <= loss_val and conf['BEAR_CODE'] != '':
+        log.info('loss_val: %s' % loss_val)
         conf['BEAR_CODE'] = ''
         sell_all(stock_type='bear')
-        return data
+        return False
 
     data = data[data.qty > 0]
     if len(data) > 0:
@@ -1009,9 +1011,11 @@ def pre_buy():
     # if glb['ticker_list'][-1][1][-2:] != '00':
     #     return False
     filled_all_last_order_time = glb['filled_all_last_order'].get('last', {}).get('updated_time')
-    if filled_all_last_order_time and datestr_to_timestamp(glb['ticker_list'][-1].get('time')) - datestr_to_timestamp(filled_all_last_order_time) <= conf['DELTA_SECONDS']:
-        # log.info('filled_all_last_order_time: %s' % filled_all_last_order_time)
-        return False
+    if filled_all_last_order_time:
+        delta_seconds = datestr_to_timestamp(glb['ticker_list'][-1].get('time')) - datestr_to_timestamp(filled_all_last_order_time)
+        if delta_seconds <= conf['DELTA_SECONDS']:
+            log.info('pre_buy delta_seconds: %s' % delta_seconds)
+            return False
     delta_price = glb['ticker_list'][-1].get('price') - glb['ticker_list'][0].get('price')
     # 60秒内上涨点数比预设点数还要大
     if delta_price >= conf['DELTA_PRICE']:
