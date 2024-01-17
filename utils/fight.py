@@ -57,7 +57,6 @@ conf = {
     ],                                              # 下单多少股以上（大的写前面），每单挂多少股，一单挂高几格，下一单挂高几格
 
     'AUTO_ADJUST_SELL': True,                       # 是否自动调整挂的卖单的价格，若是则下面的ADJUST_SELL_DICT有效
-    'AUTO_ADJUST_SELL_ALMOST_OVER': True,           # 尾盘是否自动调整挂的卖单的价格，只降不升
     'ADJUST_SELL_DICT': {
         'rise': [60, 1, 2],                          # 最近多少秒内，往持仓股票方向波动多少点，调整卖单为第几档
         'fall': [60, 1, 0]                           # 最近多少秒内，往持仓股票反向波动多少点，调整卖单为第几档
@@ -860,7 +859,7 @@ def pre_adjust():
     if conf['AUTO_ADJUST_BUY']:
         auto_adjust(delta_price, i, conf['ADJUST_BUY_DICT'], 'submitted_buy_bear')
         auto_adjust(delta_price, i, conf['ADJUST_BUY_DICT'], 'submitted_buy_bull')
-    if conf['AUTO_ADJUST_SELL'] or (conf['AUTO_ADJUST_SELL_ALMOST_OVER'] and glb['almost_over']):
+    if conf['AUTO_ADJUST_SELL']:
         auto_adjust(delta_price, i, conf['ADJUST_SELL_DICT'], 'submitted_sell_bear')
         auto_adjust(delta_price, i, conf['ADJUST_SELL_DICT'], 'submitted_sell_bull')
 
@@ -1113,17 +1112,17 @@ class TickerTest(ft.TickerHandlerBase):
                 position_list_query(logging=False)
 
         # 自动买入和自动调价
-        if conf['AUTO_BUY'] or conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL'] or conf['AUTO_ADJUST_SELL_ALMOST_OVER']:
+        if conf['AUTO_BUY'] or conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']:
             for index, row in data.iterrows():
                 if conf['AUTO_BUY'] and not glb['soon_over']:
                     glb['ticker_list'].append(row)
-                if conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL'] or conf['AUTO_ADJUST_SELL_ALMOST_OVER']:
+                if conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']:
                     glb['adjust_ticker_list'].append(row)
             # 尾盘就不买了
             if conf['AUTO_BUY'] and not glb['soon_over']:
                 pre_buy()
             # 自动调价
-            if conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL'] or conf['AUTO_ADJUST_SELL_ALMOST_OVER']:
+            if conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']:
                 pre_adjust()
 
         return ret, data
@@ -1226,7 +1225,7 @@ def start(config=None):
     quote_ctx.set_handler(SysNotifyTest())
     quote_ctx.set_handler(TickerTest())
     trade_ctx.set_handler(TradeOrderTest())
-    if conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL'] or conf['AUTO_ADJUST_SELL_ALMOST_OVER']:
+    if conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']:
         quote_ctx.set_handler(OrderBookTest())
     position_list_query()
     order_list_query(status=ft.OrderStatus.FILLED_ALL)
