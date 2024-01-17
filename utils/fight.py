@@ -19,10 +19,10 @@ conf = {
     'HOST': '127.0.0.1',
     'PORT': 11111,
 
-    'AUTO_BUY': True,                               # 是否自动买入，若是则下面的配置有效
+    'AUTO_BUY': False,                              # 是否自动买入，若是则下面的配置有效
     'FOLLOW_TREND': False,                          # 买入策略是否为顺势买入，逆势则为False
     'BULL_CODE': '',                                # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
-    'BEAR_CODE': 'auto',                            # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
+    'BEAR_CODE': '',                                # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
     'CHECK_GOLDEN_LINE': True,                      # 是否检查黄金分割线
     'GOLDEN_LINE_DIFF': 80,                         # 黄金分割线0-100之间要间隔多少点
     'BID_ASK_DIFF': 0.002,                          # 买一价和卖一价的价差小于等于多少元，才允许买入
@@ -35,16 +35,17 @@ conf = {
     'MAX_VOLUME': 300e3,                            # 最大持仓股数，若超过则不会再买入
     'LOSS_PRICE_DIFF': 0.01,                        # 止损价差，买入后单价亏多少元要强制止损
 
+    'AUTO_ADJUST': False,                           # 是否自动调整订单价格，若是则下面的AUTO_ADJUST_BUY和AUTO_ADJUST_SELL有效
     'AUTO_ADJUST_BUY': True,                        # 是否自动调整挂的买单的价格，若是则下面的ADJUST_BUY_DICT有效
     'ADJUST_BUY_DICT': {
-        'rise': [60, 1, 1],                          # 最近多少秒内，往持仓股票方向波动多少点，调整买单为第几档
-        'fall': [60, 1, 2]                           # 最近多少秒内，往持仓股票反向波动多少点，调整买单为第几档
+        'rise': [60, 1, 1],                         # 最近多少秒内，往持仓股票方向波动多少点，调整买单为第几档
+        'fall': [60, 1, 2]                          # 最近多少秒内，往持仓股票反向波动多少点，调整买单为第几档
     },
 
     'ALLOW_ADD': True,                              # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
     'ADD_PRICE_DIFF': 0.005,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
 
-    'AUTO_PLACE_ORDER': True,                       # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
+    'AUTO_PLACE_ORDER': False,                      # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
     'ORDER_LIST': [
         [800e3, 400e3, 2, 3],
         [700e3, 350e3, 2, 3],
@@ -58,8 +59,8 @@ conf = {
 
     'AUTO_ADJUST_SELL': True,                       # 是否自动调整挂的卖单的价格，若是则下面的ADJUST_SELL_DICT有效
     'ADJUST_SELL_DICT': {
-        'rise': [60, 1, 2],                          # 最近多少秒内，往持仓股票方向波动多少点，调整卖单为第几档
-        'fall': [60, 1, 0]                           # 最近多少秒内，往持仓股票反向波动多少点，调整卖单为第几档
+        'rise': [60, 1, 2],                         # 最近多少秒内，往持仓股票方向波动多少点，调整卖单为第几档
+        'fall': [60, 1, 0]                          # 最近多少秒内，往持仓股票反向波动多少点，调整卖单为第几档
     }
 }
 
@@ -609,44 +610,46 @@ def _position_list_query(stock_type='', logging=True):
             glb['today_pl_val_bear'] += data2.today_pl_val
     log.info('current price: %s, today bull: %s, today bear: %s' % (glb['cur_price'], glb['today_pl_val_bull'], glb['today_pl_val_bear']))
     loss_val = -(conf['BUY_VOLUME'] * conf['LOSS_PRICE_DIFF'] + (conf['MAX_VOLUME'] - conf['BUY_VOLUME']) * conf['ADD_PRICE_DIFF'])
-    if glb['today_pl_val_bull'] <= loss_val and conf['BULL_CODE'] != '':
-        log.info('loss_val: %s' % loss_val)
-        conf['BULL_CODE'] = ''
-        sell_all(stock_type='bull')
-        return False
-    if glb['today_pl_val_bear'] <= loss_val and conf['BEAR_CODE'] != '':
-        log.info('loss_val: %s' % loss_val)
-        conf['BEAR_CODE'] = ''
-        sell_all(stock_type='bear')
-        return False
+    if conf['AUTO_BUY']:
+        if glb['today_pl_val_bull'] <= loss_val and conf['BULL_CODE'] != '':
+            log.info('loss_val: %s' % loss_val)
+            conf['BULL_CODE'] = ''
+            sell_all(stock_type='bull')
+            return False
+        if glb['today_pl_val_bear'] <= loss_val and conf['BEAR_CODE'] != '':
+            log.info('loss_val: %s' % loss_val)
+            conf['BEAR_CODE'] = ''
+            sell_all(stock_type='bear')
+            return False
 
     data = data[data.qty > 0]
     if len(data) > 0:
         for i in range(0, len(data)):
             data2 = data.iloc[i]
             set_has(data2.code, data2.stock_name)
-            if data2.qty == data2.can_sell_qty:
-                # reset_submitted_buy(data2.code, data2.stock_name)
-                if conf['AUTO_PLACE_ORDER'] and round(data2.nominal_price, 3) > 0.021 and not glb['to_over']:
-                    if data2.stock_name.find('熊') > -1 or (data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto'):
-                        log.info('code: %s, not auto_place_order, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
-                        auto_place_order(data2.code, data2.qty, max(data2.nominal_price, data2.cost_price))
-            if ((glb['golden_line']['reverse'] == 'bull' and data2.stock_name.find('熊') > -1) or
-                (glb['golden_line']['reverse'] == 'bear' and data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto')):
-                    log.info('code: %s, reverse_sell, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
+            if conf['AUTO_BUY']:
+                if data2.qty == data2.can_sell_qty:
+                    # reset_submitted_buy(data2.code, data2.stock_name)
+                    if conf['AUTO_PLACE_ORDER'] and round(data2.nominal_price, 3) > 0.021 and not glb['to_over']:
+                        if data2.stock_name.find('熊') > -1 or (data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto'):
+                            log.info('code: %s, not auto_place_order, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
+                            auto_place_order(data2.code, data2.qty, max(data2.nominal_price, data2.cost_price))
+                if ((glb['golden_line']['reverse'] == 'bull' and data2.stock_name.find('熊') > -1) or
+                    (glb['golden_line']['reverse'] == 'bear' and data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto')):
+                        log.info('code: %s, reverse_sell, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
+                        sell_all(code=data2.code, qty=data2.qty)
+                        if glb['golden_line']['reverse'] == 'bear':
+                            to_buy('bear', data2.qty, force=True)
+                        else:
+                            to_buy('bull', data2.qty, force=True)
+                if round(data2.nominal_price, 3) <= 0.021:
+                    log.info('code: %s, force_replacing, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
+                    glb['force_replacing'] = True
                     sell_all(code=data2.code, qty=data2.qty)
-                    if glb['golden_line']['reverse'] == 'bear':
+                    if data2.stock_name.find('熊') > -1:
                         to_buy('bear', data2.qty, force=True)
                     else:
                         to_buy('bull', data2.qty, force=True)
-            if round(data2.nominal_price, 3) <= 0.021:
-                log.info('code: %s, force_replacing, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
-                glb['force_replacing'] = True
-                sell_all(code=data2.code, qty=data2.qty)
-                if data2.stock_name.find('熊') > -1:
-                    to_buy('bear', data2.qty, force=True)
-                else:
-                    to_buy('bull', data2.qty, force=True)
         bull_data = data[data.stock_name.str.contains('牛')]
         bear_data = data[data.stock_name.str.contains('熊')]
         if len(bull_data) == 0:
@@ -1084,13 +1087,14 @@ class TickerTest(ft.TickerHandlerBase):
             if m >= 55:
                 if not glb['almost_over']:
                     glb['almost_over'] = True
-                    cancel_all()
-                    position_list_query()
+                    if conf['AUTO_BUY']:
+                        cancel_all()
+                        position_list_query()
                 if m >= 59:
                     if not glb['to_over']:
                         glb['to_over'] = True
                         log.info('[%s]--------------------to_over--------------------' % t)
-                        if not glb['over']:
+                        if conf['AUTO_BUY'] and not glb['over']:
                             if conf['BULL_CODE'] != '' and conf['BEAR_CODE'] != '':
                                 sell_all()
                             elif conf['BULL_CODE'] != '':
@@ -1112,17 +1116,17 @@ class TickerTest(ft.TickerHandlerBase):
                 position_list_query(logging=False)
 
         # 自动买入和自动调价
-        if conf['AUTO_BUY'] or conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']:
+        if conf['AUTO_BUY'] or conf['AUTO_ADJUST']:
             for index, row in data.iterrows():
                 if conf['AUTO_BUY'] and not glb['soon_over']:
                     glb['ticker_list'].append(row)
-                if conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']:
+                if conf['AUTO_ADJUST']:
                     glb['adjust_ticker_list'].append(row)
             # 尾盘就不买了
             if conf['AUTO_BUY'] and not glb['soon_over']:
                 pre_buy()
             # 自动调价
-            if conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']:
+            if conf['AUTO_ADJUST']:
                 pre_adjust()
 
         return ret, data
@@ -1225,7 +1229,7 @@ def start(config=None):
     quote_ctx.set_handler(SysNotifyTest())
     quote_ctx.set_handler(TickerTest())
     trade_ctx.set_handler(TradeOrderTest())
-    if conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']:
+    if conf['AUTO_ADJUST']:
         quote_ctx.set_handler(OrderBookTest())
     position_list_query()
     order_list_query(status=ft.OrderStatus.FILLED_ALL)
