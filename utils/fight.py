@@ -664,7 +664,7 @@ def _position_list_query(stock_type='', logging=True):
             log.info('today buy %s, data:\n%s' % (stock_type, data))
         return data
     else:
-        log.info('today buy qty has empty')
+        # log.info('today buy qty is empty')
         reset_has(real=True) # TODO 没有取消订阅，因为has_bear_list已经在上面被清空了
         if glb['almost_over']:
             glb['over'] = True
@@ -1106,14 +1106,15 @@ class TickerTest(ft.TickerHandlerBase):
         if glb['to_over']:
             return ret, data
 
-        # 有持仓的时候，每一分钟查询分割线，每波动10点查询持仓列表
+        # 每波动10点查询持仓列表
         glb['cur_price'] = data0.price
+        if abs(glb['cur_price'] - glb['last_price']) >= 10:
+                glb['last_price'] = glb['cur_price']
+                position_list_query(logging=False)
+        # 有持仓的时候，每一分钟查询分割线
         if (len(glb['has_bull_list']) > 0 or len(glb['has_bear_list']) > 0):
             if data0.get('time')[-2:] == '00' and conf['CHECK_GOLDEN_LINE']:
                 check_golden_line()
-            if abs(glb['cur_price'] - glb['last_price']) >= 10:
-                glb['last_price'] = glb['cur_price']
-                position_list_query(logging=False)
 
         # 自动买入和自动调价
         if conf['AUTO_BUY'] or conf['AUTO_ADJUST']:
