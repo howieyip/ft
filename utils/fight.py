@@ -61,7 +61,8 @@ conf = {
     'ADJUST_SELL_DICT': {
         'rise': [60, 1, 2],                         # 最近多少秒内，往持仓股票方向波动多少点，调整卖单为第几档
         'fall': [60, 1, 0]                          # 最近多少秒内，往持仓股票反向波动多少点，调整卖单为第几档
-    }
+    },
+    'AUTO_FORCE_REPLACING': False                   # 快回收时是否自动强制移仓
 }
 
 
@@ -609,8 +610,8 @@ def _position_list_query(stock_type='', logging=True):
         elif data2.stock_name.find('熊') > -1:
             glb['today_pl_val_bear'] += data2.today_pl_val
     log.info('current price: %s, today bull: %s, today bear: %s' % (glb['cur_price'], glb['today_pl_val_bull'], glb['today_pl_val_bear']))
-    loss_val = -(conf['BUY_VOLUME'] * conf['LOSS_PRICE_DIFF'] + (conf['MAX_VOLUME'] - conf['BUY_VOLUME']) * conf['ADD_PRICE_DIFF'])
     if conf['AUTO_BUY']:
+        loss_val = -(conf['BUY_VOLUME'] * conf['LOSS_PRICE_DIFF'] + (conf['MAX_VOLUME'] - conf['BUY_VOLUME']) * conf['ADD_PRICE_DIFF'])
         if glb['today_pl_val_bull'] <= loss_val and conf['BULL_CODE'] != '':
             log.info('loss_val: %s' % loss_val)
             conf['BULL_CODE'] = ''
@@ -642,14 +643,14 @@ def _position_list_query(stock_type='', logging=True):
                             to_buy('bear', data2.qty, force=True)
                         else:
                             to_buy('bull', data2.qty, force=True)
-                if round(data2.nominal_price, 3) <= 0.021:
-                    log.info('code: %s, force_replacing, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
-                    glb['force_replacing'] = True
-                    sell_all(code=data2.code, qty=data2.qty)
-                    if data2.stock_name.find('熊') > -1:
-                        to_buy('bear', data2.qty, force=True)
-                    else:
-                        to_buy('bull', data2.qty, force=True)
+            if conf['AUTO_FORCE_REPLACING'] and round(data2.nominal_price, 3) <= 0.021:
+                log.info('code: %s, force_replacing, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
+                glb['force_replacing'] = True
+                sell_all(code=data2.code, qty=data2.qty)
+                if data2.stock_name.find('熊') > -1:
+                    to_buy('bear', data2.qty, force=True)
+                else:
+                    to_buy('bull', data2.qty, force=True)
         bull_data = data[data.stock_name.str.contains('牛')]
         bear_data = data[data.stock_name.str.contains('熊')]
         if len(bull_data) == 0:

@@ -13,4 +13,5 @@ start({
     'MAX_VOLUME' : 300e3,
     'AUTO_ADJUST': True,
     'AUTO_PLACE_ORDER': True,
+    'AUTO_FORCE_REPLACING': False,
 })
