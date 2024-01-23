@@ -14,4 +14,9 @@ start({
     'AUTO_ADJUST': True,
     'AUTO_PLACE_ORDER': True,
     'AUTO_FORCE_REPLACING': False,
+    'FORCE_REPLACING_DICT': {
+        'from_code': 'HK.',
+        'to_code': 'auto',
+        'volume': 400e3
+    }
 })
