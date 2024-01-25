@@ -13,10 +13,12 @@ start({
     'MAX_VOLUME' : 800e3,
     'AUTO_ADJUST': True,
     'AUTO_PLACE_ORDER': True,
-    'AUTO_FORCE_REPLACING': False,
-    'FORCE_REPLACING_DICT': {
+    'AUTO_MOVE_POSITION': False,
+    'MOVE_POSITION_DICT': {
         'from_code': 'HK.',
         'to_code': 'auto',
-        'volume': 400e3
+        'volume': 400e3,
+        'cur_price_min': 0.13,
+        'cur_price_max': 0.18
     }
 })
