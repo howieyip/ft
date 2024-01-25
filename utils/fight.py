@@ -27,7 +27,7 @@ conf = {
     'GOLDEN_LINE_DIFF': 80,                         # 黄金分割线0-100之间要间隔多少点
     'BID_ASK_DIFF': 0.002,                          # 买一价和卖一价的价差小于等于多少元，才允许买入
     'CUR_PRICE_MIN': 0.04,
-    'CUR_PRICE_MAX': 0.09,                          # 这个值非常重要，当天买入的股票如果低于这个价，会被当成是日内短炒止损
+    'CUR_PRICE_MAX': 0.12,                          # 这个值非常重要，当天买入的新股票如果低于这个价，会被当成是日内短炒止损
 
     'DELTA_SECONDS': 60,                            # 多少秒内
     'DELTA_PRICE': 15,                              # 波动多少点
@@ -62,13 +62,13 @@ conf = {
         'rise': [60, 1, 2],                         # 最近多少秒内，往持仓股票方向波动多少点，调整卖单为第几档
         'fall': [60, 1, 0]                          # 最近多少秒内，往持仓股票反向波动多少点，调整卖单为第几档
     },
-    'AUTO_MOVE_POSITION': False,                  # 是否自动强制移仓，是则下面的MOVE_POSITION_DICT生效
+    'AUTO_MOVE_POSITION': False,                    # 是否自动强制移仓，是则下面的MOVE_POSITION_DICT生效
     'MOVE_POSITION_DICT': {
-        'from_code': 'HK.',
+        'from_code': 'HK.',                         # 指定code移仓目前是一次性应急用
         'to_code': 'auto',
         'volume': 400e3,
-        'cur_price_min': 0.13,
-        'cur_price_max': 0.18
+        'cur_price_min': 0.15,
+        'cur_price_max': 0.19
     }
 }
 
@@ -669,6 +669,8 @@ def _position_list_query(stock_type='', logging=True):
         return False
 
     today_buy_hold_data = today_buy_data[today_buy_data.qty > 0]
+    if logging:
+        log.info('today_buy_hold_data:\n%s' % today_buy_hold_data)
     if len(today_buy_hold_data) > 0:
         for i in range(0, len(today_buy_hold_data)):
             data2 = today_buy_hold_data.iloc[i]
@@ -693,8 +695,6 @@ def _position_list_query(stock_type='', logging=True):
                                 to_buy('bull', volume=data2.qty, force=True)
         bull_data = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('牛')]
         bear_data = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('熊')]
-        if logging:
-            log.info('today_buy_hold_data:\n%s' % today_buy_hold_data)
         if len(bull_data) == 0:
             reset_has('牛', True)
         if len(bear_data) == 0:
@@ -705,7 +705,6 @@ def _position_list_query(stock_type='', logging=True):
             return bear_data
         return today_buy_hold_data
     else:
-        # log.info('today_buy_hold_data is empty')
         reset_has(real=True) # TODO 没有取消订阅，因为has_bear_list已经在上面被清空了
         if glb['almost_over']:
             glb['over'] = True
