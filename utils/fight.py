@@ -47,15 +47,16 @@ conf = {
 
     'AUTO_PLACE_ORDER': False,                      # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
     'ORDER_LIST': [                                 # 下单多少股以上（大的写前面），每单挂多少股，例如下单800k，分3档200k 200k 400k挂单
-        [800e3, 200e3, 200e3, 400e3],
-        [700e3, 200e3, 200e3, 300e3],
-        [600e3, 150e3, 150e3, 300e3],
-        [500e3, 150e3, 150e3, 200e3],
-        [400e3, 100e3, 100e3, 200e3],
-        [300e3, 100e3, 100e3, 100e3],
-        [200e3, 50e3, 50e3, 100e3],
-        [100e3, 0, 50e3, 50e3]
+        [800e3, 200e3, 200e3, 200e3, 200e3],
+        [700e3, 150e3, 150e3, 200e3, 200e3],
+        [600e3, 150e3, 150e3, 150e3, 150e3],
+        [500e3, 100e3, 100e3, 150e3, 150e3],
+        [400e3, 100e3, 100e3, 100e3, 100e3],
+        [300e3, 50e3, 50e3, 100e3, 100e3],
+        [200e3, 50e3, 50e3, 50e3, 50e3],
+        [100e3, 0, 50e3, 0, 50e3]
     ],
+    'FALL_PRICE_MIN_DIFF': 0.004,                   # 最后一个卖单降档的最小值为第几档
 
     'AUTO_ADJUST_SELL': True,                       # 是否自动调整挂的卖单的价格，若是则下面的ADJUST_SELL_DICT有效
     'ADJUST_SELL_DICT': {
@@ -862,7 +863,7 @@ def auto_adjust(delta_price, i, adjust_dict, submitted_type):
         rise_price = round(ask_price + (adjust_dict['rise'][2] - 1) * 0.001, 3)
         fall_price = round(ask_price + (adjust_dict['fall'][2] - 1) * 0.001, 3)
         if conf['AUTO_ADJUST_SELL'] and not glb['almost_over']:
-            fall_price = max(find_buy_price(data) + 0.003, fall_price)
+            fall_price = max(find_buy_price(data) + conf['FALL_PRICE_MIN_DIFF'], fall_price)
     rise_condition = False
     fall_condition = False
     if submitted_type.find('bull') > -1:
