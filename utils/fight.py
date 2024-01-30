@@ -46,23 +46,23 @@ conf = {
     'ADD_PRICE_DIFF': 0.005,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
 
     'AUTO_PLACE_ORDER': False,                      # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
-    'ORDER_LIST': [
-        [800e3, 400e3, 2, 3],
-        [700e3, 350e3, 2, 3],
-        [600e3, 300e3, 2, 3],
-        [500e3, 250e3, 2, 3],
-        [400e3, 200e3, 2, 3],
-        [300e3, 150e3, 2, 3],
-        [200e3, 100e3, 2, 3],
-        [100e3, 50e3, 2, 3]
-    ],                                              # 下单多少股以上（大的写前面），每单挂多少股，一单挂高几格，下一单挂高几格
+    'ORDER_LIST': [                                 # 下单多少股以上（大的写前面），每单挂多少股，例如下单800k，分3档200k 200k 400k挂单
+        [800e3, 200e3, 200e3, 400e3],
+        [700e3, 200e3, 200e3, 300e3],
+        [600e3, 150e3, 150e3, 300e3],
+        [500e3, 150e3, 150e3, 200e3],
+        [400e3, 100e3, 100e3, 200e3],
+        [300e3, 100e3, 100e3, 100e3],
+        [200e3, 50e3, 50e3, 100e3],
+        [100e3, 0, 50e3, 50e3]
+    ],
 
     'AUTO_ADJUST_SELL': True,                       # 是否自动调整挂的卖单的价格，若是则下面的ADJUST_SELL_DICT有效
     'ADJUST_SELL_DICT': {
         'rise': [60, 1, 2],                         # 最近多少秒内，往持仓股票方向波动多少点，调整卖单为第几档
         'fall': [60, 1, 0]                          # 最近多少秒内，往持仓股票反向波动多少点，调整卖单为第几档
     },
-    'AUTO_MOVE_POSITION': False,                    # 是否自动强制移仓，是则下面的MOVE_POSITION_DICT生效
+    'AUTO_MOVE_POSITION': True,                     # 是否自动强制移仓，是则下面的MOVE_POSITION_DICT生效
     'MOVE_POSITION_DICT': {
         'from_code': 'HK.',                         # 指定code移仓目前是一次性应急用
         'to_code': 'auto',
@@ -684,11 +684,11 @@ def _position_list_query(stock_type='', logging=True):
                             log.info('code: %s, not auto_place_order, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
                             auto_place_order(data2.code, data2.qty, max(data2.nominal_price, data2.cost_price))
                 # 分割线反画
-                if not glb['soon_over']:
-                    if ((glb['golden_line']['reverse'] == 'bull' and data2.stock_name.find('熊') > -1 and conf['BEAR_CODE'] == 'auto') or
-                        (glb['golden_line']['reverse'] == 'bear' and data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto')):
-                            log.info('code: %s, reverse_sell, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
-                            sell_all(code=data2.code, qty=data2.qty)
+                if ((glb['golden_line']['reverse'] == 'bull' and data2.stock_name.find('熊') > -1 and conf['BEAR_CODE'] == 'auto') or
+                    (glb['golden_line']['reverse'] == 'bear' and data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto')):
+                        log.info('code: %s, reverse_sell, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
+                        sell_all(code=data2.code, qty=data2.qty)
+                        if not glb['soon_over']:
                             if glb['golden_line']['reverse'] == 'bear':
                                 to_buy('bear', volume=data2.qty, force=True)
                             else:
@@ -755,17 +755,17 @@ def auto_place_order(code, volume, price):
     #     return False
     glb['auto_place_order_flag'] = True
     item = []
-    # conf['ORDER_LIST'] = [[400e3, 200e3, 2, 3],
-    #     [200e3, 100e3, 2, 3],
-    #     [100e3, 50e3, 2, 3]]            # 下单多少股以上（大的写前面），每单挂多少股，一单挂高几格，下一单挂高几格
+    # [[600e3, 150e3, 150e3, 300e3]]
     for i in range(0, len(conf['ORDER_LIST'])):
         if volume >= conf['ORDER_LIST'][i][0]:
             item = conf['ORDER_LIST'][i]
             break
     if glb['move_position']:
         price += 0.02
-    for i in range(0, len(item) - 2):
-        data = smart_sell(code, item[1], price + 0.001 * item[2 + i])
+    for i in range(1, len(item)):
+        if item[i] == 0:
+            continue
+        data = smart_sell(code, item[i], price + 0.001 * i)
         if data is False:
             log.info('auto_place_order => smart_sell error')
         elif glb['move_position']:

@@ -13,7 +13,7 @@ start({
     'MAX_VOLUME' : 800e3,
     'AUTO_ADJUST': True,
     'AUTO_PLACE_ORDER': True,
-    'AUTO_MOVE_POSITION': False,
+    'AUTO_MOVE_POSITION': True,
     'MOVE_POSITION_DICT': {
         'from_code': 'HK.',
         'to_code': 'auto',
