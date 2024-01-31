@@ -633,6 +633,7 @@ def auto_move_position(hsi_data):
         if round(data2.nominal_price, 3) <= 0.021:
             log.info('code: %s, move_position, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
             glb['move_position'] = True
+            subscribe([data2.code], [ft.SubType.ORDER_BOOK]) # 有可能不是今天买的，所以可能没订阅
             sell_all(code=data2.code, qty=data2.qty)
             if data2.stock_name.find('熊') > -1:
                 to_buy('bear', volume=data2.qty, force=True)
@@ -659,7 +660,7 @@ def _position_list_query(stock_type='', logging=True):
         return False
     reset_has()
     hsi_data = data[data.stock_name.str.contains('恒指')]
-    
+
     # 自动移仓
     auto_move_position(hsi_data)
 
