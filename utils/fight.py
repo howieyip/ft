@@ -145,12 +145,11 @@ def add_unique_element(arr, element):
 
 
 # 节流函数
-def throttle(fn, wait):
+def throttle(fn, wait, need_log=True):
     last_call_time = None
-    logged = False
 
     def throttled(*args, **kwargs):
-        nonlocal last_call_time, logged
+        nonlocal last_call_time, need_log
         current_time = time.time()
 
         if last_call_time is not None:
@@ -160,12 +159,11 @@ def throttle(fn, wait):
 
         if countdown <= 0:
             last_call_time = current_time
-            logged = False
+            need_log = True
             return fn(*args, **kwargs)
-        else:
-            if not logged:
-                log.info(f'{fn.__name__} call throttling, {countdown}s remaining')
-                logged = True
+        elif need_log:
+            log.info(f'{fn.__name__} call throttling, {countdown}s remaining')
+            need_log = False
 
     return throttled
 
@@ -651,9 +649,9 @@ def auto_move_position(hsi_data):
                 conf['BULL_CODE'] = conf['MOVE_POSITION_DICT']['to_code']
                 to_buy('bull', volume=qty, force=True, cur_price_min=conf['MOVE_POSITION_DICT']['cur_price_min'], cur_price_max=conf['MOVE_POSITION_DICT']['cur_price_max'])
 
-def _position_list_query(stock_type='', logging=True):
+def _position_list_query(stock_type='', need_log=True):
     ret, data = trade_ctx.position_list_query(trd_env=conf['TRADE_ENV'], refresh_cache=True)
-    if logging:
+    if need_log:
         log.info('position_list_query, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
         log.info('position_list_query error, ret: %s, data:\n%s' % (ret, data))
@@ -671,7 +669,7 @@ def _position_list_query(stock_type='', logging=True):
         return False
 
     today_buy_hold_data = today_buy_data[today_buy_data.qty > 0]
-    if logging:
+    if need_log:
         log.info('today_buy_hold_data:\n%s' % today_buy_hold_data)
     if len(today_buy_hold_data) > 0:
         for i in range(0, len(today_buy_hold_data)):
@@ -772,6 +770,7 @@ def auto_place_order(code, volume, price):
             log.info('auto_place_order => smart_sell error')
         elif glb['move_position']:
             glb['move_position'] = False
+        time.sleep(1)
     glb['auto_place_order_flag'] = False
 
 
@@ -1049,12 +1048,12 @@ def auto_buy(stock_type):
             to_buy('bear')
 
 
-def pre_buy():
+def _pre_buy():
     #       code              time                 price        volume  turnover    ticker_direction       sequence   type      push_data_type
     # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
     while datestr_to_timestamp(glb['ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['ticker_list'][0].get('time')) > conf['DELTA_SECONDS']:
         glb['ticker_list'].pop(0)
-    # if glb['ticker_list'][-1][1][-2:] != '00':
+    # if glb['ticker_list'][-1].get('time').split('.')[0][-2:] != '00':
     #     return False
     filled_all_last_order_time = glb['filled_all_last_order'].get('last', {}).get('updated_time')
     if filled_all_last_order_time:
@@ -1152,10 +1151,10 @@ class TickerTest(ft.TickerHandlerBase):
         glb['cur_price'] = data0.price
         if abs(glb['cur_price'] - glb['last_price']) >= 10:
                 glb['last_price'] = glb['cur_price']
-                position_list_query(logging=False)
+                position_list_query(need_log=False)
         # 有持仓的时候，每一分钟查询分割线
         if (len(glb['has_bull_list']) > 0 or len(glb['has_bear_list']) > 0):
-            if data0.get('time')[-2:] == '00' and conf['CHECK_GOLDEN_LINE']:
+            if s == 0 and conf['CHECK_GOLDEN_LINE']:
                 check_golden_line()
 
         # 自动买入和自动调价
@@ -1214,6 +1213,8 @@ def resetData():
     request_trading_days()
 
 
+# 限制2秒内最多查1次足够
+pre_buy = throttle(_pre_buy, 2, False)
 # 限制3秒内最多查1次足够
 check_golden_line = throttle(_check_golden_line, 3)
 # 每 30 秒内最多请求 10 次查询持仓接口
