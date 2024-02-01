@@ -147,9 +147,10 @@ def add_unique_element(arr, element):
 # 节流函数
 def throttle(fn, wait, need_log=True):
     last_call_time = None
+    logged = False
 
     def throttled(*args, **kwargs):
-        nonlocal last_call_time, need_log
+        nonlocal last_call_time, logged, need_log
         current_time = time.time()
 
         if last_call_time is not None:
@@ -159,11 +160,12 @@ def throttle(fn, wait, need_log=True):
 
         if countdown <= 0:
             last_call_time = current_time
-            need_log = True
+            logged = False
             return fn(*args, **kwargs)
-        elif need_log:
-            log.info(f'{fn.__name__} call throttling, {countdown}s remaining')
-            need_log = False
+        if need_log and not logged:
+            print(f'{fn.__name__} call throttling, {countdown}s remaining')
+            logged = True
+        return None
 
     return throttled
 
@@ -233,6 +235,7 @@ def draw_golden_line():
     # 'cur_price': [17337.70, 17214.94, 17223.84, 17212.21]})
     # data = pd.DataFrame(data)
 
+    data = data.iloc[:-1] # 排除最后一个数据，因为在当前分钟未结束时是不准确的
     data_min = data[data.cur_price == min(data.cur_price)]
     data_max = data[data.cur_price == max(data.cur_price)]
     min_index = data_min.index.tolist()[0]
