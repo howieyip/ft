@@ -692,18 +692,23 @@ def _position_list_query(stock_type='', need_log=True):
                     # reset_submitted_buy(data2.code, data2.stock_name)
                     if conf['AUTO_PLACE_ORDER'] and not glb['to_over']:
                         if (data2.stock_name.find('熊') > -1 and conf['BEAR_CODE'] == 'auto') or (data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto'):
-                            log.info('code: %s, not auto_place_order, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
+                            log.info('auto_place_order, code: %s, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
                             auto_place_order(data2.code, data2.qty, max(data2.nominal_price, data2.cost_price))
                 # 分割线反画
                 if ((glb['golden_line']['reverse'] == 'bull' and data2.stock_name.find('熊') > -1 and conf['BEAR_CODE'] == 'auto') or
                     (glb['golden_line']['reverse'] == 'bear' and data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto')):
-                        log.info('code: %s, reverse_sell, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
+                        log.info('reverse_sell, code: %s, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
                         sell_all(code=data2.code, qty=data2.qty)
                         if not glb['soon_over']:
                             if glb['golden_line']['reverse'] == 'bear':
                                 to_buy('bear', volume=data2.qty, force=True)
                             else:
                                 to_buy('bull', volume=data2.qty, force=True)
+                # 亏10格重新按当前价格挂单
+                if round(data2.cost_price - data2.nominal_price, 3) >= conf['LOSS_PRICE_DIFF']:
+                    cancel_all(data2.code)
+                    log.info('auto_place_order, code: %s, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
+                    auto_place_order(data2.code, data2.qty, data2.nominal_price)
         bull_data = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('牛')]
         bear_data = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('熊')]
         if len(bull_data) == 0:
