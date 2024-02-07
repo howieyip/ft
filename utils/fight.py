@@ -212,19 +212,21 @@ def get_golden_line(line=None):
         d['reverse'] = 'bear'
     # d['200'] = d['0'] + d['diff'] * 2
     d['2618'] = d['0'] + d['diff'] * 2.618
+    d['300'] = d['0'] + d['diff'] * 3
     glb['golden_line'] = d
     return d
 
 
 def draw_golden_line():
-    ret, data = quote_ctx.get_rt_data(HSI_CODE)
-    # log.info('get_rt_data, ret: %s, data:%s' % (ret, data))
+    ret, rt_data = quote_ctx.get_rt_data(HSI_CODE)
+    # log.info('get_rt_data, ret: %s, rt_data:%s' % (ret, rt_data))
     if ret != ft.RET_OK:
-        log.info('get_rt_data error, ret: %s, data:%s' % (ret, data))
-        return False
-    if data.iloc[-1].time[0:10] != glb['trade_date'].get('time'):
+        log.info('get_rt_data error, ret: %s, rt_data:%s' % (ret, rt_data))
+        return False, False
+    cur_rt_data = rt_data.iloc[-1]
+    if cur_rt_data.time[0:10] != glb['trade_date'].get('time'):
         log.info('get_rt_data not today')
-        # return False
+        # return False, False
 
     #       code                 time  is_blank  opened_mins  cur_price  last_close     avg_price  volume      turnover
     # 0    HK.800000  2023-10-31 09:30:00     False          570   17337.70    17406.36  17337.700000       0  1.682861e+09
@@ -235,7 +237,7 @@ def draw_golden_line():
     # 'cur_price': [17337.70, 17214.94, 17223.84, 17212.21]})
     # data = pd.DataFrame(data)
 
-    data = data.iloc[:-1] # 排除最后一个数据，因为在当前分钟未结束时是不准确的
+    data = rt_data.iloc[:-1] # 排除最后一个数据，因为在当前分钟未结束时画分割线是不准确的
     data_min = data[data.cur_price == min(data.cur_price)]
     data_max = data[data.cur_price == max(data.cur_price)]
     min_index = data_min.index.tolist()[0]
@@ -254,7 +256,7 @@ def draw_golden_line():
                     (cur_price - golden_line['0'] > conf['GOLDEN_LINE_DIFF'])):
                         golden_line['100'] = cur_price
                         golden_line = get_golden_line(golden_line)
-                        if (data_max.cur_price <= golden_line['2618']):
+                        if (data_max.cur_price <= golden_line['300']):
                             break
     else:
         golden_line['0'] = data_max.cur_price
@@ -266,22 +268,28 @@ def draw_golden_line():
                     (golden_line['0'] - cur_price > conf['GOLDEN_LINE_DIFF'])):
                         golden_line['100'] = cur_price
                         golden_line = get_golden_line(golden_line)
-                        if (data_min.cur_price >= golden_line['2618']):
+                        if (data_min.cur_price >= golden_line['300']):
                             break
     if golden_line['100'] == 0:
         log.info('golden_line not ready')
-        return False
+        return False, cur_rt_data
     log.info('golden_line: %s' % golden_line)
-    return golden_line
+    return golden_line, cur_rt_data
 
 def _check_golden_line():
-    golden_line = draw_golden_line()
+    golden_line, cur_rt_data = draw_golden_line()
     if golden_line is False:
         return 'null'
     if golden_line['100'] < golden_line['0']:
         value = 'bear'
+        if cur_rt_data.cur_price < golden_line['2618']:
+            log.info('当前价格位于黄金分割261.8%之上，别追了')
+            value = 'null'
     else:
         value = 'bull'
+        if cur_rt_data.cur_price > golden_line['2618']:
+            log.info('当前价格位于黄金分割261.8%之上，别追了')
+            value = 'null'
     return value
 
 
