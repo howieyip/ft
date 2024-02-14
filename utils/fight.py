@@ -210,8 +210,8 @@ def get_golden_line(line=None):
         d['reverse'] = 'bull'
     elif d['diff'] < 0 and glb['golden_line']['diff'] > 0:
         d['reverse'] = 'bear'
-    # d['200'] = d['0'] + d['diff'] * 2
-    d['2618'] = d['0'] + d['diff'] * 2.618
+    d['123.6'] = d['0'] + d['diff'] * 1.236
+    d['261.8'] = d['0'] + d['diff'] * 2.618
     d['300'] = d['0'] + d['diff'] * 3
     glb['golden_line'] = d
     return d
@@ -280,15 +280,21 @@ def _check_golden_line():
     golden_line, cur_rt_data = draw_golden_line()
     if golden_line is False:
         return 'null'
-    if golden_line['100'] < golden_line['0']:
-        value = 'bear'
-        if cur_rt_data.cur_price < golden_line['2618']:
-            log.info('当前价格位于黄金分割261.8%之上，别追了')
+    if golden_line['100'] > golden_line['0']:
+        value = 'bull'
+        if cur_rt_data.cur_price < golden_line['123.6']:
+            log.info('当前价格位于黄金分割123.6%之内，先别急')
+            value = 'null'
+        elif cur_rt_data.cur_price > golden_line['261.8']:
+            log.info('当前价格位于黄金分割261.8%之外，别追了')
             value = 'null'
     else:
-        value = 'bull'
-        if cur_rt_data.cur_price > golden_line['2618']:
-            log.info('当前价格位于黄金分割261.8%之上，别追了')
+        value = 'bear'
+        if cur_rt_data.cur_price > golden_line['123.6']:
+            log.info('当前价格位于黄金分割123.6%之内，先别急')
+            value = 'null'
+        elif cur_rt_data.cur_price < golden_line['261.8']:
+            log.info('当前价格位于黄金分割261.8%之外，别追了')
             value = 'null'
     return value
 
@@ -651,7 +657,7 @@ def auto_move_position(hsi_data):
         elif conf['MOVE_POSITION_DICT']['from_code'] == data2.code:
             conf['AUTO_MOVE_POSITION'] = False
             log.info('code: %s, move_position, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
-            qty = min(conf['MOVE_POSITION_DICT']['volume'], data2.qty)
+            qty = min(data2.qty, conf['MOVE_POSITION_DICT']['volume'])
             sell_all(code=data2.code, qty=qty)
             if data2.stock_name.find('熊') > -1:
                 conf['BEAR_CODE'] = conf['MOVE_POSITION_DICT']['to_code']
@@ -708,7 +714,7 @@ def _position_list_query(stock_type='', need_log=True):
                 if round(data2.cost_price - data2.nominal_price, 3) >= conf['LOSS_PRICE_DIFF']:
                     cancel_all(data2.code)
                     log.info('auto_place_order, code: %s, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
-                    auto_place_order(data2.code, data2.qty, data2.nominal_price)
+                    auto_place_order(data2.code, min(data2.qty, conf['BUY_VOLUME']), data2.nominal_price)
         bull_data = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('牛')]
         bear_data = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('熊')]
         if len(bull_data) == 0:
