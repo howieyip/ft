@@ -280,24 +280,24 @@ def _check_golden_line():
         return 'null'
     if golden_line['100'] > golden_line['0']:
         value = 'bull'
-        if golden_line.cur_price < golden_line.avg_price:
+        if golden_line['cur_price'] < golden_line['avg_price']:
             log.info('当前价格位于均线之下，别买了')
             value = 'null'
-        elif golden_line.cur_price < golden_line['123.6'] and golden_line.max_price < golden_line['150']:
+        elif golden_line['cur_price'] < golden_line['123.6'] and golden_line['max_price'] < golden_line['150']:
             log.info('当前价格位于黄金分割123.6%之内，且最大值未突破150%，不急买')
             value = 'null'
-        elif golden_line.cur_price > golden_line['261.8']:
+        elif golden_line['cur_price'] > golden_line['261.8']:
             log.info('当前价格位于黄金分割261.8%之外，别追了')
             value = 'null'
     else:
         value = 'bear'
-        if golden_line.cur_price > golden_line.avg_price:
+        if golden_line['cur_price'] > golden_line['avg_price']:
             log.info('当前价格位于均线之上，别买了')
             value = 'null'
-        elif golden_line.cur_price > golden_line['123.6'] and golden_line.min_price > golden_line['150']:
+        elif golden_line['cur_price'] > golden_line['123.6'] and golden_line['min_price'] > golden_line['150']:
             log.info('当前价格位于黄金分割123.6%之内，且最小值未突破150%，不急买')
             value = 'null'
-        elif golden_line.cur_price < golden_line['261.8']:
+        elif golden_line['cur_price'] < golden_line['261.8']:
             log.info('当前价格位于黄金分割261.8%之外，别追了')
             value = 'null'
     return value
@@ -705,20 +705,23 @@ def _position_list_query(stock_type='', need_log=True):
                             log.info('auto_place_order, code: %s, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
                             auto_place_order(data2.code, data2.qty, max(data2.nominal_price, data2.cost_price))
                 # 分割线反画
-                if ((glb['golden_line']['reverse'] == 'bull' and data2.stock_name.find('熊') > -1 and conf['BEAR_CODE'] == 'auto') or
-                    (glb['golden_line']['reverse'] == 'bear' and data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto')):
+                if glb['golden_line']['reverse'] == 'bull':
+                    if data2.stock_name.find('熊') > -1 and conf['BEAR_CODE'] == 'auto':
                         log.info('reverse_sell, code: %s, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
                         sell_all(code=data2.code, qty=data2.qty)
-                        if not glb['soon_over']:
-                            if glb['golden_line']['reverse'] == 'bear':
-                                to_buy('bear', volume=data2.qty, force=True)
-                            else:
-                                to_buy('bull', volume=data2.qty, force=True)
-                # 亏10格重新按当前价格挂单
-                if round(data2.cost_price - data2.nominal_price, 3) >= conf['LOSS_PRICE_DIFF']:
-                    cancel_all(data2.code)
-                    log.info('auto_place_order, code: %s, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
-                    auto_place_order(data2.code, min(data2.qty, conf['BUY_VOLUME']), data2.nominal_price)
+                    if not glb['soon_over']:
+                        to_buy('bull')
+                if glb['golden_line']['reverse'] == 'bear':
+                    if data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto':
+                        log.info('reverse_sell, code: %s, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
+                        sell_all(code=data2.code, qty=data2.qty)
+                    if not glb['soon_over']:
+                        to_buy('bear')
+                # 破均线强制止损
+                if ((glb['golden_line']['cur_price'] < glb['golden_line']['avg_price'] and data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto') or
+                    (glb['golden_line']['cur_price'] > glb['golden_line']['avg_price'] and data2.stock_name.find('熊') > -1 and conf['BEAR_CODE'] == 'auto')):
+                        log.info('loss_sell, code: %s, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
+                        sell_all(code=data2.code, qty=data2.qty)
         bull_data = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('牛')]
         bear_data = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('熊')]
         if len(bull_data) == 0:
