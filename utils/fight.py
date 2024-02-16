@@ -200,21 +200,19 @@ def datestr_to_timestamp(time_str, format_str="%Y-%m-%d %H:%M:%S", pattern=r'\d{
 def get_golden_line(line=None):
     if line is None:
         line = glb['golden_line']
-    d = dict()
-    d['0'] = line['0']
-    d['100'] = line['100']
-    d['diff'] = d['100'] - d['0']
+    line['diff'] = line['100'] - line['0']
     glb['golden_line']['diff'] = glb['golden_line']['100'] - glb['golden_line']['0']
-    d['reverse'] = glb['golden_line']['reverse']
-    if d['diff'] > 0 and glb['golden_line']['diff'] < 0:
-        d['reverse'] = 'bull'
-    elif d['diff'] < 0 and glb['golden_line']['diff'] > 0:
-        d['reverse'] = 'bear'
-    d['123.6'] = d['0'] + d['diff'] * 1.236
-    d['261.8'] = d['0'] + d['diff'] * 2.618
-    d['300'] = d['0'] + d['diff'] * 3
-    glb['golden_line'] = d
-    return d
+    line['reverse'] = glb['golden_line']['reverse']
+    if line['diff'] > 0 and glb['golden_line']['diff'] < 0:
+        line['reverse'] = 'bull'
+    elif line['diff'] < 0 and glb['golden_line']['diff'] > 0:
+        line['reverse'] = 'bear'
+    line['123.6'] = line['0'] + line['diff'] * 1.236
+    line['150'] = line['0'] + line['diff'] * 1.5
+    line['261.8'] = line['0'] + line['diff'] * 2.618
+    line['300'] = line['0'] + line['diff'] * 3
+    glb['golden_line'] = line
+    return line
 
 
 def draw_golden_line():
@@ -222,11 +220,11 @@ def draw_golden_line():
     # log.info('get_rt_data, ret: %s, rt_data:%s' % (ret, rt_data))
     if ret != ft.RET_OK:
         log.info('get_rt_data error, ret: %s, rt_data:%s' % (ret, rt_data))
-        return False, False
+        return False
     cur_rt_data = rt_data.iloc[-1]
     if cur_rt_data.time[0:10] != glb['trade_date'].get('time'):
         log.info('get_rt_data not today')
-        # return False, False
+        # return False
 
     #       code                 time  is_blank  opened_mins  cur_price  last_close     avg_price  volume      turnover
     # 0    HK.800000  2023-10-31 09:30:00     False          570   17337.70    17406.36  17337.700000       0  1.682861e+09
@@ -238,62 +236,68 @@ def draw_golden_line():
     # data = pd.DataFrame(data)
 
     data = rt_data.iloc[:-1] # 排除最后一个数据，因为在当前分钟未结束时画分割线是不准确的
-    data_min = data[data.cur_price == min(data.cur_price)]
-    data_max = data[data.cur_price == max(data.cur_price)]
-    min_index = data_min.index.tolist()[0]
-    max_index = data_max.index.tolist()[0]
+    min_data = data[data.cur_price == min(data.cur_price)]
+    max_data = data[data.cur_price == max(data.cur_price)]
+    min_index = min_data.index.tolist()[0]
+    max_index = max_data.index.tolist()[0]
     # cur_index = data.shape[0] - 1
-    data_min = data_min.iloc[0]
-    data_max = data_max.iloc[0]
-    golden_line = {'0': 0, '100': 0}
-    if data_max.opened_mins > data_min.opened_mins:
-        golden_line['0'] = data_min.cur_price
-        for i in range(min_index, max_index): # 买入要谨慎，需最大值和最小值之间有拐点
+    min_data = min_data.iloc[0]
+    max_data = max_data.iloc[0]
+    golden_line = {'0': 0, '100': 0, 'cur_price': cur_rt_data.cur_price, 'avg_price': cur_rt_data.avg_price, 'min_price': min_data.cur_price, 'max_price': max_data.cur_price}
+    if max_data.opened_mins > min_data.opened_mins:
+        golden_line['0'] = min_data.cur_price
+        for i in range(min_index, max_index): # 寻找100%的位置，需是最小值和最大值之间的拐点
             if i >= 4:
                 cur_price = data.iloc[i - 2].cur_price
                 if ((data.iloc[i - 3].cur_price < cur_price > data.iloc[i - 1].cur_price) and
-                    (cur_price > data.iloc[i].cur_price or cur_price - data.iloc[i - 1].cur_price >= conf['DELTA_PRICE']) and
+                    (cur_price > data.iloc[i].cur_price or cur_price - data.iloc[i - 1].cur_price >= 10) and
                     (cur_price - golden_line['0'] > conf['GOLDEN_LINE_DIFF'])):
                         golden_line['100'] = cur_price
                         golden_line = get_golden_line(golden_line)
-                        if (data_max.cur_price <= golden_line['300']):
+                        if (max_data.cur_price <= golden_line['300']):
                             break
     else:
-        golden_line['0'] = data_max.cur_price
+        golden_line['0'] = max_data.cur_price
         for i in range(max_index, min_index):
             if i >= 4:
                 cur_price = data.iloc[i - 2].cur_price
                 if ((data.iloc[i - 3].cur_price > cur_price < data.iloc[i - 1].cur_price) and
-                    (cur_price < data.iloc[i].cur_price or cur_price - data.iloc[i - 1].cur_price <= -conf['DELTA_PRICE']) and
+                    (cur_price < data.iloc[i].cur_price or cur_price - data.iloc[i - 1].cur_price <= -10) and
                     (golden_line['0'] - cur_price > conf['GOLDEN_LINE_DIFF'])):
                         golden_line['100'] = cur_price
                         golden_line = get_golden_line(golden_line)
-                        if (data_min.cur_price >= golden_line['300']):
+                        if (min_data.cur_price >= golden_line['300']):
                             break
     if golden_line['100'] == 0:
         log.info('golden_line not ready')
-        return False, cur_rt_data
+        return False
     log.info('golden_line: %s' % golden_line)
-    return golden_line, cur_rt_data
+    return golden_line
 
 def _check_golden_line():
-    golden_line, cur_rt_data = draw_golden_line()
+    golden_line = draw_golden_line()
     if golden_line is False:
         return 'null'
     if golden_line['100'] > golden_line['0']:
         value = 'bull'
-        if cur_rt_data.cur_price < golden_line['123.6']:
-            log.info('当前价格位于黄金分割123.6%之内，先别急')
+        if golden_line.cur_price < golden_line.avg_price:
+            log.info('当前价格位于均线之下，别买了')
             value = 'null'
-        elif cur_rt_data.cur_price > golden_line['261.8']:
+        elif golden_line.cur_price < golden_line['123.6'] and golden_line.max_price < golden_line['150']:
+            log.info('当前价格位于黄金分割123.6%之内，且最大值未突破150%，不急买')
+            value = 'null'
+        elif golden_line.cur_price > golden_line['261.8']:
             log.info('当前价格位于黄金分割261.8%之外，别追了')
             value = 'null'
     else:
         value = 'bear'
-        if cur_rt_data.cur_price > golden_line['123.6']:
-            log.info('当前价格位于黄金分割123.6%之内，先别急')
+        if golden_line.cur_price > golden_line.avg_price:
+            log.info('当前价格位于均线之上，别买了')
             value = 'null'
-        elif cur_rt_data.cur_price < golden_line['261.8']:
+        elif golden_line.cur_price > golden_line['123.6'] and golden_line.min_price > golden_line['150']:
+            log.info('当前价格位于黄金分割123.6%之内，且最小值未突破150%，不急买')
+            value = 'null'
+        elif golden_line.cur_price < golden_line['261.8']:
             log.info('当前价格位于黄金分割261.8%之外，别追了')
             value = 'null'
     return value
