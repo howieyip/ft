@@ -327,6 +327,8 @@ def _smart_buy(code, volume, price=None, type='Bid'):
     log.info('_smart_buy, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
         log.info('code %s _smart_buy error, price %s, volume %s' % (code, price, volume))
+        if '购买力不足' in data:
+            conf['AUTO_BUY'] = False
         return False
     else:
         log.info('code %s _smart_buy success, price %s, volume %s' % (code, price, volume))
