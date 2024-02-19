@@ -280,8 +280,8 @@ def _check_golden_line():
         return 'null'
     if golden_line['100'] > golden_line['0']:
         value = 'bull'
-        if golden_line['cur_price'] < golden_line['avg_price']:
-            log.info('当前价格位于均线之下，别买了')
+        if golden_line['cur_price'] < golden_line['avg_price'] + 50:
+            log.info('当前价格在均线50点以内，别买了')
             value = 'null'
         elif golden_line['cur_price'] < golden_line['123.6'] and golden_line['max_price'] < golden_line['150']:
             log.info('当前价格位于黄金分割123.6%之内，且最大值未突破150%，不急买')
@@ -291,8 +291,8 @@ def _check_golden_line():
             value = 'null'
     else:
         value = 'bear'
-        if golden_line['cur_price'] > golden_line['avg_price']:
-            log.info('当前价格位于均线之上，别买了')
+        if golden_line['cur_price'] > golden_line['avg_price'] - 50:
+            log.info('当前价格在均线50点以内，别买了')
             value = 'null'
         elif golden_line['cur_price'] > golden_line['123.6'] and golden_line['min_price'] > golden_line['150']:
             log.info('当前价格位于黄金分割123.6%之内，且最小值未突破150%，不急买')
@@ -720,8 +720,8 @@ def _position_list_query(stock_type='', need_log=True):
                     if not glb['soon_over']:
                         to_buy('bear')
                 # 破均线强制止损
-                if ((glb['golden_line']['cur_price'] < glb['golden_line']['avg_price'] and data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto') or
-                    (glb['golden_line']['cur_price'] > glb['golden_line']['avg_price'] and data2.stock_name.find('熊') > -1 and conf['BEAR_CODE'] == 'auto')):
+                if ((glb['golden_line']['cur_price'] < glb['golden_line']['avg_price'] - 5 and data2.stock_name.find('牛') > -1 and conf['BULL_CODE'] == 'auto') or
+                    (glb['golden_line']['cur_price'] > glb['golden_line']['avg_price'] + 5 and data2.stock_name.find('熊') > -1 and conf['BEAR_CODE'] == 'auto')):
                         log.info('loss_sell, code: %s, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
                         sell_all(code=data2.code, qty=data2.qty)
         bull_data = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('牛')]
