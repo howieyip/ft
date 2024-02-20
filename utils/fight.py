@@ -75,8 +75,12 @@ conf = {
 
 
 # 常量
-HSI_CODE = 'HK.800000'                              # 恒指代码
-MHI_CODE = 'HK.MHImain'                             # 小恒指代码
+CONST = {
+    'hsi_code': 'HK.800000',
+    'mhi_code': 'HK.MHImain',
+    'bull': '牛',
+    'bear': '熊'
+}
 
 
 # 全局变量
@@ -115,8 +119,6 @@ glb = {
     'submitted_buy_bear_flag': False,
     'pre_buy_bull_flag': True,
     'pre_buy_bear_flag': True,
-    'bull_stop_price': 0,
-    'bear_stop_price': 0,
     'move_position': False,
     'cache_get_stock_code': {
         'bull': {
@@ -129,10 +131,6 @@ glb = {
             'duration': 5,
             'last_time': 0
         }
-    },
-    'stock_name': {
-        'bull': '牛',
-        'bear': '熊'
     }
 }
 
@@ -216,7 +214,7 @@ def get_golden_line(line=None):
 
 
 def draw_golden_line():
-    ret, rt_data = quote_ctx.get_rt_data(HSI_CODE)
+    ret, rt_data = quote_ctx.get_rt_data(CONST['hsi_code'])
     # log.info('get_rt_data, ret: %s, rt_data:%s' % (ret, rt_data))
     if ret != ft.RET_OK:
         log.info('get_rt_data error, ret: %s, rt_data:%s' % (ret, rt_data))
@@ -454,9 +452,9 @@ def _cancel_all(code='', stock_type='', trd_side=''):
             data2 = data.iloc[i]
             if stock_type == '' and trd_side == '':
                 cancel_order(data2.order_id)
-            elif data2.stock_name.find(glb['stock_name'][stock_type]) > -1 and trd_side == '':
+            elif data2.stock_name.find(CONST[stock_type]) > -1 and trd_side == '':
                 cancel_order(data2.order_id)
-            elif data2.stock_name.find(glb['stock_name'][stock_type]) > -1 and trd_side == data2.trd_side:
+            elif data2.stock_name.find(CONST[stock_type]) > -1 and trd_side == data2.trd_side:
                 cancel_order(data2.order_id)
             elif stock_type == '' and trd_side == data2.trd_side:
                 cancel_order(data2.order_id)
@@ -535,12 +533,10 @@ def set_has(code, stock_name):
 def reset_has(stock_name='', real=False):
     if stock_name == '' or stock_name.find('牛') > -1:
         if real:
-            glb['bull_stop_price'] = 0
             unsubscribe(glb['has_bull_list'], [ft.SubType.ORDER_BOOK])
         glb['has_bull_list'] = []
     if stock_name == '' or stock_name.find('熊') > -1:
         if real:
-            glb['bear_stop_price'] = 0
             unsubscribe(glb['has_bear_list'], [ft.SubType.ORDER_BOOK])
         glb['has_bear_list'] = []
 
@@ -658,7 +654,7 @@ def auto_move_position(hsi_data):
             sell_all(code=data2.code, qty=data2.qty)
             if data2.stock_name.find('熊') > -1:
                 to_buy('bear', volume=data2.qty, force=True)
-            else:
+            elif data2.stock_name.find('牛') > -1:
                 to_buy('bull', volume=data2.qty, force=True)
         elif conf['MOVE_POSITION_DICT']['from_code'] == data2.code:
             conf['AUTO_MOVE_POSITION'] = False
@@ -668,7 +664,7 @@ def auto_move_position(hsi_data):
             if data2.stock_name.find('熊') > -1:
                 conf['BEAR_CODE'] = conf['MOVE_POSITION_DICT']['to_code']
                 to_buy('bear', volume=qty, force=True, cur_price_min=conf['MOVE_POSITION_DICT']['cur_price_min'], cur_price_max=conf['MOVE_POSITION_DICT']['cur_price_max'])
-            else:
+            elif data2.stock_name.find('牛') > -1:
                 conf['BULL_CODE'] = conf['MOVE_POSITION_DICT']['to_code']
                 to_buy('bull', volume=qty, force=True, cur_price_min=conf['MOVE_POSITION_DICT']['cur_price_min'], cur_price_max=conf['MOVE_POSITION_DICT']['cur_price_max'])
 
@@ -947,7 +943,7 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
     cache['data'] = False
 
     req = ft.WarrantRequest()
-    req.stock_owner = HSI_CODE  # 所属正股
+    req.stock_owner = CONST['hsi_code']  # 所属正股
     if stock_type == 'bull':
         req.type_list = [ft.WrtType.BULL]  # Qot_Common.WarrantType, 窝轮类型过滤列表 WrtType
     elif stock_type == 'bear':
@@ -970,7 +966,7 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
         log.info('get_warrant error')
     else:
         data = data[0]
-        data = data[data.stock_owner == HSI_CODE] # 坑，返回的结果还要再过滤一次
+        data = data[data.stock_owner == CONST['hsi_code']] # 坑，返回的结果还要再过滤一次
         # data = data[data.cur_price == min(data.cur_price)]
         if len(data) > 0:
             data = data.iloc[0]
@@ -1038,13 +1034,13 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
             return False
         code = data.stock
 
-    set_submitted_buy(code, glb['stock_name'][stock_type])
+    set_submitted_buy(code, CONST[stock_type])
     if force:
         data = smart_buy(code, volume, type='Ask')
     else:
         data = smart_buy(code, volume)
     if data is False or data is None:
-        reset_submitted_buy(code, glb['stock_name'][stock_type])
+        reset_submitted_buy(code, CONST[stock_type])
     else:
         add_unique_element(glb['auto_buy_list'], code)
         # 刚买入，先设置别追买，要等待时机才买
@@ -1297,7 +1293,7 @@ def start(config=None):
             glb['restarted'] = False
             log.info('unlock_trade error')
             return False
-    data = subscribe([MHI_CODE], [ft.SubType.TICKER])
+    data = subscribe([CONST['mhi_code']], [ft.SubType.TICKER])
     if data is False:
         glb['restarted'] = False
         return False
@@ -1310,7 +1306,7 @@ def start(config=None):
     order_list_query(status=ft.OrderStatus.FILLED_ALL)
     # get_stock_code('熊')
     if conf['CHECK_GOLDEN_LINE']:
-        data = subscribe([HSI_CODE], [ft.SubType.RT_DATA], subscribe_push=False)
+        data = subscribe([CONST['hsi_code']], [ft.SubType.RT_DATA], subscribe_push=False)
         if data is False:
             glb['restarted'] = False
             return False
