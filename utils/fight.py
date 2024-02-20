@@ -104,10 +104,12 @@ glb = {
     'filled_all_last_order': {},
     'filled_all_buy_order': {},
     'adjust_ticker_list': [],
-    'submitted_buy_bull': None,
-    'submitted_buy_bear': None,
-    'submitted_sell_bull': None,
-    'submitted_sell_bear': None,
+    'submitted_buy_bull_flag': False,
+    'submitted_buy_bear_flag': False,
+    'submitted_buy_bull_data': None,
+    'submitted_buy_bear_data': None,
+    'submitted_sell_bull_data': None,
+    'submitted_sell_bear_data': None,
     'submitted_sell_bull_list': [],
     'submitted_sell_bear_list': [],
     'order_book': {},
@@ -115,8 +117,6 @@ glb = {
     'has_bull_list': [],
     'has_bear_list': [],
     'auto_place_order_flag': False,
-    'submitted_buy_bull_flag': False,
-    'submitted_buy_bear_flag': False,
     'pre_buy_bull_flag': True,
     'pre_buy_bear_flag': True,
     'move_position': False,
@@ -279,24 +279,24 @@ def _check_golden_line():
     if golden_line['100'] > golden_line['0']:
         value = 'bull'
         if golden_line['cur_price'] < golden_line['avg_price'] + 50:
-            log.info('当前价格在均线50点以内，别买了')
+            log.info('当前价格小于均线上方50点位置，别买了')
             value = 'null'
         elif golden_line['cur_price'] < golden_line['123.6'] and golden_line['max_price'] < golden_line['150']:
-            log.info('当前价格位于黄金分割123.6%之内，且最大值未突破150%，不急买')
+            log.info('当前价格位于黄金分割123.6%之内，且最大值未突破150%，别买了')
             value = 'null'
         elif golden_line['cur_price'] > golden_line['261.8']:
-            log.info('当前价格位于黄金分割261.8%之外，别追了')
+            log.info('当前价格位于黄金分割261.8%之外，别买了')
             value = 'null'
     else:
         value = 'bear'
         if golden_line['cur_price'] > golden_line['avg_price'] - 50:
-            log.info('当前价格在均线50点以内，别买了')
+            log.info('当前价格大于均线下方50点位置，别买了')
             value = 'null'
         elif golden_line['cur_price'] > golden_line['123.6'] and golden_line['min_price'] > golden_line['150']:
-            log.info('当前价格位于黄金分割123.6%之内，且最小值未突破150%，不急买')
+            log.info('当前价格位于黄金分割123.6%之内，且最小值未突破150%，别买了')
             value = 'null'
         elif golden_line['cur_price'] < golden_line['261.8']:
-            log.info('当前价格位于黄金分割261.8%之外，别追了')
+            log.info('当前价格位于黄金分割261.8%之外，别买了')
             value = 'null'
     return value
 
@@ -545,12 +545,12 @@ def set_submitted_buy(code, stock_name, data=None):
     if stock_name.find('牛') > -1:
         glb['submitted_buy_bull_flag'] = True
         if data is not None:
-            glb['submitted_buy_bull'] = data
+            glb['submitted_buy_bull_data'] = data
         log.info('set_submitted_buy bull:%s' % code)
     elif stock_name.find('熊') > -1:
         glb['submitted_buy_bear_flag'] = True
         if data is not None:
-            glb['submitted_buy_bear'] = data
+            glb['submitted_buy_bear_data'] = data
         log.info('set_submitted_buy bear: %s' % code)
     subscribe([code], [ft.SubType.ORDER_BOOK])
 
@@ -558,11 +558,11 @@ def set_submitted_buy(code, stock_name, data=None):
 def reset_submitted_buy(code, stock_name=''):
     if stock_name == '' or stock_name.find('牛') > -1:
         glb['submitted_buy_bull_flag'] = False
-        glb['submitted_buy_bull'] = None
+        glb['submitted_buy_bull_data'] = None
         log.info('reset_submitted_buy bull: %s' % code)
     if stock_name == '' or stock_name.find('熊') > -1:
         glb['submitted_buy_bear_flag'] = False
-        glb['submitted_buy_bear'] = None
+        glb['submitted_buy_bear_data'] = None
         log.info('reset_submitted_buy bear: %s' % code)
     # if not conf['AUTO_ADJUST_SELL']:
     #     unsubscribe(code, ft.SubType.ORDER_BOOK)
@@ -589,28 +589,28 @@ def del_data(dict_list, key, data):
 def set_submitted_sell(code, stock_name, data):
     if stock_name.find('牛') > -1:
         append_data(glb['submitted_sell_bull_list'], 'order_id', data)
-        glb['submitted_sell_bull'] = glb['submitted_sell_bull_list'][-1]
-        log.info('set_submitted_sell bull: %s, price: %s' % (code, glb['submitted_sell_bull'].price))
+        glb['submitted_sell_bull_data'] = glb['submitted_sell_bull_list'][-1]
+        log.info('set_submitted_sell bull: %s, price: %s' % (code, glb['submitted_sell_bull_data'].price))
     elif stock_name.find('熊') > -1:
         append_data(glb['submitted_sell_bear_list'], 'order_id', data)
-        glb['submitted_sell_bear'] = glb['submitted_sell_bear_list'][-1]
-        log.info('set_submitted_sell bear: %s, price: %s' % (code, glb['submitted_sell_bear'].price))
+        glb['submitted_sell_bear_data'] = glb['submitted_sell_bear_list'][-1]
+        log.info('set_submitted_sell bear: %s, price: %s' % (code, glb['submitted_sell_bear_data'].price))
 
 
 def reset_submitted_sell(code, stock_name='', data=None):
     if stock_name == '' or stock_name.find('牛') > -1:
         del_data(glb['submitted_sell_bull_list'], 'order_id', data)
         if len(glb['submitted_sell_bull_list']) > 0:
-            glb['submitted_sell_bull'] = glb['submitted_sell_bull_list'][-1]
+            glb['submitted_sell_bull_data'] = glb['submitted_sell_bull_list'][-1]
         else:
-            glb['submitted_sell_bull'] = None
+            glb['submitted_sell_bull_data'] = None
         log.info('reset_submitted_sell bull: %s' % code)
     if stock_name == '' or stock_name.find('熊') > -1:
         del_data(glb['submitted_sell_bear_list'], 'order_id', data)
         if len(glb['submitted_sell_bear_list']) > 0:
-            glb['submitted_sell_bear'] = glb['submitted_sell_bear_list'][-1]
+            glb['submitted_sell_bear_data'] = glb['submitted_sell_bear_list'][-1]
         else:
-            glb['submitted_sell_bear'] = None
+            glb['submitted_sell_bear_data'] = None
         log.info('reset_submitted_sell bear: %s' % code)
 
 
@@ -776,9 +776,9 @@ def auto_place_order(code, volume, price):
         return
     if volume < 100e3:
         return False
-    # if glb['submitted_sell_bull'] is not None and glb['submitted_sell_bull'].code == code:
+    # if glb['submitted_sell_bull_data'] is not None and glb['submitted_sell_bull_data'].code == code:
     #     return False
-    # if glb['submitted_sell_bear'] is not None and glb['submitted_sell_bear'].code == code:
+    # if glb['submitted_sell_bear_data'] is not None and glb['submitted_sell_bear_data'].code == code:
     #     return False
     glb['auto_place_order_flag'] = True
     item = []
@@ -928,11 +928,11 @@ def pre_adjust():
     # if delta_price > MAX_ADJUST_DELTA_PRICE:
     #     break
     if conf['AUTO_ADJUST_BUY']:
-        auto_adjust(delta_price, i, conf['ADJUST_BUY_DICT'], 'submitted_buy_bear')
-        auto_adjust(delta_price, i, conf['ADJUST_BUY_DICT'], 'submitted_buy_bull')
+        auto_adjust(delta_price, i, conf['ADJUST_BUY_DICT'], 'submitted_buy_bear_data')
+        auto_adjust(delta_price, i, conf['ADJUST_BUY_DICT'], 'submitted_buy_bull_data')
     if conf['AUTO_ADJUST_SELL']:
-        auto_adjust(delta_price, i, conf['ADJUST_SELL_DICT'], 'submitted_sell_bear')
-        auto_adjust(delta_price, i, conf['ADJUST_SELL_DICT'], 'submitted_sell_bull')
+        auto_adjust(delta_price, i, conf['ADJUST_SELL_DICT'], 'submitted_sell_bear_data')
+        auto_adjust(delta_price, i, conf['ADJUST_SELL_DICT'], 'submitted_sell_bull_data')
 
 
 def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur_price_max=None):
@@ -1179,10 +1179,13 @@ class TickerTest(ft.TickerHandlerBase):
         if abs(glb['cur_price'] - glb['last_price']) >= 10:
                 glb['last_price'] = glb['cur_price']
                 position_list_query(need_log=False)
-        # 有持仓的时候，每一分钟查询分割线
-        if (len(glb['has_bull_list']) > 0 or len(glb['has_bear_list']) > 0):
-            if s == 0 and conf['CHECK_GOLDEN_LINE']:
-                check_golden_line()
+        # 每一分钟查询分割线
+        if s == 0 and conf['CHECK_GOLDEN_LINE']:
+            check_result = check_golden_line()
+            if glb['submitted_buy_bull_data'] is not None and check_result != 'bull':
+                cancel_all(code=glb['submitted_buy_bull_data'].code)
+            elif glb['submitted_buy_bear_data'] is not None and check_result != 'bear':
+                cancel_all(code=glb['submitted_buy_bear_data'].code)
 
         # 自动买入和自动调价
         if conf['AUTO_BUY'] or conf['AUTO_ADJUST']:
