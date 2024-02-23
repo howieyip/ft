@@ -251,7 +251,7 @@ def draw_golden_line():
             if i >= 4:
                 cur_price = data.iloc[i - 2].cur_price
                 if ((data.iloc[i - 3].cur_price < cur_price > data.iloc[i - 1].cur_price) and
-                    (cur_price > data.iloc[i].cur_price or cur_price - data.iloc[i - 1].cur_price >= 10) and
+                    # (cur_price > data.iloc[i].cur_price or cur_price - data.iloc[i - 1].cur_price >= 5) and
                     (cur_price - golden_line['0'] > conf['GOLDEN_LINE_DIFF'])):
                         golden_line['100'] = cur_price
                         golden_line = get_golden_line(golden_line)
@@ -263,7 +263,7 @@ def draw_golden_line():
             if i >= 4:
                 cur_price = data.iloc[i - 2].cur_price
                 if ((data.iloc[i - 3].cur_price > cur_price < data.iloc[i - 1].cur_price) and
-                    (cur_price < data.iloc[i].cur_price or cur_price - data.iloc[i - 1].cur_price <= -10) and
+                    # (cur_price < data.iloc[i].cur_price or cur_price - data.iloc[i - 1].cur_price <= -5) and
                     (golden_line['0'] - cur_price > conf['GOLDEN_LINE_DIFF'])):
                         golden_line['100'] = cur_price
                         golden_line = get_golden_line(golden_line)
