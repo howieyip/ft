@@ -219,6 +219,9 @@ def draw_golden_line():
     if ret != ft.RET_OK:
         log.info('get_rt_data error, ret: %s, rt_data:%s' % (ret, rt_data))
         return False
+    if rt_data.empty:
+        log.info('rt_data is empty')
+        return False
     cur_rt_data = rt_data.iloc[-1]
     if cur_rt_data.time[0:10] != glb['trade_date'].get('time'):
         log.info('get_rt_data not today')
@@ -279,24 +282,24 @@ def _check_golden_line():
     if golden_line['100'] > golden_line['0']:
         value = 'bull'
         if golden_line['cur_price'] < golden_line['avg_price'] + 50:
-            log.info('当前价格小于均线上方50点位置，别买了')
+            log.info('cur_price < avg_price + 50')
             value = 'null'
         elif golden_line['cur_price'] < golden_line['123.6'] and golden_line['max_price'] < golden_line['150']:
-            log.info('当前价格位于黄金分割123.6%之内，且最大值未突破150%，别买了')
+            log.info('cur_price < 123.6% and max_price < 150%')
             value = 'null'
         elif golden_line['cur_price'] > golden_line['261.8']:
-            log.info('当前价格位于黄金分割261.8%之外，别买了')
+            log.info('cur_price > 261.8%')
             value = 'null'
     else:
         value = 'bear'
         if golden_line['cur_price'] > golden_line['avg_price'] - 50:
-            log.info('当前价格大于均线下方50点位置，别买了')
+            log.info('cur_price > avg_price - 50')
             value = 'null'
         elif golden_line['cur_price'] > golden_line['123.6'] and golden_line['min_price'] > golden_line['150']:
-            log.info('当前价格位于黄金分割123.6%之内，且最小值未突破150%，别买了')
+            log.info('cur_price > 123.6% and min_price < 150%')
             value = 'null'
         elif golden_line['cur_price'] < golden_line['261.8']:
-            log.info('当前价格位于黄金分割261.8%之外，别买了')
+            log.info('cur_price < 261.8%')
             value = 'null'
     return value
 
