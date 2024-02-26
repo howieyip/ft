@@ -88,7 +88,8 @@ log = None
 quote_ctx = None
 trade_ctx = None
 glb = {
-    'golden_line': {'0': 0, '100': 0, 'diff': 0, 'reverse': ''},
+    'rt_data': None,
+    'golden_line': {'0': 0, '100': 0, 'diff': 0, 'reverse': '', 'min_price': '', 'max_price': ''},
     'today_pl_val_bull': 0,
     'today_pl_val_bear': 0,
     'trade_date': {},
@@ -213,21 +214,15 @@ def get_golden_line(line=None):
     return line
 
 
-def draw_golden_line():
+def get_rt_data():
     ret, rt_data = quote_ctx.get_rt_data(CONST['hsi_code'])
     # log.info('get_rt_data, ret: %s, rt_data:%s' % (ret, rt_data))
     if ret != ft.RET_OK:
         log.info('get_rt_data error, ret: %s, rt_data:%s' % (ret, rt_data))
         return False
     if len(rt_data) < 5:
-        log.info('len(rt_data) < 5')
+        # log.info('len(rt_data) < 5')
         return False
-    pre_rt_data = rt_data.iloc[-2]
-    cur_rt_data = rt_data.iloc[-1]
-    if cur_rt_data.time[0:10] != glb['trade_date'].get('time'):
-        log.info('get_rt_data not today')
-        # return False
-
     #       code                 time  is_blank  opened_mins  cur_price  last_close     avg_price  volume      turnover
     # 0    HK.800000  2023-10-31 09:30:00     False          570   17337.70    17406.36  17337.700000       0  1.682861e+09
     # 1    HK.800000  2023-10-31 09:31:00     False          571   17214.94    17406.36  17276.320000       0  1.822654e+09
@@ -236,7 +231,17 @@ def draw_golden_line():
     # ret, data = (0, {'opened_mins': [570, 571, 572, 573],
     # 'cur_price': [17337.70, 17214.94, 17223.84, 17212.21]})
     # data = pd.DataFrame(data)
+    glb['rt_data'] = rt_data
+    return rt_data
 
+
+def draw_golden_line():
+    rt_data = get_rt_data()
+    if rt_data is False:
+        return False
+    if rt_data.iloc[-1].time[0:10] != glb['trade_date'].get('time'):
+        log.info('get_rt_data not today')
+        # return False
     data = rt_data.iloc[:-1] # 排除最后一个数据，因为在当前分钟未结束时画分割线是不准确的
     min_data = data[data.cur_price == min(data.cur_price)]
     max_data = data[data.cur_price == max(data.cur_price)]
@@ -248,10 +253,6 @@ def draw_golden_line():
     golden_line = {
         '0': 0,
         '100': 0,
-        'pre_cur_price': pre_rt_data.cur_price,
-        'pre_avg_price': pre_rt_data.avg_price,
-        'cur_price': cur_rt_data.cur_price,
-        'avg_price': cur_rt_data.avg_price,
         'min_price': min_data.cur_price,
         'max_price': max_data.cur_price
     }
@@ -289,29 +290,30 @@ def _check_golden_line():
     golden_line = draw_golden_line()
     if golden_line is False:
         return 'null'
+    cur_rt_data = glb['rt_data'].iloc[-1]
     if golden_line['100'] > golden_line['0']:
         if conf['FOLLOW_TREND']:
             return 'bull'
-        if golden_line['cur_price'] < golden_line['avg_price'] + 50:
+        if cur_rt_data.cur_price < cur_rt_data.avg_price + 50:
             log.info('cur_price < avg_price + 50')
             return 'null'
-        if golden_line['cur_price'] < golden_line['123.6'] and golden_line['max_price'] < golden_line['150']:
+        if cur_rt_data.cur_price < golden_line['123.6'] and golden_line['max_price'] < golden_line['150']:
             log.info('cur_price < 123.6% and max_price < 150%')
             return 'null'
-        if golden_line['cur_price'] > golden_line['261.8']:
+        if cur_rt_data.cur_price > golden_line['261.8']:
             log.info('cur_price > 261.8%')
             return 'null'
         return 'bull'
     else:
         if conf['FOLLOW_TREND']:
             return 'bear'
-        if golden_line['cur_price'] > golden_line['avg_price'] - 50:
+        if cur_rt_data.cur_price > cur_rt_data.avg_price - 50:
             log.info('cur_price > avg_price - 50')
             return 'null'
-        if golden_line['cur_price'] > golden_line['123.6'] and golden_line['min_price'] > golden_line['150']:
+        if cur_rt_data.cur_price > golden_line['123.6'] and golden_line['min_price'] > golden_line['150']:
             log.info('cur_price > 123.6% and min_price < 150%')
             return 'null'
-        if golden_line['cur_price'] < golden_line['261.8']:
+        if cur_rt_data.cur_price < golden_line['261.8']:
             log.info('cur_price < 261.8%')
             return 'null'
         return 'bear'
@@ -707,7 +709,6 @@ def _position_list_query(stock_type='', need_log=True):
     if need_log:
         log.info('today_buy_hold_data:\n%s' % today_buy_hold_data)
     if len(today_buy_hold_data) > 0:
-        golden_line = glb['golden_line']
         for i in range(0, len(today_buy_hold_data)):
             data2 = today_buy_hold_data.iloc[i]
             set_has(data2.code, data2.stock_name)
@@ -719,23 +720,26 @@ def _position_list_query(stock_type='', need_log=True):
                         log.info('auto_place_order, code: %s, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
                         auto_place_order(data2.code, data2.qty, max(data2.nominal_price, data2.cost_price))
                 # 分割线反画
-                if golden_line['reverse'] == 'bull':
+                if glb['golden_line']['reverse'] == 'bull':
                     if data2.stock_name.find('熊') > -1:
                         log.info('reverse_sell, code: %s, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
                         sell_all(code=data2.code, qty=data2.qty)
                     if not glb['soon_over']:
                         to_buy('bull')
-                if golden_line['reverse'] == 'bear':
+                if glb['golden_line']['reverse'] == 'bear':
                     if data2.stock_name.find('牛') > -1:
                         log.info('reverse_sell, code: %s, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
                         sell_all(code=data2.code, qty=data2.qty)
                     if not glb['soon_over']:
                         to_buy('bear')
                 # 破均线强制止损
-                if ((data2.stock_name.find('牛') > -1 and golden_line['pre_cur_price'] >= golden_line['pre_avg_price'] and golden_line['cur_price'] < golden_line['avg_price']) or
-                    (data2.stock_name.find('熊') > -1 and golden_line['pre_cur_price'] <= golden_line['pre_avg_price'] and golden_line['cur_price'] > golden_line['avg_price'])):
-                        log.info('loss_sell, code: %s, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
-                        sell_all(code=data2.code, qty=data2.qty)
+                if glb['rt_data'] is not None:
+                    last3_rt_data = glb['rt_data'].iloc[-3]
+                    last2_rt_data = glb['rt_data'].iloc[-2]
+                    if ((data2.stock_name.find('牛') > -1 and last3_rt_data.cur_price >= last3_rt_data.avg_price and last2_rt_data.cur_price < last2_rt_data.avg_price) or
+                        (data2.stock_name.find('熊') > -1 and last3_rt_data.cur_price <= last3_rt_data.avg_price and last2_rt_data.cur_price > last2_rt_data.avg_price)):
+                            log.info('loss_sell, code: %s, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
+                            sell_all(code=data2.code, qty=data2.qty)
         bull_data = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('牛')]
         bear_data = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('熊')]
         if len(bull_data) == 0:
@@ -755,10 +759,10 @@ def _position_list_query(stock_type='', need_log=True):
         return []
 
 
-class SysNotifyTest(ft.SysNotifyHandlerBase):
+class SysNotify(ft.SysNotifyHandlerBase):
     def on_recv_rsp(self, rsp_pb):
         log.info('--------------------SysNotify push--------------------')
-        ret, data = super(SysNotifyTest, self).on_recv_rsp(rsp_pb)
+        ret, data = super(SysNotify, self).on_recv_rsp(rsp_pb)
         log.info('SysNotify push ret: %s, data:%s' % (ret, data))
         if ret != ft.RET_OK:
             log.info('SysNotify push error')
@@ -766,9 +770,9 @@ class SysNotifyTest(ft.SysNotifyHandlerBase):
         return ret, data
 
 
-class OrderBookTest(ft.OrderBookHandlerBase):
+class OrderBook(ft.OrderBookHandlerBase):
     def on_recv_rsp(self, rsp_str):
-        ret, data = super(OrderBookTest, self).on_recv_rsp(rsp_str)
+        ret, data = super(OrderBook, self).on_recv_rsp(rsp_str)
         # log.info('实时摆盘推送，ret: %s, data:%s' % (ret, data))
         if ret != ft.RET_OK:
             log.info('OrderBook push error，ret: %s, data:%s' % (ret, data))
@@ -817,10 +821,10 @@ def auto_place_order(code, volume, price):
     glb['auto_place_order_flag'] = False
 
 
-class TradeOrderTest(ft.TradeOrderHandlerBase):
+class TradeOrder(ft.TradeOrderHandlerBase):
     def on_recv_rsp(self, rsp_pb):
         log.info('--------------------TradeOrder--------------------')
-        ret, data = super(TradeOrderTest, self).on_recv_rsp(rsp_pb)
+        ret, data = super(TradeOrder, self).on_recv_rsp(rsp_pb)
         log.info('TradeOrder ret: %s, data:\n%s' % (ret, data))
         if ret != ft.RET_OK:
             log.info('TradeOrder error')
@@ -871,20 +875,6 @@ class TradeOrderTest(ft.TradeOrderHandlerBase):
             log.info('else TradeOrder %s' % data.order_status)
 
         return ret, data
-
-
-# class RTDataTest(ft.RTDataHandlerBase):
-#     def on_recv_rsp(self, rsp_str):
-#         # log.info('--------------------分时推送--------------------')
-#         ret, data = super(RTDataTest, self).on_recv_rsp(rsp_str)
-#         if ret != ft.RET_OK:
-#             log.info('分时推送error')
-#             return ret, data
-#         #    code                 time      is_blank    opened_mins  cur_price  last_close     avg_price  turnover  volume
-#         # 0  HK.800000  2019-08-14 13:01:00     False          781   25416.63     25281.3  25482.145921  660739.0       0
-#         glb['rt_data'] = data.iloc[0]
-
-#         return ret, data
 
 
 def auto_adjust(delta_price, i, adjust_dict, submitted_type):
@@ -1118,12 +1108,27 @@ def _pre_buy():
             auto_buy('bull')
 
 
-class TickerTest(ft.TickerHandlerBase):
+# class RTData(ft.RTDataHandlerBase):
+#     def on_recv_rsp(self, rsp_str):
+#         # log.info('--------------------分时推送--------------------')
+#         ret, data = super(RTData, self).on_recv_rsp(rsp_str)
+#         if ret != ft.RET_OK:
+#             log.info('RTData push error，ret: %s, data:%s' % (ret, data))
+#             return ret, data
+#         #       code                 time  is_blank  opened_mins  cur_price  last_close     avg_price  volume      turnover
+#         # 0    HK.800000  2023-10-31 09:30:00     False          570   17337.70    17406.36  17337.700000       0  1.682861e+09
+        
+#         cur_data = data.iloc[-1]
+
+#         return ret, data
+
+
+class Ticker(ft.TickerHandlerBase):
     def on_recv_rsp(self, rsp_str):
         # log.info('--------------------逐笔明细--------------------')
-        ret, data = super(TickerTest, self).on_recv_rsp(rsp_str)
+        ret, data = super(Ticker, self).on_recv_rsp(rsp_str)
         if ret != ft.RET_OK:
-            log.info('ticker push error')
+            log.info('Ticker push error，ret: %s, data:%s' % (ret, data))
             return ret, data
         #       code              time                 price        volume  turnover    ticker_direction       sequence   type      push_data_type
         # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
@@ -1194,8 +1199,8 @@ class TickerTest(ft.TickerHandlerBase):
         if abs(glb['cur_price'] - glb['last_price']) >= 10:
                 glb['last_price'] = glb['cur_price']
                 position_list_query(need_log=False)
-        # 每一分钟查询分割线
-        if s == 0 and conf['CHECK_GOLDEN_LINE']:
+        # 每5秒查询分割线
+        if s % 5 == 0 and conf['CHECK_GOLDEN_LINE']:
             check_result = check_golden_line()
             if glb['submitted_buy_bull_data'] is not None and check_result != 'bull':
                 cancel_all(code=glb['submitted_buy_bull_data'].code)
@@ -1315,11 +1320,11 @@ def start(config=None):
     if data is False:
         glb['restarted'] = False
         return False
-    quote_ctx.set_handler(SysNotifyTest())
-    quote_ctx.set_handler(TickerTest())
-    trade_ctx.set_handler(TradeOrderTest())
+    quote_ctx.set_handler(SysNotify())
+    quote_ctx.set_handler(Ticker())
+    trade_ctx.set_handler(TradeOrder())
     if conf['AUTO_ADJUST']:
-        quote_ctx.set_handler(OrderBookTest())
+        quote_ctx.set_handler(OrderBook())
     position_list_query()
     order_list_query(status=ft.OrderStatus.FILLED_ALL)
     # get_stock_code('熊')
@@ -1336,8 +1341,8 @@ def start(config=None):
         log.info('query_subscription error')
     quote_ctx.start()
 
-    # ticker_test = TickerTest()
-    # ticker_test.on_recv_rsp()
+    # ticker = Ticker()
+    # ticker.on_recv_rsp()
 
     if temp_quote_ctx is not None:
         temp_quote_ctx.close()
