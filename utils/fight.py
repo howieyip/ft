@@ -283,37 +283,40 @@ def draw_golden_line():
     if golden_line['100'] == 0:
         log.info('golden_line not ready')
         return False
-    log.info('golden_line: %s' % golden_line)
     return golden_line
 
-def _check_golden_line():
+def _check_golden_line(need_log=True):
     golden_line = draw_golden_line()
     if golden_line is False:
         return 'null'
     cur_rt_data = glb['rt_data'].iloc[-1]
+    cur_price = cur_rt_data.cur_price
+    avg_price = cur_rt_data.avg_price
+    if need_log:
+        log.info('cur_price: %s, avg_price: %s, golden_line: %s' % (cur_price, avg_price, golden_line))
     if golden_line['100'] > golden_line['0']:
         if conf['FOLLOW_TREND']:
             return 'bull'
-        if cur_rt_data.cur_price < cur_rt_data.avg_price + 50:
+        if cur_price < avg_price + 50:
             log.info('cur_price < avg_price + 50')
             return 'null'
-        if cur_rt_data.cur_price < golden_line['123.6'] and golden_line['max_price'] < golden_line['150']:
+        if cur_price < golden_line['123.6'] and golden_line['max_price'] < golden_line['150']:
             log.info('cur_price < 123.6% and max_price < 150%')
             return 'null'
-        if cur_rt_data.cur_price > golden_line['261.8']:
+        if cur_price > golden_line['261.8']:
             log.info('cur_price > 261.8%')
             return 'null'
         return 'bull'
     else:
         if conf['FOLLOW_TREND']:
             return 'bear'
-        if cur_rt_data.cur_price > cur_rt_data.avg_price - 50:
+        if cur_price > avg_price - 50:
             log.info('cur_price > avg_price - 50')
             return 'null'
-        if cur_rt_data.cur_price > golden_line['123.6'] and golden_line['min_price'] > golden_line['150']:
+        if cur_price > golden_line['123.6'] and golden_line['min_price'] > golden_line['150']:
             log.info('cur_price > 123.6% and min_price < 150%')
             return 'null'
-        if cur_rt_data.cur_price < golden_line['261.8']:
+        if cur_price < golden_line['261.8']:
             log.info('cur_price < 261.8%')
             return 'null'
         return 'bear'
@@ -1201,7 +1204,7 @@ class Ticker(ft.TickerHandlerBase):
                 position_list_query(need_log=False)
         # 每5秒查询分割线
         if s % 5 == 0 and conf['CHECK_GOLDEN_LINE']:
-            check_result = check_golden_line()
+            check_result = check_golden_line(True if s == 0 else False)
             if glb['submitted_buy_bull_data'] is not None and check_result != 'bull':
                 cancel_all(code=glb['submitted_buy_bull_data'].code)
             elif glb['submitted_buy_bear_data'] is not None and check_result != 'bear':
