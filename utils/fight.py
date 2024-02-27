@@ -300,6 +300,9 @@ def _check_golden_line(need_log=True):
         if last3_rt_data.cur_price >= last3_rt_data.avg_price and last2_rt_data.cur_price < last2_rt_data.avg_price:
             return 'bull_loss'
         if conf['FOLLOW_TREND']:
+            if avg_price - 20 < cur_price < avg_price + 20:
+                log.info('avg_price - 20 < cur_price < avg_price + 20')
+                return 'null'
             return 'bull'
         if cur_price < avg_price + 50:
             log.info('cur_price < avg_price + 50')
@@ -315,6 +318,9 @@ def _check_golden_line(need_log=True):
         if last3_rt_data.cur_price <= last3_rt_data.avg_price and last2_rt_data.cur_price > last2_rt_data.avg_price:
             return 'bear_loss'
         if conf['FOLLOW_TREND']:
+            if avg_price - 20 < cur_price < avg_price + 20:
+                log.info('avg_price - 20 < cur_price < avg_price + 20')
+                return 'null'
             return 'bear'
         if cur_price > avg_price - 50:
             log.info('cur_price > avg_price - 50')
@@ -344,7 +350,7 @@ def _smart_buy(code, volume, price=None, type='Bid'):
             return False
         if conf['TRADE_ENV'] == ft.TrdEnv.SIMULATE:
             type = 'Ask'
-        price = data[type][0][0]
+        price = data[type][0 if type == 'Ask' else 1][0]
     if not price > 0:
         log.info('not price > 0, _smart_buy error')
         return False
@@ -1130,7 +1136,7 @@ def _pre_buy():
 #             return ret, data
 #         #       code                 time  is_blank  opened_mins  cur_price  last_close     avg_price  volume      turnover
 #         # 0    HK.800000  2023-10-31 09:30:00     False          570   17337.70    17406.36  17337.700000       0  1.682861e+09
-        
+
 #         cur_data = data.iloc[-1]
 
 #         return ret, data
