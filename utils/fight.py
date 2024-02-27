@@ -289,12 +289,16 @@ def _check_golden_line(need_log=True):
     golden_line = draw_golden_line()
     if golden_line is False:
         return 'null'
+    last3_rt_data = glb['rt_data'].iloc[-3]
+    last2_rt_data = glb['rt_data'].iloc[-2]
     cur_rt_data = glb['rt_data'].iloc[-1]
     cur_price = cur_rt_data.cur_price
     avg_price = cur_rt_data.avg_price
     if need_log:
         log.info('cur_price: %s, avg_price: %s, golden_line: %s' % (cur_price, avg_price, golden_line))
     if golden_line['100'] > golden_line['0']:
+        if last3_rt_data.cur_price >= last3_rt_data.avg_price and last2_rt_data.cur_price < last2_rt_data.avg_price:
+            return 'bull_loss'
         if conf['FOLLOW_TREND']:
             return 'bull'
         if cur_price < avg_price + 50:
@@ -308,6 +312,8 @@ def _check_golden_line(need_log=True):
             return 'null'
         return 'bull'
     else:
+        if last3_rt_data.cur_price <= last3_rt_data.avg_price and last2_rt_data.cur_price > last2_rt_data.avg_price:
+            return 'bear_loss'
         if conf['FOLLOW_TREND']:
             return 'bear'
         if cur_price > avg_price - 50:
@@ -736,13 +742,11 @@ def _position_list_query(stock_type='', need_log=True):
                     if not glb['soon_over']:
                         to_buy('bear')
                 # 破均线强制止损
-                if glb['rt_data'] is not None:
-                    last3_rt_data = glb['rt_data'].iloc[-3]
-                    last2_rt_data = glb['rt_data'].iloc[-2]
-                    if ((data2.stock_name.find('牛') > -1 and last3_rt_data.cur_price >= last3_rt_data.avg_price and last2_rt_data.cur_price < last2_rt_data.avg_price) or
-                        (data2.stock_name.find('熊') > -1 and last3_rt_data.cur_price <= last3_rt_data.avg_price and last2_rt_data.cur_price > last2_rt_data.avg_price)):
-                            log.info('loss_sell, code: %s, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
-                            sell_all(code=data2.code, qty=data2.qty)
+                check_result = check_golden_line()
+                if ((data2.stock_name.find('牛') > -1 and check_result == 'bull_loss') or
+                    (data2.stock_name.find('熊') > -1 and check_result == 'bear_loss')):
+                        log.info('loss_sell, code: %s, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
+                        sell_all(code=data2.code, qty=data2.qty)
         bull_data = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('牛')]
         bear_data = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('熊')]
         if len(bull_data) == 0:
@@ -1169,11 +1173,7 @@ class Ticker(ft.TickerHandlerBase):
             glb['afternoon'] = True
 
         if glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15:
-            if ((len(glb['has_bull_list']) == 0 and len(glb['has_bear_list']) == 0) or
-                (glb['golden_line']['reverse'] == 'bull' and len(glb['has_bull_list']) == 0) or
-                (glb['golden_line']['reverse'] == 'bear' and len(glb['has_bear_list']) == 0)):
-                    glb['soon_over'] = True
-            elif m >= 30:
+            if m >= 30:
                 glb['soon_over'] = True
             if m >= 55:
                 if not glb['almost_over']:
