@@ -1072,9 +1072,13 @@ def auto_buy(stock_type):
         if not glb['pre_buy_bull_flag']:
             # log.info('not pre_buy_bull_flag')
             return False
-        if not conf['CHECK_GOLDEN_LINE'] or check_golden_line() == 'bull':
+        check_result = check_golden_line()
+        if not conf['CHECK_GOLDEN_LINE'] or check_result == 'bull':
             log.info('to buy bull')
             to_buy('bull')
+        # 走势反向，撤销买单
+        if conf['FOLLOW_TREND'] and glb['submitted_buy_bear_data'] is not None and check_result == 'bear':
+            cancel_all(code=glb['submitted_buy_bear_data'].code)
     elif stock_type == 'bear' and not glb['submitted_buy_bear_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bear_list']) == 0):
         glb['pre_buy_bull_flag'] = True
         if conf['BEAR_CODE'] == '':
@@ -1082,9 +1086,13 @@ def auto_buy(stock_type):
         if not glb['pre_buy_bear_flag']:
             # log.info('not pre_buy_bear_flag')
             return False
-        if not conf['CHECK_GOLDEN_LINE'] or check_golden_line() == 'bear':
+        check_result = check_golden_line()
+        if not conf['CHECK_GOLDEN_LINE'] or check_result == 'bear':
             log.info('to buy bear')
             to_buy('bear')
+        # 走势反向，撤销买单
+        if conf['FOLLOW_TREND'] and glb['submitted_buy_bull_data'] is not None and check_result == 'bull':
+            cancel_all(code=glb['submitted_buy_bull_data'].code)
 
 
 def _pre_buy():
@@ -1101,13 +1109,11 @@ def _pre_buy():
             log.info('pre_buy delta_seconds: %s' % delta_seconds)
             return False
     delta_price = glb['ticker_list'][-1].get('price') - glb['ticker_list'][0].get('price')
-    # 60秒内上涨点数比预设点数还要大
     if delta_price >= conf['DELTA_PRICE']:
         if conf['FOLLOW_TREND']:
             auto_buy('bull')
         else:
             auto_buy('bear')
-    # 60秒内下跌点数比预设点数还要小
     elif delta_price <= -conf['DELTA_PRICE']:
         if conf['FOLLOW_TREND']:
             auto_buy('bear')
