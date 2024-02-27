@@ -299,38 +299,42 @@ def _check_golden_line(need_log=True):
     if golden_line['100'] > golden_line['0']:
         if last3_rt_data.cur_price >= last3_rt_data.avg_price and last2_rt_data.cur_price < last2_rt_data.avg_price:
             return 'bull_loss'
-        if conf['FOLLOW_TREND']:
-            if avg_price - 20 < cur_price < avg_price + 20:
-                log.info('avg_price - 20 < cur_price < avg_price + 20')
-                return 'null'
-            return 'bull'
+        if avg_price - 20 < cur_price < avg_price + 20:
+            log.info('avg_price - 20 < cur_price < avg_price + 20')
+            return 'null'
         if cur_price < avg_price + 50:
             log.info('cur_price < avg_price + 50')
-            return 'null'
-        if cur_price < golden_line['123.6'] and golden_line['max_price'] < golden_line['150']:
-            log.info('cur_price < 123.6% and max_price < 150%')
-            return 'null'
+            conf['FOLLOW_TREND'] = True
+            return 'bull'
+        if cur_price < golden_line['123.6']:
+            log.info('cur_price < 123.6%')
+            conf['FOLLOW_TREND'] = True
+            return 'bull'
         if cur_price > golden_line['261.8']:
             log.info('cur_price > 261.8%')
-            return 'null'
+            conf['FOLLOW_TREND'] = True
+            return 'bull'
+        conf['FOLLOW_TREND'] = False
         return 'bull'
     else:
         if last3_rt_data.cur_price <= last3_rt_data.avg_price and last2_rt_data.cur_price > last2_rt_data.avg_price:
             return 'bear_loss'
-        if conf['FOLLOW_TREND']:
-            if avg_price - 20 < cur_price < avg_price + 20:
-                log.info('avg_price - 20 < cur_price < avg_price + 20')
-                return 'null'
-            return 'bear'
+        if avg_price - 20 < cur_price < avg_price + 20:
+            log.info('avg_price - 20 < cur_price < avg_price + 20')
+            return 'null'
         if cur_price > avg_price - 50:
             log.info('cur_price > avg_price - 50')
-            return 'null'
-        if cur_price > golden_line['123.6'] and golden_line['min_price'] > golden_line['150']:
-            log.info('cur_price > 123.6% and min_price < 150%')
-            return 'null'
+            conf['FOLLOW_TREND'] = True
+            return 'bear'
+        if cur_price > golden_line['123.6']:
+            log.info('cur_price > 123.6%')
+            conf['FOLLOW_TREND'] = True
+            return 'bear'
         if cur_price < golden_line['261.8']:
             log.info('cur_price < 261.8%')
-            return 'null'
+            conf['FOLLOW_TREND'] = True
+            return 'bear'
+        conf['FOLLOW_TREND'] = False
         return 'bear'
 
 
