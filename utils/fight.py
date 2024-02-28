@@ -297,8 +297,10 @@ def _check_golden_line(need_log=True):
     if need_log:
         log.info('cur_price: %s, avg_price: %s, golden_line: %s' % (cur_price, avg_price, golden_line))
     if golden_line['100'] > golden_line['0']:
-        if last3_rt_data.cur_price >= last3_rt_data.avg_price and last2_rt_data.cur_price < last2_rt_data.avg_price:
-            return 'bull_loss'
+        if ((last3_rt_data.cur_price >= last3_rt_data.avg_price and last2_rt_data.cur_price < last2_rt_data.avg_price) and
+            (last2_rt_data.cur_price < last2_rt_data.avg_price - 5 or cur_rt_data.cur_price < cur_rt_data.avg_price - 5)):
+                log.info('bull_loss')
+                return 'bull_loss'
         if avg_price - 20 < cur_price < avg_price + 20:
             log.info('avg_price - 20 < cur_price < avg_price + 20')
             return 'null'
@@ -317,8 +319,10 @@ def _check_golden_line(need_log=True):
         conf['FOLLOW_TREND'] = False
         return 'bull'
     else:
-        if last3_rt_data.cur_price <= last3_rt_data.avg_price and last2_rt_data.cur_price > last2_rt_data.avg_price:
-            return 'bear_loss'
+        if ((last3_rt_data.cur_price <= last3_rt_data.avg_price and last2_rt_data.cur_price > last2_rt_data.avg_price) and
+            (last2_rt_data.cur_price > last2_rt_data.avg_price + 5 or cur_rt_data.cur_price > cur_rt_data.avg_price + 5)):
+                log.info('bear_loss')
+                return 'bear_loss'
         if avg_price - 20 < cur_price < avg_price + 20:
             log.info('avg_price - 20 < cur_price < avg_price + 20')
             return 'null'
