@@ -23,7 +23,6 @@ conf = {
     'FOLLOW_TREND': False,                          # 买入策略是否为顺势买入，逆势则为False
     'BULL_CODE': '',                                # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
     'BEAR_CODE': '',                                # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
-    'CHECK_GOLDEN_LINE': True,                      # 是否检查黄金分割线
     'GOLDEN_LINE_DIFF': 80,                         # 黄金分割线0-100之间要间隔多少点
     'BID_ASK_DIFF': 0.002,                          # 买一价和卖一价的价差小于等于多少元，才允许买入
     'CUR_PRICE_MIN': 0.04,
@@ -89,11 +88,10 @@ quote_ctx = None
 trade_ctx = None
 glb = {
     'rt_data': None,
-    'golden_line': {'0': 0, '100': 0, 'diff': 0, 'reverse': '', 'min_price': '', 'max_price': ''},
+    'golden_line': {'0': 0, '100': 0, 'diff': 0, 'reverse': '', 'check_result': ''},
     'today_pl_val_bull': 0,
     'today_pl_val_bear': 0,
     'trade_date': {},
-    'restarted': False,
     'afternoon': False,
     'soon_over': False,
     'almost_over': False,
@@ -250,12 +248,7 @@ def draw_golden_line():
     # cur_index = data.shape[0] - 1
     min_data = min_data.iloc[0]
     max_data = max_data.iloc[0]
-    golden_line = {
-        '0': 0,
-        '100': 0,
-        'min_price': min_data.cur_price,
-        'max_price': max_data.cur_price
-    }
+    golden_line = {'0': 0, '100': 0}
     if max_data.opened_mins > min_data.opened_mins:
         golden_line['0'] = min_data.cur_price
         for i in range(min_index, max_index): # 寻找100%的位置，需是最小值和最大值之间的拐点
@@ -288,36 +281,42 @@ def draw_golden_line():
 def _check_golden_line(need_log=True):
     golden_line = draw_golden_line()
     if golden_line is False:
+        glb['golden_line']['check_result'] = 'null'
         return 'null'
     cur_rt_data = glb['rt_data'].iloc[-1]
     cur_price = cur_rt_data.cur_price
     avg_price = cur_rt_data.avg_price
-    if need_log:
-        log.info('cur_price: %s, avg_price: %s, golden_line: %s' % (cur_price, avg_price, golden_line))
+    check_result = ''
     if golden_line['100'] > golden_line['0']:
-        if  avg_price - 50 < cur_price < avg_price - 20:
-            return 'bull_loss'
-        if avg_price - 20 < cur_price < avg_price:
-            return 'bull_sell'
-        if avg_price < cur_price < avg_price + 20:
-            return 'null'
-        # if cur_price < golden_line['123.6']:
-        #     return 'null'
-        if cur_price > golden_line['261.8']:
-            return 'null'
-        return 'bull'
+        if avg_price - 50 < cur_price < avg_price - 20:
+            check_result = 'bull_loss'
+        elif avg_price - 20 < cur_price < avg_price:
+            check_result = 'bull_sell'
+        elif avg_price < cur_price < avg_price + 20:
+            check_result = 'null'
+        # elif cur_price < golden_line['123.6']:
+        #     check_result = 'null'
+        elif cur_price > golden_line['261.8']:
+            check_result = 'null'
+        else:
+            check_result = 'bull'
     else:
         if avg_price + 50 > cur_price > avg_price + 20:
-            return 'bear_loss'
-        if avg_price + 20 > cur_price > avg_price:
-            return 'bear_sell'
-        if avg_price > cur_price > avg_price - 20:
-            return 'null'
-        # if cur_price > golden_line['123.6']:
-        #     return 'null'
-        if cur_price < golden_line['261.8']:
-            return 'null'
-        return 'bear'
+            check_result = 'bear_loss'
+        elif avg_price + 20 > cur_price > avg_price:
+            check_result = 'bear_sell'
+        elif avg_price > cur_price > avg_price - 20:
+            check_result = 'null'
+        # elif cur_price > golden_line['123.6']:
+        #     check_result = 'null'
+        elif cur_price < golden_line['261.8']:
+            check_result = 'null'
+        else:
+            check_result = 'bear'
+    glb['golden_line']['check_result'] = check_result
+    if need_log:
+        log.info('cur_price: %s, avg_price: %s, golden_line: %s' % (cur_price, avg_price, glb['golden_line']))
+    return check_result
 
 
 def get_order_book(code):
@@ -1078,7 +1077,7 @@ def auto_buy(stock_type):
             # log.info('not pre_buy_bull_flag')
             return False
         check_result = check_golden_line()
-        if not conf['CHECK_GOLDEN_LINE'] or check_result == 'bull':
+        if check_result == 'bull':
             log.info('to buy bull')
             to_buy('bull')
         # 走势反向，撤销买单
@@ -1092,7 +1091,7 @@ def auto_buy(stock_type):
             # log.info('not pre_buy_bear_flag')
             return False
         check_result = check_golden_line()
-        if not conf['CHECK_GOLDEN_LINE'] or check_result == 'bear':
+        if check_result == 'bear':
             log.info('to buy bear')
             to_buy('bear')
         # 走势反向，撤销买单
@@ -1169,17 +1168,12 @@ class Ticker(ft.TickerHandlerBase):
         s = int(t[17:19])
         if h < 9 or h == 9 and m < 30 or h >= 16:
             # print(data)
-            if h == 9 and m == 15 and not glb['restarted']:
-                log.info('[%s]soon to start, need to resetData' % t)
-                glb['restarted'] = True
-                resetData()
-            elif h == 16 and m == 0 and s == 0:
+            if h == 16 and m == 0 and s == 0:
                 log.info('[%s]--------------------end--------------------' % t)
             return ret, data
 
-        if h == 9 and m == 30 and glb['restarted']:
+        if h == 9 and m == 30 and s == 0:
             log.info('[%s]--------------------start--------------------' % t)
-            glb['restarted'] = False
         elif h >= 13 and not glb['afternoon']:
             glb['afternoon'] = True
 
@@ -1213,13 +1207,14 @@ class Ticker(ft.TickerHandlerBase):
         if abs(glb['cur_price'] - glb['last_price']) >= 10:
                 glb['last_price'] = glb['cur_price']
                 position_list_query(need_log=False)
-        # 每5秒查询分割线
-        if s % 5 == 0 and conf['CHECK_GOLDEN_LINE']:
+        # 每5秒查询分割线，方便撤单和止损
+        if s % 5 == 0:
             check_result = check_golden_line(True if s == 0 else False)
-            if glb['submitted_buy_bull_data'] is not None and check_result != 'bull':
-                cancel_all(code=glb['submitted_buy_bull_data'].code)
-            elif glb['submitted_buy_bear_data'] is not None and check_result != 'bear':
-                cancel_all(code=glb['submitted_buy_bear_data'].code)
+            if check_result is not None:
+                if glb['submitted_buy_bull_data'] is not None and check_result != 'bull':
+                    cancel_all(code=glb['submitted_buy_bull_data'].code)
+                elif glb['submitted_buy_bear_data'] is not None and check_result != 'bear':
+                    cancel_all(code=glb['submitted_buy_bear_data'].code)
 
         # 自动买入和自动调价
         if conf['AUTO_BUY'] or conf['AUTO_ADJUST']:
@@ -1248,7 +1243,6 @@ def request_trading_days():
     ret, data = quote_ctx.request_trading_days(ft.Market.HK, start=today.strftime('%Y-%m-%d'), end=last_day.strftime('%Y-%m-%d'))
     log.info('request_trading_days, ret: %s, data:%s' % (ret, data))
     if ret != ft.RET_OK:
-        glb['restarted'] = False
         log.info('request_trading_days error')
         return False
     if len(data) == 0 or data[0]['time'] != today.strftime('%Y-%m-%d'):
@@ -1327,12 +1321,14 @@ def start(config=None):
         ret, data = trade_ctx.unlock_trade(password_md5=conf['PASSWORD_MD5'], password=conf['PASSWORD'])
         log.info('unlock_trade, ret: %s, data:%s' % (ret, data))
         if ret != ft.RET_OK:
-            glb['restarted'] = False
             log.info('unlock_trade error')
             return False
+    data = subscribe([CONST['hsi_code']], [ft.SubType.RT_DATA], subscribe_push=False)
+    if data is False:
+        return False
+    check_golden_line()
     data = subscribe([CONST['mhi_code']], [ft.SubType.TICKER])
     if data is False:
-        glb['restarted'] = False
         return False
     quote_ctx.set_handler(SysNotify())
     quote_ctx.set_handler(Ticker())
@@ -1342,12 +1338,6 @@ def start(config=None):
     position_list_query()
     order_list_query(status=ft.OrderStatus.FILLED_ALL)
     # get_stock_code('熊')
-    if conf['CHECK_GOLDEN_LINE']:
-        data = subscribe([CONST['hsi_code']], [ft.SubType.RT_DATA], subscribe_push=False)
-        if data is False:
-            glb['restarted'] = False
-            return False
-        check_golden_line()
 
     ret, data = quote_ctx.query_subscription()
     log.info('query_subscription, ret: %s, data:%s' % (ret, data))
