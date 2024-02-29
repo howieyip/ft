@@ -20,7 +20,7 @@ conf = {
     'PORT': 11111,
 
     'AUTO_BUY': False,                              # 是否自动买入，若是则下面的配置有效
-    'FOLLOW_TREND': True,                           # 买入策略是否为顺势买入，逆势则为False
+    'FOLLOW_TREND': False,                          # 买入策略是否为顺势买入，逆势则为False
     'BULL_CODE': '',                                # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
     'BEAR_CODE': '',                                # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
     'CHECK_GOLDEN_LINE': True,                      # 是否检查黄金分割线
@@ -289,56 +289,44 @@ def _check_golden_line(need_log=True):
     golden_line = draw_golden_line()
     if golden_line is False:
         return 'null'
-    last3_rt_data = glb['rt_data'].iloc[-3]
-    last2_rt_data = glb['rt_data'].iloc[-2]
     cur_rt_data = glb['rt_data'].iloc[-1]
     cur_price = cur_rt_data.cur_price
     avg_price = cur_rt_data.avg_price
     if need_log:
         log.info('cur_price: %s, avg_price: %s, golden_line: %s' % (cur_price, avg_price, golden_line))
     if golden_line['100'] > golden_line['0']:
-        if ((last3_rt_data.cur_price >= last3_rt_data.avg_price and last2_rt_data.cur_price < last2_rt_data.avg_price) and
-            (last2_rt_data.cur_price < last2_rt_data.avg_price - 5 or cur_rt_data.cur_price < cur_rt_data.avg_price - 5)):
-                log.info('bull_loss')
-                return 'bull_loss'
-        if avg_price - 20 < cur_price < avg_price + 20:
-            log.info('avg_price - 20 < cur_price < avg_price + 20')
+        if cur_price < avg_price - 20:
+            log.info('bull_loss')
+            return 'bull_loss'
+        if cur_price < avg_price:
+            log.info('bull_sell')
+            return 'bull_sell'
+        if cur_price < avg_price + 20:
+            # log.info('cur_price < avg_price + 20')
             return 'null'
-        if cur_price < avg_price + 50:
-            log.info('cur_price < avg_price + 50')
-            conf['FOLLOW_TREND'] = True
-            return 'bull'
-        if cur_price < golden_line['123.6']:
-            log.info('cur_price < 123.6%')
-            conf['FOLLOW_TREND'] = True
-            return 'bull'
+        # if cur_price < golden_line['123.6']:
+        #     log.info('cur_price < 123.6%')
+        #     return 'null'
         if cur_price > golden_line['261.8']:
-            log.info('cur_price > 261.8%')
-            conf['FOLLOW_TREND'] = True
-            return 'bull'
-        conf['FOLLOW_TREND'] = False
+            # log.info('cur_price > 261.8%')
+            return 'null'
         return 'bull'
     else:
-        if ((last3_rt_data.cur_price <= last3_rt_data.avg_price and last2_rt_data.cur_price > last2_rt_data.avg_price) and
-            (last2_rt_data.cur_price > last2_rt_data.avg_price + 5 or cur_rt_data.cur_price > cur_rt_data.avg_price + 5)):
-                log.info('bear_loss')
-                return 'bear_loss'
-        if avg_price - 20 < cur_price < avg_price + 20:
-            log.info('avg_price - 20 < cur_price < avg_price + 20')
+        if cur_price > avg_price + 20:
+            log.info('bear_loss')
+            return 'bear_loss'
+        if cur_price > avg_price:
+            log.info('bear_sell')
+            return 'bear_sell'
+        if cur_price > avg_price - 20:
+            # log.info('cur_price > avg_price - 20')
             return 'null'
-        if cur_price > avg_price - 50:
-            log.info('cur_price > avg_price - 50')
-            conf['FOLLOW_TREND'] = True
-            return 'bear'
-        if cur_price > golden_line['123.6']:
-            log.info('cur_price > 123.6%')
-            conf['FOLLOW_TREND'] = True
-            return 'bear'
+        # if cur_price > golden_line['123.6']:
+        #     log.info('cur_price > 123.6%')
+        #     return 'null'
         if cur_price < golden_line['261.8']:
-            log.info('cur_price < 261.8%')
-            conf['FOLLOW_TREND'] = True
-            return 'bear'
-        conf['FOLLOW_TREND'] = False
+            # log.info('cur_price < 261.8%')
+            return 'null'
         return 'bear'
 
 
@@ -755,12 +743,17 @@ def _position_list_query(stock_type='', need_log=True):
                         sell_all(code=data2.code, qty=data2.qty)
                     if not glb['soon_over']:
                         to_buy('bear')
-                # 破均线强制止损
+                # 破均线止损
                 check_result = check_golden_line()
                 if ((data2.stock_name.find('牛') > -1 and check_result == 'bull_loss') or
                     (data2.stock_name.find('熊') > -1 and check_result == 'bear_loss')):
                         log.info('loss_sell, code: %s, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
                         sell_all(code=data2.code, qty=data2.qty)
+                elif ((data2.stock_name.find('牛') > -1 and check_result == 'bull_sell') or
+                    (data2.stock_name.find('熊') > -1 and check_result == 'bear_sell')):
+                        log.info('loss_sell, code: %s, nominal_price: %s, cost_price: %s' % (data2.code, data2.nominal_price, data2.cost_price))
+                        cancel_all(code=data2.code)
+                        auto_place_order(data2.code, data2.qty, data2.nominal_price)
         bull_data = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('牛')]
         bear_data = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('熊')]
         if len(bull_data) == 0:
