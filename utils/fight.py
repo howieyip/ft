@@ -75,8 +75,8 @@ conf = {
 
 # 常量
 CONST = {
-    'hsi_code': 'HK.800000',
-    'mhi_code': 'HK.MHImain',
+    'HSI_CODE': 'HK.800000',
+    'MHI_CODE': 'HK.MHImain',
     'bull': '牛',
     'bear': '熊'
 }
@@ -214,7 +214,7 @@ def get_golden_line(line=None):
 
 
 def get_rt_data():
-    ret, rt_data = quote_ctx.get_rt_data(CONST['hsi_code'])
+    ret, rt_data = quote_ctx.get_rt_data(CONST['HSI_CODE'])
     # log.info('get_rt_data, ret: %s, rt_data:%s' % (ret, rt_data))
     if ret != ft.RET_OK:
         log.info('get_rt_data error, ret: %s, rt_data:%s' % (ret, rt_data))
@@ -643,7 +643,7 @@ def sum_today_pl_val(today_buy_data):
             glb['today_pl_val_bull'] += item.today_pl_val
         elif item.stock_name.find('熊') > -1:
             glb['today_pl_val_bear'] += item.today_pl_val
-    log.info('current price: %s, today bull: %s, today bear: %s' % (glb['cur_price'], glb['today_pl_val_bull'], glb['today_pl_val_bear']))
+    log.info('MHI cur_price: %s, today bull: %s, today bear: %s' % (glb['cur_price'], glb['today_pl_val_bull'], glb['today_pl_val_bear']))
     # 止损
     if conf['AUTO_BUY']:
         loss_val = -(conf['BUY_VOLUME'] * conf['LOSS_PRICE_DIFF'] + (conf['MAX_VOLUME'] - conf['BUY_VOLUME']) * conf['ADD_PRICE_DIFF'])
@@ -909,7 +909,7 @@ def auto_adjust(delta_price, i, adjust_dict, submitted_type):
     elif submitted_type.find('sell') > -1:
         rise_price = round(ask_price + (adjust_dict['rise'][2] - 1) * 0.001, 3)
         # 尾盘或要止损时才降价到卖一
-        if glb['almost_over'] or glb['loss'][data.code]:
+        if glb['almost_over'] or glb['loss'].get(data.code):
             fall_price = round(ask_price + (adjust_dict['fall'][2] - 1) * 0.001, 3)
         else:
             fall_price = round(max(find_buy_price(data) + conf['FALL_PRICE_MIN_DIFF'], ask_price - 0.001), 3)
@@ -923,7 +923,7 @@ def auto_adjust(delta_price, i, adjust_dict, submitted_type):
         fall_condition = delta_price >= adjust_dict['fall'][1]
     # 买单可升可降，卖单在尾盘或要止损时只降不升
     if rise_condition:
-        if submitted_type.find('buy') > -1 or (not glb['almost_over'] and not glb['loss'][data.code]):
+        if submitted_type.find('buy') > -1 or (not glb['almost_over'] and not glb['loss'].get(data.code)):
             delta_seconds = datestr_to_timestamp(glb['adjust_ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['adjust_ticker_list'][i].get('time'))
             if delta_seconds <= adjust_dict['rise'][0] and data.price < rise_price:
                 log.info('%s order price: %s, rise_price: %s' % (submitted_type, data.price, rise_price))
@@ -966,7 +966,7 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
     cache['data'] = False
 
     req = ft.WarrantRequest()
-    req.stock_owner = CONST['hsi_code']  # 所属正股
+    req.stock_owner = CONST['HSI_CODE']  # 所属正股
     if stock_type == 'bull':
         req.type_list = [ft.WrtType.BULL]  # Qot_Common.WarrantType, 窝轮类型过滤列表 WrtType
     elif stock_type == 'bear':
@@ -989,7 +989,7 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
         log.info('get_warrant error')
     else:
         data = data[0]
-        data = data[data.stock_owner == CONST['hsi_code']] # 坑，返回的结果还要再过滤一次
+        data = data[data.stock_owner == CONST['HSI_CODE']] # 坑，返回的结果还要再过滤一次
         # data = data[data.cur_price == min(data.cur_price)]
         if len(data) > 0:
             data = data.iloc[0]
@@ -1330,11 +1330,11 @@ def start(config=None):
         if ret != ft.RET_OK:
             log.info('unlock_trade error')
             return False
-    data = subscribe([CONST['hsi_code']], [ft.SubType.RT_DATA], subscribe_push=False)
+    data = subscribe([CONST['HSI_CODE']], [ft.SubType.RT_DATA], subscribe_push=False)
     if data is False:
         return False
     check_golden_line()
-    data = subscribe([CONST['mhi_code']], [ft.SubType.TICKER])
+    data = subscribe([CONST['MHI_CODE']], [ft.SubType.TICKER])
     if data is False:
         return False
     quote_ctx.set_handler(SysNotify())
