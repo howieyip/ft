@@ -60,7 +60,7 @@ conf = {
     'AUTO_ADJUST_SELL': True,                       # 是否自动调整挂的卖单的价格，若是则下面的ADJUST_SELL_DICT有效
     'ADJUST_SELL_DICT': {
         'rise': [60, 1, 2],                         # 最近多少秒内，往持仓股票方向波动多少点，调整卖单为第几档
-        'fall': [60, 1, 0]                          # 最近多少秒内，往持仓股票反向波动多少点，调整卖单为第几档
+        'fall': [60, 1, 1]                          # 最近多少秒内，往持仓股票反向波动多少点，调整卖单为第几档
     },
     'AUTO_MOVE_POSITION': True,                     # 是否自动强制移仓，是则下面的MOVE_POSITION_DICT生效
     'MOVE_POSITION_DICT': {
@@ -89,6 +89,7 @@ trade_ctx = None
 glb = {
     'rt_data': None,
     'golden_line': {'0': 0, '100': 0, 'diff': 0, 'reverse': '', 'check_result': ''},
+    'loss': {},
     'today_pl_val_bull': 0,
     'today_pl_val_bear': 0,
     'trade_date': {},
@@ -289,9 +290,9 @@ def _check_golden_line(need_log=True):
     check_result = ''
     if golden_line['100'] > golden_line['0']:
         if avg_price - 50 < cur_price < avg_price - 20:
-            check_result = 'bull_loss'
+            check_result = 'loss_bull'
         elif avg_price - 20 < cur_price < avg_price:
-            check_result = 'bull_sell'
+            check_result = 'avg_bull'
         elif avg_price < cur_price < avg_price + 20:
             check_result = 'null'
         # elif cur_price < golden_line['123.6']:
@@ -302,9 +303,9 @@ def _check_golden_line(need_log=True):
             check_result = 'bull'
     else:
         if avg_price + 50 > cur_price > avg_price + 20:
-            check_result = 'bear_loss'
+            check_result = 'loss_bear'
         elif avg_price + 20 > cur_price > avg_price:
-            check_result = 'bear_sell'
+            check_result = 'avg_bear'
         elif avg_price > cur_price > avg_price - 20:
             check_result = 'null'
         # elif cur_price > golden_line['123.6']:
@@ -732,23 +733,26 @@ def _position_list_query(stock_type='', need_log=True):
                         sell_all(code=item.code, qty=item.qty)
                     if not glb['soon_over']:
                         to_buy('bear')
-                # 亏损大于3格的时候，破均线要止损
+                # 亏损大于3格的时候，破均线要开始止损
                 check_result = check_golden_line()
+                glb['loss'][item.code] = False
                 if item.nominal_price < item.cost_price - 0.003:
                     if item.stock_name.find('牛') > -1:
-                        if check_result == 'bull_loss':
-                            log.info('bull_loss, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                            sell_all(code=item.code, qty=item.qty)
-                        elif check_result == 'bull_sell' and len(glb['submitted_sell_bull_list']) > 0 and glb['submitted_sell_bull_list'][0].price > item.nominal_price + 0.001:
-                            log.info('bull_sell, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
+                        if check_result == 'loss_bull':
+                            log.info('loss_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
+                            glb['loss'][item.code] = True
+                            # sell_all(code=item.code, qty=item.qty)
+                        elif check_result == 'avg_bull' and len(glb['submitted_sell_bull_list']) > 0 and glb['submitted_sell_bull_list'][0].price > item.nominal_price + 0.002:
+                            log.info('avg_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                             cancel_all(code=item.code)
                             auto_place_order(item.code, item.qty, item.nominal_price)
                     elif item.stock_name.find('熊') > -1:
-                        if check_result == 'bear_loss':
-                            log.info('bear_loss, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                            sell_all(code=item.code, qty=item.qty)
-                        elif check_result == 'bear_sell' and len(glb['submitted_sell_bear_list']) > 0 and glb['submitted_sell_bear_list'][0].price > item.nominal_price + 0.001:
-                            log.info('bear_sell, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
+                        if check_result == 'loss_bear':
+                            log.info('loss_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
+                            glb['loss'][item.code] = True
+                            # sell_all(code=item.code, qty=item.qty)
+                        elif check_result == 'avg_bear' and len(glb['submitted_sell_bear_list']) > 0 and glb['submitted_sell_bear_list'][0].price > item.nominal_price + 0.002:
+                            log.info('avg_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                             cancel_all(code=item.code)
                             auto_place_order(item.code, item.qty, item.nominal_price)
         bull_data = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('牛')]
@@ -904,9 +908,11 @@ def auto_adjust(delta_price, i, adjust_dict, submitted_type):
         fall_price = round(bid_price - (adjust_dict['fall'][2] - 1) * 0.001, 3)
     elif submitted_type.find('sell') > -1:
         rise_price = round(ask_price + (adjust_dict['rise'][2] - 1) * 0.001, 3)
-        fall_price = round(ask_price + (adjust_dict['fall'][2] - 1) * 0.001, 3)
-        if conf['AUTO_ADJUST_SELL'] and not glb['almost_over']:
-            fall_price = max(find_buy_price(data) + conf['FALL_PRICE_MIN_DIFF'], fall_price)
+        # 尾盘或要止损时才降价到卖一
+        if glb['almost_over'] or glb['loss'][data.code]:
+            fall_price = round(ask_price + (adjust_dict['fall'][2] - 1) * 0.001, 3)
+        else:
+            fall_price = round(max(find_buy_price(data) + conf['FALL_PRICE_MIN_DIFF'], ask_price - 0.001), 3)
     rise_condition = False
     fall_condition = False
     if submitted_type.find('bull') > -1:
@@ -915,13 +921,14 @@ def auto_adjust(delta_price, i, adjust_dict, submitted_type):
     elif submitted_type.find('bear') > -1:
         rise_condition = delta_price <= -adjust_dict['rise'][1]
         fall_condition = delta_price >= adjust_dict['fall'][1]
-    # 如果没开启AUTO_ADJUST_SELL，那么买入的时候才考虑升档，尾盘要卖出的时候只考虑降档
-    if rise_condition and ((conf['AUTO_ADJUST_SELL'] and not glb['almost_over']) or submitted_type.find('buy') > -1):
-        delta_seconds = datestr_to_timestamp(glb['adjust_ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['adjust_ticker_list'][i].get('time'))
-        if delta_seconds <= adjust_dict['rise'][0] and data.price < rise_price:
-            log.info('%s order price: %s, rise_price: %s' % (submitted_type, data.price, rise_price))
-            data.price = rise_price
-            modify_order(data.order_id, rise_price, data.qty)
+    # 买单可升可降，卖单在尾盘或要止损时只降不升
+    if rise_condition:
+        if submitted_type.find('buy') > -1 or (not glb['almost_over'] and not glb['loss'][data.code]):
+            delta_seconds = datestr_to_timestamp(glb['adjust_ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['adjust_ticker_list'][i].get('time'))
+            if delta_seconds <= adjust_dict['rise'][0] and data.price < rise_price:
+                log.info('%s order price: %s, rise_price: %s' % (submitted_type, data.price, rise_price))
+                data.price = rise_price
+                modify_order(data.order_id, rise_price, data.qty)
     elif fall_condition:
         delta_seconds = datestr_to_timestamp(glb['adjust_ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['adjust_ticker_list'][i].get('time'))
         if delta_seconds <= adjust_dict['fall'][0] and data.price > fall_price:
