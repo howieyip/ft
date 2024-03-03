@@ -20,6 +20,7 @@ conf = {
     'PORT': 11111,
 
     'AUTO_BUY': False,                              # 是否自动买入，若是则下面的配置有效
+    'TRY_RECOVERY': False,                          # 是否尝试买快回收的股票
     'FOLLOW_TREND': False,                          # 买入策略是否为顺势买入，逆势则为False
     'BULL_CODE': '',                                # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
     'BEAR_CODE': '',                                # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
@@ -127,6 +128,11 @@ glb = {
             'last_time': 0
         },
         'bear': {
+            'data': None,
+            'duration': 5,
+            'last_time': 0
+        },
+        'all': {
             'data': None,
             'duration': 5,
             'last_time': 0
@@ -282,8 +288,8 @@ def draw_golden_line():
 def _check_golden_line(need_log=True):
     golden_line = draw_golden_line()
     if golden_line is False:
-        glb['golden_line']['check_result'] = 'null'
-        return 'null'
+        glb['golden_line']['check_result'] = 'not_ready'
+        return 'not_ready'
     cur_rt_data = glb['rt_data'].iloc[-1]
     cur_price = cur_rt_data.cur_price
     avg_price = cur_rt_data.avg_price
@@ -981,7 +987,7 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
     req.sort_field = ft.SortField.VOLUME  # 根据哪个字段排序
     req.ascend = False  # 升序ture, 降序false
     req.begin = 0  # 数据起始点
-    req.num = 3  # 返回数据个数，最大200
+    req.num = 20 if cur_price_min == 0.01 else 3  # 返回数据个数，最大200
 
     ret, data = quote_ctx.get_warrant(req=req)
     log.info('get_warrant, ret: %s, data:\n%s' % (ret, data))
@@ -989,16 +995,34 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
         log.info('get_warrant error')
     else:
         data = data[0]
-        data = data[data.stock_owner == CONST['HSI_CODE']] # 坑，返回的结果还要再过滤一次
+        # FUTU BUG: 返回的结果还要再过滤一次
+        data = data[(data.stock_owner == CONST['HSI_CODE']) & (data.status == ft.WarrantStatus.NORMAL)]
         # data = data[data.cur_price == min(data.cur_price)]
         if len(data) > 0:
-            data = data.iloc[0]
-            bid_ask_diff = data.ask_price - data.bid_price
-            if data.ask_price != 0 and (bid_ask_diff < conf['BID_ASK_DIFF'] or math.isclose(bid_ask_diff, conf['BID_ASK_DIFF'])):
-                log.info('bid_price: %s, ask_price: %s, diff: %s <= %s, allow buy' % (data.bid_price, data.ask_price, bid_ask_diff, conf['BID_ASK_DIFF']))
-                cache['data'] = data
+            if cur_price_min == 0.01:
+                cur_rt_data = glb['rt_data'].iloc[-1]
+                intrinsic_price = round(abs(cur_rt_data.cur_price - data['strike_price']) / data.conversion_ratio, 3)
+                data.insert(loc=data.columns.get_loc('ask_price') + 1, column='intrinsic_price', value=intrinsic_price)
+                data.insert(loc=data.columns.get_loc('intrinsic_price') + 1, column='ibp_diff', value=data.intrinsic_price - data.bid_price)
+                data = data.sort_values(by='ibp_diff', ascending=False)
+                # print(data)
+                data = data.iloc[0]
+                if data.ibp_diff >= 0.008:
+                    log.info('allow buy, code: %s, bid_price: %s, ask_price: %s, intrinsic_price: %s' % (data.stock, data.bid_price, data.ask_price, data.intrinsic_price))
+                    cache['data'] = data
+                else:
+                    log.info('not allow buy, code: %s, bid_price: %s, ask_price: %s, intrinsic_price: %s' % (data.stock, data.bid_price, data.ask_price, data.intrinsic_price))
             else:
-                log.info('bid_price: %s, ask_price: %s, diff: %s > %s, not allow buy' % (data.bid_price, data.ask_price, bid_ask_diff, conf['BID_ASK_DIFF']))
+                data = data.iloc[0]
+                if conf['FOLLOW_TREND']:
+                    bid_ask_diff = round(data.ask_price - data.bid_price, 3)
+                    if data.ask_price != 0 and bid_ask_diff <= conf['BID_ASK_DIFF']:
+                        log.info('allow buy, code: %s, bid_price: %s, ask_price: %s, diff: %s' % (data.stock, data.bid_price, data.ask_price, bid_ask_diff))
+                        cache['data'] = data
+                    else:
+                        log.info('not allow buy, code: %s, bid_price: %s, ask_price: %s, diff: %s' % (data.stock, data.bid_price, data.ask_price, bid_ask_diff))
+                else:
+                    cache['data'] = data
         else:
             log.info('_get_stock_code error, conditions not met')
     cache['last_time'] = time.time()
@@ -1006,6 +1030,7 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
 
 
 def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cur_price_max=None):
+    log.info('to buy %s' % stock_type)
     if volume is None:
         volume = conf['BUY_VOLUME']
         if glb['afternoon']:
@@ -1015,6 +1040,8 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
             code = conf['BULL_CODE']
         elif stock_type == 'bear':
             code = conf['BEAR_CODE']
+        else:
+            code = 'auto'
     if code == '':
         return False
 
@@ -1056,6 +1083,10 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
         if data is False or data is None:
             return False
         code = data.stock
+        if '牛' in data.name:
+            stock_type = 'bull'
+        elif '熊' in data.name:
+            stock_type = 'bear'
 
     set_submitted_buy(code, CONST[stock_type])
     if force:
@@ -1085,8 +1116,9 @@ def auto_buy(stock_type):
             return False
         check_result = check_golden_line()
         if check_result == 'bull':
-            log.info('to buy bull')
             to_buy('bull')
+        elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bear'):
+            to_buy('bull', cur_price_min=0.01, cur_price_max=0.015)
         # 走势反向，撤销买单
         if conf['FOLLOW_TREND'] and glb['submitted_buy_bear_data'] is not None and check_result == 'bear':
             cancel_all(code=glb['submitted_buy_bear_data'].code)
@@ -1099,8 +1131,9 @@ def auto_buy(stock_type):
             return False
         check_result = check_golden_line()
         if check_result == 'bear':
-            log.info('to buy bear')
             to_buy('bear')
+        elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bull'):
+            to_buy('bear', cur_price_min=0.01, cur_price_max=0.015)
         # 走势反向，撤销买单
         if conf['FOLLOW_TREND'] and glb['submitted_buy_bull_data'] is not None and check_result == 'bull':
             cancel_all(code=glb['submitted_buy_bull_data'].code)
@@ -1344,7 +1377,7 @@ def start(config=None):
         quote_ctx.set_handler(OrderBook())
     position_list_query()
     order_list_query(status=ft.OrderStatus.FILLED_ALL)
-    # get_stock_code('熊')
+    # get_stock_code(cur_price_min=0.01, cur_price_max=0.015)
 
     ret, data = quote_ctx.query_subscription()
     log.info('query_subscription, ret: %s, data:%s' % (ret, data))
