@@ -211,8 +211,7 @@ def get_golden_line(line=None):
         line['reverse'] = 'bull'
     elif line['diff'] < 0 and glb['golden_line']['diff'] > 0:
         line['reverse'] = 'bear'
-    line['123.6'] = line['0'] + line['diff'] * 1.236
-    line['150'] = line['0'] + line['diff'] * 1.5
+    # line['123.6'] = line['0'] + line['diff'] * 1.236
     line['261.8'] = line['0'] + line['diff'] * 2.618
     line['300'] = line['0'] + line['diff'] * 3
     glb['golden_line'] = line
@@ -300,11 +299,11 @@ def _check_golden_line(need_log=True):
         elif avg_price - 20 < cur_price < avg_price:
             check_result = 'avg_bull'
         elif avg_price < cur_price < avg_price + 20:
-            check_result = 'null'
+            check_result = 'too_close'
         # elif cur_price < golden_line['123.6']:
         #     check_result = 'null'
         elif cur_price > golden_line['261.8']:
-            check_result = 'null'
+            check_result = 'too_far'
         else:
             check_result = 'bull'
     else:
@@ -313,11 +312,11 @@ def _check_golden_line(need_log=True):
         elif avg_price + 20 > cur_price > avg_price:
             check_result = 'avg_bear'
         elif avg_price > cur_price > avg_price - 20:
-            check_result = 'null'
+            check_result = 'too_close'
         # elif cur_price > golden_line['123.6']:
         #     check_result = 'null'
         elif cur_price < golden_line['261.8']:
-            check_result = 'null'
+            check_result = 'too_far'
         else:
             check_result = 'bear'
     glb['golden_line']['check_result'] = check_result
@@ -1083,9 +1082,9 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
         if data is False or data is None:
             return False
         code = data.stock
-        if '牛' in data.name:
+        if '牛' in data['name']: # 必须用中括号，data.name会访问到name属性而不是列
             stock_type = 'bull'
-        elif '熊' in data.name:
+        elif '熊' in data['name']:
             stock_type = 'bear'
 
     set_submitted_buy(code, CONST[stock_type])
