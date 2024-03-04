@@ -719,34 +719,38 @@ def _position_list_query(stock_type='', need_log=True):
             item = today_buy_hold_data.iloc[i]
             set_has(item.code, item.stock_name)
             if conf['AUTO_BUY']:
-                # 自动挂单
+                # 没有挂单则自动挂单
                 if item.qty == item.can_sell_qty:
                     # reset_submitted_buy(item.code, item.stock_name)
                     if conf['AUTO_PLACE_ORDER'] and not glb['to_over']:
                         log.info('auto_place_order, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                         auto_place_order(item.code, item.qty, max(item.nominal_price, item.cost_price))
+                # 亏损大于3格的时候，才考虑止损
+                is_loss = item.cost_price - item.nominal_price > 0.003
                 # 分割线反画
                 if glb['golden_line']['reverse'] == 'bull':
-                    if item.stock_name.find('熊') > -1:
+                    if '熊' in item.stock_name and is_loss:
                         log.info('reverse_sell, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                        sell_all(code=item.code, qty=item.qty)
+                        # sell_all(code=item.code, qty=item.qty)
+                        glb['loss'][item.code] = True
                     if not glb['soon_over']:
                         to_buy('bull')
-                if glb['golden_line']['reverse'] == 'bear':
-                    if item.stock_name.find('牛') > -1:
+                elif glb['golden_line']['reverse'] == 'bear':
+                    if '牛' in item.stock_name and is_loss:
                         log.info('reverse_sell, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                        sell_all(code=item.code, qty=item.qty)
+                        # sell_all(code=item.code, qty=item.qty)
+                        glb['loss'][item.code] = True
                     if not glb['soon_over']:
                         to_buy('bear')
-                # 亏损大于3格的时候，破均线要开始止损
+                # 破均线
                 check_result = check_golden_line()
                 glb['loss'][item.code] = False
-                if item.nominal_price < item.cost_price - 0.003:
+                if is_loss:
                     if item.stock_name.find('牛') > -1:
                         if check_result == 'loss_bull':
                             log.info('loss_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                            glb['loss'][item.code] = True
                             # sell_all(code=item.code, qty=item.qty)
+                            glb['loss'][item.code] = True
                         elif check_result == 'avg_bull' and len(glb['submitted_sell_bull_list']) > 0 and glb['submitted_sell_bull_list'][0].price > item.nominal_price + 0.002:
                             log.info('avg_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                             cancel_all(code=item.code)
@@ -754,8 +758,8 @@ def _position_list_query(stock_type='', need_log=True):
                     elif item.stock_name.find('熊') > -1:
                         if check_result == 'loss_bear':
                             log.info('loss_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                            glb['loss'][item.code] = True
                             # sell_all(code=item.code, qty=item.qty)
+                            glb['loss'][item.code] = True
                         elif check_result == 'avg_bear' and len(glb['submitted_sell_bear_list']) > 0 and glb['submitted_sell_bear_list'][0].price > item.nominal_price + 0.002:
                             log.info('avg_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                             cancel_all(code=item.code)
