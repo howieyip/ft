@@ -167,7 +167,7 @@ def throttle(fn, wait, need_log=True):
             logged = False
             return fn(*args, **kwargs)
         if need_log and not logged:
-            print(f'{fn.__name__} call throttling, {countdown}s remaining')
+            log.info(f'{fn.__name__} call throttling, {countdown}s remaining')
             logged = True
         return None
 
@@ -1008,7 +1008,7 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
                 data.insert(loc=data.columns.get_loc('ask_price') + 1, column='intrinsic_price', value=intrinsic_price)
                 data.insert(loc=data.columns.get_loc('intrinsic_price') + 1, column='ibp_diff', value=data.intrinsic_price - data.bid_price)
                 data = data.sort_values(by='ibp_diff', ascending=False)
-                # print(data)
+                log.info('ibp_diff, data:\n%s' % data)
                 data = data.iloc[0]
                 if data.ibp_diff >= 0.008:
                     log.info('allow buy, code: %s, bid_price: %s, ask_price: %s, intrinsic_price: %s' % (data.stock, data.bid_price, data.ask_price, data.intrinsic_price))
@@ -1254,9 +1254,9 @@ class Ticker(ft.TickerHandlerBase):
         if s % 5 == 0:
             check_result = check_golden_line(True if s == 0 else False)
             if check_result is not None:
-                if glb['submitted_buy_bull_data'] is not None and check_result != 'bull':
+                if glb['submitted_buy_bull_data'] is not None and glb['submitted_buy_bull_data'].price > 0.02 and check_result != 'bull':
                     cancel_all(code=glb['submitted_buy_bull_data'].code)
-                elif glb['submitted_buy_bear_data'] is not None and check_result != 'bear':
+                elif glb['submitted_buy_bear_data'] is not None and glb['submitted_buy_bear_data'].price > 0.02 and check_result != 'bear':
                     cancel_all(code=glb['submitted_buy_bear_data'].code)
 
         # 自动买入和自动调价
