@@ -748,7 +748,7 @@ def _position_list_query(stock_type='', need_log=True):
                             log.info('avg_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                             cancel_all(code=item.code)
                             auto_place_order(item.code, item.qty, item.nominal_price)
-                        elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bear'):
+                        elif conf['TRY_RECOVERY'] and check_result == 'not_ready':
                             log.info('sell_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                             sell_all(code=item.code, qty=item.qty)
                     elif item.stock_name.find('熊') > -1:
@@ -760,7 +760,7 @@ def _position_list_query(stock_type='', need_log=True):
                             log.info('avg_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                             cancel_all(code=item.code)
                             auto_place_order(item.code, item.qty, item.nominal_price)
-                        elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bull'):
+                        elif conf['TRY_RECOVERY'] and check_result == 'not_ready':
                             log.info('sell_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                             sell_all(code=item.code, qty=item.qty)
         bull_data = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('牛')]
@@ -992,7 +992,7 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
     req.num = 20 if cur_price_min == 0.01 else 3  # 返回数据个数，最大200
 
     ret, data = quote_ctx.get_warrant(req=req)
-    log.info('get_warrant, ret: %s, data:\n%s' % (ret, data))
+    # log.info('get_warrant, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
         log.info('get_warrant error')
     else:
@@ -1013,19 +1013,19 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
                 log.info('ibp_diff, data:\n%s' % data)
                 data = data.iloc[0]
                 if data.ibp_diff >= 0.008:
-                    log.info('allow buy, code: %s, bid_price: %s, ask_price: %s, intrinsic_price: %s' % (data.stock, data.bid_price, data.ask_price, data.intrinsic_price))
+                    log.info('ibp_diff allow buy, code: %s, bid_price: %s, ask_price: %s, intrinsic_price: %s' % (data.stock, data.bid_price, data.ask_price, data.intrinsic_price))
                     cache['data'] = data
                 else:
-                    log.info('not allow buy, code: %s, bid_price: %s, ask_price: %s, intrinsic_price: %s' % (data.stock, data.bid_price, data.ask_price, data.intrinsic_price))
+                    log.info('ibp_diff not allow buy, code: %s, bid_price: %s, ask_price: %s, intrinsic_price: %s' % (data.stock, data.bid_price, data.ask_price, data.intrinsic_price))
             else:
                 data = data.iloc[0]
                 if conf['FOLLOW_TREND']:
                     bid_ask_diff = round(data.ask_price - data.bid_price, 3)
-                    if data.ask_price != 0 and bid_ask_diff <= conf['BID_ASK_DIFF']:
-                        log.info('allow buy, code: %s, bid_price: %s, ask_price: %s, diff: %s' % (data.stock, data.bid_price, data.ask_price, bid_ask_diff))
+                    if bid_ask_diff <= conf['BID_ASK_DIFF']:
+                        log.info('bid_ask_diff allow buy, code: %s, bid_price: %s, ask_price: %s, diff: %s' % (data.stock, data.bid_price, data.ask_price, bid_ask_diff))
                         cache['data'] = data
                     else:
-                        log.info('not allow buy, code: %s, bid_price: %s, ask_price: %s, diff: %s' % (data.stock, data.bid_price, data.ask_price, bid_ask_diff))
+                        log.info('bid_ask_diff not allow buy, code: %s, bid_price: %s, ask_price: %s, diff: %s' % (data.stock, data.bid_price, data.ask_price, bid_ask_diff))
                 else:
                     cache['data'] = data
         else:
@@ -1122,7 +1122,7 @@ def auto_buy(stock_type):
         check_result = check_golden_line()
         if check_result == 'bull':
             to_buy('bull')
-        elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bear'):
+        elif conf['TRY_RECOVERY'] and check_result == 'not_ready':
             to_buy('bull', cur_price_min=0.01, cur_price_max=0.015)
         # 走势反向，撤销买单
         if conf['FOLLOW_TREND'] and glb['submitted_buy_bear_data'] is not None and check_result == 'bear':
@@ -1137,7 +1137,7 @@ def auto_buy(stock_type):
         check_result = check_golden_line()
         if check_result == 'bear':
             to_buy('bear')
-        elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bull'):
+        elif conf['TRY_RECOVERY'] and check_result == 'not_ready':
             to_buy('bear', cur_price_min=0.01, cur_price_max=0.015)
         # 走势反向，撤销买单
         if conf['FOLLOW_TREND'] and glb['submitted_buy_bull_data'] is not None and check_result == 'bull':
@@ -1319,7 +1319,7 @@ def resetData():
 # 限制2秒内最多查1次足够
 pre_buy = throttle(_pre_buy, 2, False)
 # 限制3秒内最多查1次足够
-check_golden_line = throttle(_check_golden_line, 3)
+check_golden_line = throttle(_check_golden_line, 3, False)
 # 每 30 秒内最多请求 10 次查询持仓接口
 position_list_query = throttle(_position_list_query, 3)
 # 每 30 秒内最多请求 15 次下单接口，且连续两次请求的间隔不可小于 0.02 秒
