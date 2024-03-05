@@ -165,6 +165,8 @@ def throttle(fn, wait, need_log=True):
         if countdown <= 0:
             last_call_time = current_time
             logged = False
+            if need_log:
+                log.info(f'{fn.__name__} call success')
             return fn(*args, **kwargs)
         if need_log and not logged:
             log.info(f'{fn.__name__} call throttling, {countdown}s remaining')
@@ -338,10 +340,7 @@ def _smart_buy(code, volume, price=None, type='Bid'):
             return False
         if conf['TRADE_ENV'] == ft.TrdEnv.SIMULATE:
             type = 'Ask'
-        price = data[type][0 if type == 'Ask' else 1][0]
-    if not price > 0:
-        log.info('not price > 0, _smart_buy error')
-        return False
+        price = max(0.01, data[type][0 if type == 'Ask' else 1][0])
     ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.BUY, trd_env=conf['TRADE_ENV'])
     log.info('_smart_buy, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
@@ -359,10 +358,7 @@ def _smart_sell(code, volume, price=None, type='Ask'):
         data = get_order_book(code)
         if not data:
             return False
-        price = data[type][0][0]
-    if not price > 0:
-        log.info('not price > 0, _smart_sell error')
-        return False
+        price = max(0.01, data[type][0][0])
     ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.SELL, trd_env=conf['TRADE_ENV'])
     log.info('_smart_sell, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
@@ -721,20 +717,20 @@ def _position_list_query(stock_type='', need_log=True):
                     # reset_submitted_buy(item.code, item.stock_name)
                     if conf['AUTO_PLACE_ORDER'] and not glb['to_over']:
                         log.info('auto_place_order, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                        auto_place_order(item.code, item.qty, max(item.nominal_price, item.cost_price))
+                        auto_place_order(item.code, item.qty, max(item.nominal_price, item.cost_price), not glb['almost_over'])
                 # 亏损大于3格的时候，才考虑止损
                 is_loss = item.cost_price - item.nominal_price > 0.003
                 # 分割线反画
                 if glb['golden_line']['reverse'] == 'bull':
                     if '熊' in item.stock_name and is_loss:
-                        log.info('reverse_sell, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
+                        log.info('reverse_loss, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                         # sell_all(code=item.code, qty=item.qty)
                         glb['loss'][item.code] = True
                     if not glb['soon_over']:
                         to_buy('bull')
                 elif glb['golden_line']['reverse'] == 'bear':
                     if '牛' in item.stock_name and is_loss:
-                        log.info('reverse_sell, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
+                        log.info('reverse_loss, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                         # sell_all(code=item.code, qty=item.qty)
                         glb['loss'][item.code] = True
                     if not glb['soon_over']:
@@ -752,6 +748,9 @@ def _position_list_query(stock_type='', need_log=True):
                             log.info('avg_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                             cancel_all(code=item.code)
                             auto_place_order(item.code, item.qty, item.nominal_price)
+                        elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bear'):
+                            log.info('sell_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
+                            sell_all(code=item.code, qty=item.qty)
                     elif item.stock_name.find('熊') > -1:
                         if check_result == 'loss_bear':
                             log.info('loss_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
@@ -761,6 +760,9 @@ def _position_list_query(stock_type='', need_log=True):
                             log.info('avg_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                             cancel_all(code=item.code)
                             auto_place_order(item.code, item.qty, item.nominal_price)
+                        elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bull'):
+                            log.info('sell_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
+                            sell_all(code=item.code, qty=item.qty)
         bull_data = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('牛')]
         bear_data = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('熊')]
         if len(bull_data) == 0:
@@ -802,13 +804,13 @@ class OrderBook(ft.OrderBookHandlerBase):
         return ret, data
 
 
-def auto_place_order(code, volume, price):
+def auto_place_order(code, volume, price, batch=True):
     if glb['auto_place_order_flag']:
         log.info('auto_place_order_flag True')
         return False
     if price > conf['CUR_PRICE_MAX']:
         return False
-    if glb['almost_over']:
+    if not batch:
         glb['auto_place_order_flag'] = True
         data = smart_sell(code, volume)
         if data is False:
@@ -903,15 +905,15 @@ def auto_adjust(delta_price, i, adjust_dict, submitted_type):
     if data is None or data.code not in glb['order_book'] or (submitted_type.find('buy') > -1 and data.code not in glb['auto_buy_list']):
         return False
     order_book = glb['order_book'].get(data.code)
-    bid_price = order_book['Bid'][0][0]
-    ask_price = order_book['Ask'][0][0]
+    bid_price = max(0.01, order_book['Bid'][0][0])
+    ask_price = max(0.01, order_book['Ask'][0][0])
     if bid_price >= conf['CUR_PRICE_MAX']:
         return False
     rise_price = 0
     fall_price = 0
     if submitted_type.find('buy') > -1:
         rise_price = round(bid_price - (adjust_dict['rise'][2] - 1) * 0.001, 3)
-        fall_price = round(bid_price - (adjust_dict['fall'][2] - 1) * 0.001, 3)
+        fall_price = max(0.01, round(bid_price - (adjust_dict['fall'][2] - 1) * 0.001, 3))
     elif submitted_type.find('sell') > -1:
         rise_price = round(ask_price + (adjust_dict['rise'][2] - 1) * 0.001, 3)
         # 尾盘或要止损时才降价到卖一
@@ -997,9 +999,9 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
         data = data[0]
         # FUTU BUG: 返回的结果还要再过滤一次
         data = data[(data.stock_owner == CONST['HSI_CODE']) & (data.status == ft.WarrantStatus.NORMAL)]
-        # data = data[data.cur_price == min(data.cur_price)]
+        data = data[data.bid_price >= 0.01]
         if len(data) > 0:
-            if cur_price_min == 0.01:
+            if conf['TRY_RECOVERY'] and cur_price_min == 0.01:
                 rt_data = get_rt_data()
                 if rt_data is False:
                     return False
