@@ -224,9 +224,6 @@ def get_rt_data():
     if ret != ft.RET_OK:
         log.info('get_rt_data error, ret: %s, rt_data:%s' % (ret, rt_data))
         return False
-    if len(rt_data) < 5:
-        # log.info('len(rt_data) < 5')
-        return False
     #       code                 time  is_blank  opened_mins  cur_price  last_close     avg_price  volume      turnover
     # 0    HK.800000  2023-10-31 09:30:00     False          570   17337.70    17406.36  17337.700000       0  1.682861e+09
     # 1    HK.800000  2023-10-31 09:31:00     False          571   17214.94    17406.36  17276.320000       0  1.822654e+09
@@ -241,7 +238,7 @@ def get_rt_data():
 
 def draw_golden_line():
     rt_data = get_rt_data()
-    if rt_data is False:
+    if rt_data is False or len(rt_data) < 5:
         return False
     if rt_data.iloc[-1].time[0:10] != glb['trade_date'].get('time'):
         log.info('get_rt_data not today')
@@ -1003,7 +1000,10 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
         # data = data[data.cur_price == min(data.cur_price)]
         if len(data) > 0:
             if cur_price_min == 0.01:
-                cur_rt_data = glb['rt_data'].iloc[-1]
+                rt_data = get_rt_data()
+                if rt_data is False:
+                    return False
+                cur_rt_data = rt_data.iloc[-1]
                 intrinsic_price = round(abs(cur_rt_data.cur_price - data['strike_price']) / data.conversion_ratio, 3)
                 data.insert(loc=data.columns.get_loc('ask_price') + 1, column='intrinsic_price', value=intrinsic_price)
                 data.insert(loc=data.columns.get_loc('intrinsic_price') + 1, column='ibp_diff', value=data.intrinsic_price - data.bid_price)
