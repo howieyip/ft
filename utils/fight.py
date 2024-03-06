@@ -729,8 +729,8 @@ def _position_list_query(stock_type='', need_log=True):
                         log.info('auto_place_order, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                         auto_place_order(item.code, item.qty, max(item.nominal_price, item.cost_price), not glb['almost_over'])
                 # 亏损大于3格的时候，才考虑止损
+                glb['loss'][item.code] = False
                 if item.cost_price - item.nominal_price > 0.003:
-                    glb['loss'][item.code] = False
                     # 破均线处理
                     if item.stock_name.find('牛') > -1:
                         if check_result == 'loss_bull':
@@ -740,10 +740,11 @@ def _position_list_query(stock_type='', need_log=True):
                             log.info('avg_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                             cancel_all(code=item.code)
                             auto_place_order(item.code, item.qty, item.nominal_price)
-                        elif conf['TRY_RECOVERY'] and check_result == 'not_ready':
+                        elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bear'):
                             log.info('sell_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                            sell_all(code=item.code, qty=item.qty)
-                            has_sold = True
+                            # sell_all(code=item.code, qty=item.qty)
+                            # has_sold = True
+                            glb['loss'][item.code] = True
                     elif item.stock_name.find('熊') > -1:
                         if check_result == 'loss_bear':
                             log.info('loss_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
@@ -752,10 +753,11 @@ def _position_list_query(stock_type='', need_log=True):
                             log.info('avg_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                             cancel_all(code=item.code)
                             auto_place_order(item.code, item.qty, item.nominal_price)
-                        elif conf['TRY_RECOVERY'] and check_result == 'not_ready':
+                        elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bull'):
                             log.info('sell_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                            sell_all(code=item.code, qty=item.qty)
-                            has_sold = True
+                            # sell_all(code=item.code, qty=item.qty)
+                            # has_sold = True
+                            glb['loss'][item.code] = True
                     # 分割线反画
                     if glb['golden_line']['reverse'] == 'bull':
                         if '熊' in item.stock_name:
@@ -1016,7 +1018,7 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
                 data = data.sort_values(by='ibp_diff', ascending=False)
                 log.info('ibp_diff, data:\n%s' % data)
                 data = data.iloc[0]
-                if data.ibp_diff >= 0.008:
+                if data.ibp_diff >= 0.009:
                     log.info('ibp_diff allow buy, code: %s, bid_price: %s, ask_price: %s, intrinsic_price: %s' % (data.stock, data.bid_price, data.ask_price, data.intrinsic_price))
                     cache['data'] = data
                 else:
@@ -1129,7 +1131,7 @@ def auto_buy(stock_type):
         if check_result == 'bull':
             to_buy('bull')
         elif conf['TRY_RECOVERY'] and check_result == 'not_ready':
-            to_buy('bull', cur_price_min=0.01, cur_price_max=0.015)
+            to_buy('bull', cur_price_min=0.01, cur_price_max=0.018)
         # 走势反向，撤销买单
         if conf['FOLLOW_TREND'] and glb['submitted_buy_bear_data'] is not None and check_result == 'bear':
             cancel_all(code=glb['submitted_buy_bear_data'].code)
@@ -1144,7 +1146,7 @@ def auto_buy(stock_type):
         if check_result == 'bear':
             to_buy('bear')
         elif conf['TRY_RECOVERY'] and check_result == 'not_ready':
-            to_buy('bear', cur_price_min=0.01, cur_price_max=0.015)
+            to_buy('bear', cur_price_min=0.01, cur_price_max=0.018)
         # 走势反向，撤销买单
         if conf['FOLLOW_TREND'] and glb['submitted_buy_bull_data'] is not None and check_result == 'bull':
             cancel_all(code=glb['submitted_buy_bull_data'].code)
@@ -1388,7 +1390,7 @@ def start(config=None):
         quote_ctx.set_handler(OrderBook())
     position_list_query()
     order_list_query(status=ft.OrderStatus.FILLED_ALL)
-    # get_stock_code(cur_price_min=0.01, cur_price_max=0.015)
+    # get_stock_code(cur_price_min=0.01, cur_price_max=0.018)
 
     ret, data = quote_ctx.query_subscription()
     log.info('query_subscription, ret: %s, data:%s' % (ret, data))
