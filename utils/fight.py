@@ -248,13 +248,21 @@ def draw_golden_line():
         log.info('get_rt_data not today')
         # return False
     data = rt_data.iloc[:-1] # 排除最后一个数据，因为在当前分钟未结束时画分割线是不准确的
-    min_data = data[data.cur_price == min(data.cur_price)]
-    max_data = data[data.cur_price == max(data.cur_price)]
-    min_index = min_data.index.tolist()[0]
-    max_index = max_data.index.tolist()[0]
     # cur_index = data.shape[0] - 1
-    min_data = min_data.iloc[0]
-    max_data = max_data.iloc[0]
+    nlargest_data = data.nlargest(2, 'cur_price')
+    nsmallest_data = data.nsmallest(2, 'cur_price')
+    min1_data = nsmallest_data.iloc[0]
+    min2_data = nsmallest_data.iloc[1]
+    max1_data = nlargest_data.iloc[0]
+    max2_data = nlargest_data.iloc[1]
+    min_data = min1_data
+    max_data = max1_data
+    if max2_data.opened_mins > min2_data.opened_mins and max1_data.opened_mins < min1_data.opened_mins and abs(min1_data.cur_price - min2_data.cur_price) < 10:
+        min_data = min2_data
+    elif max2_data.opened_mins < min2_data.opened_mins and max1_data.opened_mins > min1_data.opened_mins and abs(max1_data.cur_price - max2_data.cur_price) < 10:
+        max_data = max2_data
+    min_index = min_data.name
+    max_index = max_data.name
     golden_line = {'0': 0, '100': 0}
     if max_data.opened_mins > min_data.opened_mins:
         golden_line['0'] = min_data.cur_price
