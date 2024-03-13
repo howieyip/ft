@@ -208,8 +208,7 @@ def datestr_to_timestamp(time_str, format_str="%Y-%m-%d %H:%M:%S", pattern=r'\d{
 def get_golden_line(line=None):
     if line is None:
         line = glb['golden_line']
-    line['diff'] = line['100'] - line['0']
-    glb['golden_line']['diff'] = glb['golden_line']['100'] - glb['golden_line']['0']
+    line['diff'] = round(line['100'] - line['0'], 2)
     line['reverse'] = glb['golden_line']['reverse']
     if line['diff'] > 0 and glb['golden_line']['diff'] < 0:
         line['reverse'] = 'bull'
@@ -330,7 +329,9 @@ def _check_golden_line(need_log=True):
             check_result = 'bear'
     glb['golden_line']['check_result'] = check_result
     if need_log:
-        log.info('cur_price: %s, avg_price: %s, golden_line: %s' % (cur_price, avg_price, glb['golden_line']))
+        exclude_keys = {'261.8', '300'}
+        filtered_obj = {k: v for k, v in glb['golden_line'].items() if k not in exclude_keys}
+        log.info('cur_price: %s, avg_price: %s, golden_line: %s' % (cur_price, round(avg_price, 2), filtered_obj))
     return check_result
 
 
