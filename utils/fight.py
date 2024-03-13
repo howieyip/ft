@@ -396,11 +396,11 @@ def find_buy_price(order):
     if buy_order.get(order.order_id):
         return buy_order.get(order.order_id).get('price')
     else:
-        data = order_list_query(order.code, ft.OrderStatus.FILLED_ALL)
+        data = order_list_query(order.code, [ft.OrderStatus.FILLED_ALL, ft.OrderStatus.CANCELLED_PART])
         if data is False or data is None:
             log.info('order_list_query data is False or data is None')
             return order.price
-        filled_all_buy_data = data[(data.order_status == ft.OrderStatus.FILLED_ALL) & (data.trd_side == ft.TrdSide.BUY)]
+        filled_all_buy_data = data[((data.order_status == ft.OrderStatus.FILLED_ALL) | (data.order_status == ft.OrderStatus.CANCELLED_PART)) & (data.trd_side == ft.TrdSide.BUY)]
         if filled_all_buy_data.empty:
             log.info('error: filled_all_buy_data is empty')
             return order.price
@@ -414,10 +414,9 @@ def find_buy_price(order):
         return buy_order.get(order.order_id).get('price')
 
 
-def _order_list_query(code='', status=''):
+def _order_list_query(code='', status=[]):
     status_filter_list = [ft.OrderStatus.SUBMITTED, ft.OrderStatus.FILLED_PART]
-    if status != '':
-        status_filter_list.append(status)
+    status_filter_list += status
     ret, data = trade_ctx.order_list_query(status_filter_list=status_filter_list, code=code, trd_env=conf['TRADE_ENV'], refresh_cache=True)
     # log.info('查询订单，ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
@@ -426,7 +425,7 @@ def _order_list_query(code='', status=''):
     log.info('order_list_query success, code: %s' % code)
     if ft.OrderStatus.FILLED_ALL in status_filter_list:
         last_order = glb['filled_all_last_order']
-        filled_all_data = data[data.order_status == ft.OrderStatus.FILLED_ALL]
+        filled_all_data = data[(data.order_status == ft.OrderStatus.FILLED_ALL) | (data.order_status == ft.OrderStatus.CANCELLED_PART)]
         if not filled_all_data.empty:
             last_order['last'] = filled_all_data[filled_all_data.updated_time == max(filled_all_data.updated_time)].iloc[0]
             for index, row in filled_all_data.iterrows():
@@ -816,6 +815,8 @@ def auto_place_order(code, volume, price, batch=True):
         return False
     if price > conf['CUR_PRICE_MAX']:
         return False
+    if volume < 100e3:
+        batch = False
     if not batch:
         glb['auto_place_order_flag'] = True
         data = smart_sell(code, volume)
@@ -823,25 +824,27 @@ def auto_place_order(code, volume, price, batch=True):
             log.info('auto_place_order => smart_sell error')
         glb['auto_place_order_flag'] = False
         return
-    if volume < 100e3:
-        return False
     # if glb['submitted_sell_bull_data'] is not None and glb['submitted_sell_bull_data'].code == code:
     #     return False
     # if glb['submitted_sell_bear_data'] is not None and glb['submitted_sell_bear_data'].code == code:
     #     return False
     glb['auto_place_order_flag'] = True
     item = []
-    # [[600e3, 150e3, 150e3, 300e3]]
+    # [[600e3, 150e3, 150e3, 150e3, 150e3]]
     for i in range(0, len(conf['ORDER_LIST'])):
         if volume >= conf['ORDER_LIST'][i][0]:
             item = conf['ORDER_LIST'][i]
             break
+    volume_diff = volume - item[0]
     if glb['move_position']:
         price += 0.02
     for i in range(1, len(item)): # 从1开始
         if item[i] == 0:
             continue
-        data = smart_sell(code, item[i], price + 0.001 * i)
+        vol = item[i]
+        if volume_diff > 0 and i == len(item) - 1:
+            vol += volume_diff
+        data = smart_sell(code, vol, price + 0.001 * i)
         if data is False:
             log.info('auto_place_order => smart_sell error')
         elif glb['move_position']:
@@ -862,46 +865,36 @@ class TradeOrder(ft.TradeOrderHandlerBase):
         if data.trd_env != conf['TRADE_ENV']:
             log.info('TradeOrder not TRADE_ENV')
             return ret, data
-        if data.order_status == ft.OrderStatus.FILLED_ALL:
+        log.info('TradeOrder trd_side: %s, order_status: %s' % (data.trd_side, data.order_status))
+        if data.order_status == ft.OrderStatus.FILLED_ALL or data.order_status == ft.OrderStatus.CANCELLED_PART:
             glb['filled_all_last_order'][data.code] = {'updated_time': data.updated_time, 'price': data.price, 'trd_side': data.trd_side}
             if data.trd_side == ft.TrdSide.BUY:
-                log.info('TradeOrder FILLED_ALL buy')
                 reset_submitted_buy(data.code, data.stock_name)
                 set_has(data.code, data.stock_name)
                 if conf['AUTO_PLACE_ORDER'] and not glb['to_over']:
                     time.sleep(2)
                     auto_place_order(data.code, data.dealt_qty, data.price)
             elif data.trd_side == ft.TrdSide.SELL:
-                log.info('TradeOrder FILLED_ALL sell')
                 reset_submitted_sell(data.code, data.stock_name, data)
                 position_list_query()
         elif data.order_status == ft.OrderStatus.FILLED_PART:
             if data.trd_side == ft.TrdSide.BUY:
-                log.info('TradeOrder FILLED_PART buy')
                 set_has(data.code, data.stock_name)
-            elif data.trd_side == ft.TrdSide.SELL:
-                log.info('TradeOrder FILLED_PART sell')
         elif data.order_status == ft.OrderStatus.SUBMIT_FAILED or data.order_status == ft.OrderStatus.FAILED:
-            log.info('TradeOrder SUBMIT_FAILED or FAILED')
             position_list_query()
-        elif data.order_status == ft.OrderStatus.CANCELLED_ALL or data.order_status == ft.OrderStatus.CANCELLED_PART:
-            log.info('TradeOrder CANCELLED_ALL or CANCELLED_PART')
+        elif data.order_status == ft.OrderStatus.CANCELLED_ALL:
             if data.trd_side == ft.TrdSide.BUY:
                 reset_submitted_buy(data.code, data.stock_name)
             elif data.trd_side == ft.TrdSide.SELL:
                 reset_submitted_sell(data.code, data.stock_name, data)
         elif data.order_status == ft.OrderStatus.SUBMITTED:
-            log.info('TradeOrder %s SUBMITTED' % data.trd_side)
             if data.trd_side == ft.TrdSide.BUY:
                 set_submitted_buy(data.code, data.stock_name, data)
             elif data.trd_side == ft.TrdSide.SELL:
                 set_submitted_sell(data.code, data.stock_name, data)
         elif data.order_status == ft.OrderStatus.DISABLED:
-            log.info('TradeOrder %s DISABLED' % data.trd_side)
             # 需要重新获取订单以重置一些全局变量
-            order_list_query(status=ft.OrderStatus.FILLED_ALL)
-        else:
-            log.info('else TradeOrder %s' % data.order_status)
+            order_list_query(status=[ft.OrderStatus.FILLED_ALL, ft.OrderStatus.CANCELLED_PART])
 
         return ret, data
 
@@ -1389,7 +1382,7 @@ def start(config=None):
     if conf['AUTO_ADJUST']:
         quote_ctx.set_handler(OrderBook())
     position_list_query()
-    order_list_query(status=ft.OrderStatus.FILLED_ALL)
+    order_list_query(status=[ft.OrderStatus.FILLED_ALL, ft.OrderStatus.CANCELLED_PART])
     # get_stock_code(cur_price_min=0.01, cur_price_max=0.018)
 
     ret, data = quote_ctx.query_subscription()
