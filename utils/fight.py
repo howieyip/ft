@@ -407,7 +407,7 @@ def find_buy_price(order):
     if buy_order.get(order.order_id):
         return buy_order.get(order.order_id).get('price')
     else:
-        data = order_list_query(order.code, [ft.OrderStatus.FILLED_ALL, ft.OrderStatus.CANCELLED_PART])
+        data = order_list_query(order.code)
         if data is False or data is None:
             log.info('order_list_query data is False or data is None')
             return order.price
@@ -425,9 +425,7 @@ def find_buy_price(order):
         return buy_order.get(order.order_id).get('price')
 
 
-def _order_list_query(code='', status=[]):
-    status_filter_list = [ft.OrderStatus.SUBMITTED, ft.OrderStatus.FILLED_PART]
-    status_filter_list += status
+def _order_list_query(code='', status_filter_list=[ft.OrderStatus.SUBMITTED, ft.OrderStatus.FILLED_PART, ft.OrderStatus.FILLED_ALL, ft.OrderStatus.CANCELLED_PART]):
     ret, data = trade_ctx.order_list_query(status_filter_list=status_filter_list, code=code, trd_env=conf['TRADE_ENV'], refresh_cache=True)
     # log.info('查询订单，ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
@@ -468,7 +466,7 @@ def _cancel_all(code='', stock_type='', trd_side=''):
         log.info('cancel_all_order, ret: %s, data:\n%s' % (ret, data))
         if ret != ft.RET_OK:
             log.info('cancel_all_order error')
-    data = order_list_query(code)
+    data = order_list_query(code, [ft.OrderStatus.SUBMITTED, ft.OrderStatus.FILLED_PART])
     if data is False:
         log.info('_cancel_all => order_list_query error')
         return False
@@ -508,7 +506,7 @@ def force_sell(code='', qty=''):
 # 卖掉指定的股票
 def sell_all(code='', qty='', stock_type=''):
     if code != '':
-        cancel_all(code=code)
+        cancel_all(code)
         force_sell(code, qty)
         return True
     cancel_all() # 尽量调用撤销全部订单接口比较快
@@ -520,7 +518,7 @@ def sell_all(code='', qty='', stock_type=''):
             item = data.iloc[i]
             log.info('to sell all')
             if item.qty > item.can_sell_qty:
-                cancel_all(code=item.code)
+                cancel_all(item.code)
             force_sell(item.code, item.qty)
 
 
@@ -731,12 +729,10 @@ def _position_list_query(stock_type='', need_log=True):
             item = today_buy_hold_data.iloc[i]
             set_has(item.code, item.stock_name)
             if conf['AUTO_BUY']:
-                # 没有挂单则自动挂单
-                if item.qty == item.can_sell_qty:
-                    # reset_submitted_buy(item.code, item.stock_name)
-                    if conf['AUTO_PLACE_ORDER'] and not glb['to_over']:
-                        log.info('auto_place_order, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                        auto_place_order(item.code, item.qty, max(item.nominal_price, item.cost_price), not glb['almost_over'])
+                # 还有能挂单的量则重新挂单
+                if item.can_sell_qty > 0 and conf['AUTO_PLACE_ORDER'] and not glb['to_over']:
+                    log.info('auto_place_order, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
+                    auto_place_order(item.code, item.qty, max(item.nominal_price, item.cost_price), not glb['almost_over'])
                 # 亏损大于1格的时候，才考虑止损
                 glb['loss'][item.code] = False
                 if item.cost_price - item.nominal_price > 0.001:
@@ -747,7 +743,6 @@ def _position_list_query(stock_type='', need_log=True):
                             glb['loss'][item.code] = True
                         elif check_result == 'avg_bull' and len(glb['submitted_sell_bull_list']) > 0 and glb['submitted_sell_bull_list'][0].price > item.nominal_price + 0.001:
                             log.info('avg_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                            cancel_all(code=item.code)
                             auto_place_order(item.code, item.qty, item.nominal_price)
                         elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bear'):
                             log.info('sell_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
@@ -760,7 +755,6 @@ def _position_list_query(stock_type='', need_log=True):
                             glb['loss'][item.code] = True
                         elif check_result == 'avg_bear' and len(glb['submitted_sell_bear_list']) > 0 and glb['submitted_sell_bear_list'][0].price > item.nominal_price + 0.001:
                             log.info('avg_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                            cancel_all(code=item.code)
                             auto_place_order(item.code, item.qty, item.nominal_price)
                         elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bull'):
                             log.info('sell_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
@@ -819,7 +813,7 @@ class OrderBook(ft.OrderBookHandlerBase):
         return ret, data
 
 
-def auto_place_order(code, volume, price, batch=True):
+def auto_place_order(code, volume, price, batch=True, cancel=True):
     if glb['auto_place_order_flag']:
         log.info('auto_place_order_flag True')
         return False
@@ -827,18 +821,15 @@ def auto_place_order(code, volume, price, batch=True):
         return False
     if volume < 100e3:
         batch = False
+    glb['auto_place_order_flag'] = True
+    if cancel:
+        cancel_all(code)
     if not batch:
-        glb['auto_place_order_flag'] = True
         data = smart_sell(code, volume)
         if data is False:
             log.info('auto_place_order => smart_sell error')
         glb['auto_place_order_flag'] = False
         return
-    # if glb['submitted_sell_bull_data'] is not None and glb['submitted_sell_bull_data'].code == code:
-    #     return False
-    # if glb['submitted_sell_bear_data'] is not None and glb['submitted_sell_bear_data'].code == code:
-    #     return False
-    glb['auto_place_order_flag'] = True
     item = []
     # [[600e3, 150e3, 150e3, 150e3, 150e3]]
     for i in range(0, len(conf['ORDER_LIST'])):
@@ -859,7 +850,6 @@ def auto_place_order(code, volume, price, batch=True):
             log.info('auto_place_order => smart_sell error')
         elif glb['move_position']:
             glb['move_position'] = False
-        time.sleep(1)
     glb['auto_place_order_flag'] = False
 
 
@@ -884,7 +874,7 @@ class TradeOrder(ft.TradeOrderHandlerBase):
                 set_has(data.code, data.stock_name)
                 if conf['AUTO_PLACE_ORDER'] and not glb['to_over']:
                     time.sleep(2)
-                    auto_place_order(data.code, data.dealt_qty, data.price)
+                    auto_place_order(data.code, data.dealt_qty, data.price, cancel=False)
             elif data.trd_side == ft.TrdSide.SELL:
                 reset_submitted_sell(data.code, data.stock_name, data)
                 position_list_query()
@@ -905,7 +895,7 @@ class TradeOrder(ft.TradeOrderHandlerBase):
                 set_submitted_sell(data.code, data.stock_name, data)
         elif data.order_status == ft.OrderStatus.DISABLED:
             # 需要重新获取订单以重置一些全局变量
-            order_list_query(status=[ft.OrderStatus.FILLED_ALL, ft.OrderStatus.CANCELLED_PART])
+            order_list_query()
 
         return ret, data
 
@@ -1138,7 +1128,7 @@ def auto_buy(stock_type):
             to_buy('bull', cur_price_min=0.01, cur_price_max=0.018)
         # 走势反向，撤销买单
         if conf['FOLLOW_TREND'] and glb['submitted_buy_bear_data'] is not None and check_result == 'bear':
-            cancel_all(code=glb['submitted_buy_bear_data'].code)
+            cancel_all(glb['submitted_buy_bear_data'].code)
     elif stock_type == 'bear' and not glb['submitted_buy_bear_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bear_list']) == 0):
         glb['pre_buy_bull_flag'] = True
         if conf['BEAR_CODE'] == '':
@@ -1153,7 +1143,7 @@ def auto_buy(stock_type):
             to_buy('bear', cur_price_min=0.01, cur_price_max=0.018)
         # 走势反向，撤销买单
         if conf['FOLLOW_TREND'] and glb['submitted_buy_bull_data'] is not None and check_result == 'bull':
-            cancel_all(code=glb['submitted_buy_bull_data'].code)
+            cancel_all(glb['submitted_buy_bull_data'].code)
 
 
 def _pre_buy():
@@ -1269,9 +1259,9 @@ class Ticker(ft.TickerHandlerBase):
             check_result = check_golden_line(need_log=True if s == 0 else False)
             if check_result is not None:
                 if glb['submitted_buy_bull_data'] is not None and glb['submitted_buy_bull_data'].price > 0.02 and check_result != 'bull':
-                    cancel_all(code=glb['submitted_buy_bull_data'].code)
+                    cancel_all(glb['submitted_buy_bull_data'].code)
                 elif glb['submitted_buy_bear_data'] is not None and glb['submitted_buy_bear_data'].price > 0.02 and check_result != 'bear':
-                    cancel_all(code=glb['submitted_buy_bear_data'].code)
+                    cancel_all(glb['submitted_buy_bear_data'].code)
 
         # 自动买入和自动调价
         if conf['AUTO_BUY'] or conf['AUTO_ADJUST']:
@@ -1392,7 +1382,7 @@ def start(config=None):
     if conf['AUTO_ADJUST']:
         quote_ctx.set_handler(OrderBook())
     position_list_query()
-    order_list_query(status=[ft.OrderStatus.FILLED_ALL, ft.OrderStatus.CANCELLED_PART])
+    order_list_query()
     # get_stock_code(cur_price_min=0.01, cur_price_max=0.018)
 
     ret, data = quote_ctx.query_subscription()
