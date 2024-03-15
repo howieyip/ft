@@ -438,7 +438,8 @@ def _order_list_query(code='', status=[]):
         last_order = glb['filled_all_last_order']
         filled_all_data = data[(data.order_status == ft.OrderStatus.FILLED_ALL) | (data.order_status == ft.OrderStatus.CANCELLED_PART)]
         if not filled_all_data.empty:
-            last_order['last'] = filled_all_data[filled_all_data.updated_time == max(filled_all_data.updated_time)].iloc[0]
+            last_data = filled_all_data[filled_all_data.updated_time == max(filled_all_data.updated_time)].iloc[0]
+            last_order['last'] = {'updated_time': last_data.updated_time, 'price': last_data.price, 'trd_side': last_data.trd_side}
             for index, row in filled_all_data.iterrows():
                 # code, updated_time, price = row.code, row.updated_time, row.price
                 if row.code not in last_order:
@@ -877,6 +878,7 @@ class TradeOrder(ft.TradeOrderHandlerBase):
         log.info('TradeOrder trd_side: %s, order_status: %s' % (data.trd_side, data.order_status))
         if data.order_status == ft.OrderStatus.FILLED_ALL or data.order_status == ft.OrderStatus.CANCELLED_PART:
             glb['filled_all_last_order'][data.code] = {'updated_time': data.updated_time, 'price': data.price, 'trd_side': data.trd_side}
+            glb['filled_all_last_order']['last'] = {'updated_time': data.updated_time, 'price': data.price, 'trd_side': data.trd_side}
             if data.trd_side == ft.TrdSide.BUY:
                 reset_submitted_buy(data.code, data.stock_name)
                 set_has(data.code, data.stock_name)
@@ -1061,7 +1063,7 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
         return False
 
     if force is False:
-        data = position_list_query(stock_type=stock_type)
+        data = position_list_query(stock_type=stock_type, need_log=False)
         if data is False or data is None:
             return False
         if len(data) > 0:
