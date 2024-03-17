@@ -1040,8 +1040,8 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
     log.info('to buy %s' % stock_type)
     if volume is None:
         volume = conf['BUY_VOLUME']
-        # if glb['afternoon']:
-        #     volume /= 2
+        if glb['afternoon']:
+            volume /= 2
     if code == '':
         if stock_type == 'bull':
             code = conf['BULL_CODE']
@@ -1221,7 +1221,7 @@ class Ticker(ft.TickerHandlerBase):
 
         if h == 9 and m == 30 and s == 0:
             log.info('[%s]--------------------start--------------------' % t)
-        elif h >= 13 and not glb['afternoon']:
+        elif h >= 15 and not glb['afternoon']:
             glb['afternoon'] = True
 
         if glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15:
