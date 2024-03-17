@@ -65,7 +65,7 @@ conf = {
         'rise': [60, 1, 2],                         # 最近多少秒内，往持仓股票方向波动多少点，调整卖单为第几档
         'fall': [60, 1, 1]                          # 最近多少秒内，往持仓股票反向波动多少点，调整卖单为第几档
     },
-    'AUTO_MOVE_POSITION': True,                     # 是否自动强制移仓，是则下面的MOVE_POSITION_DICT生效
+    'AUTO_MOVE_POSITION': False,                    # 是否自动强制移仓，是则下面的MOVE_POSITION_DICT生效
     'MOVE_POSITION_DICT': {
         'from_code': 'HK.',                         # 指定code移仓目前是一次性应急用
         'to_code': 'auto',
