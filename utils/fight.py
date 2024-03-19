@@ -256,9 +256,11 @@ def draw_golden_line():
     max2_data = nlargest_data.iloc[1]
     min_data = min1_data
     max_data = max1_data
-    if max2_data.opened_mins > min2_data.opened_mins and max1_data.opened_mins < min1_data.opened_mins and abs(min1_data.cur_price - min2_data.cur_price) < 10:
+    # min2 max2 max1 min1 排列形态，反画向下
+    if min2_data.opened_mins < max2_data.opened_mins < min1_data.opened_mins and min2_data.opened_mins < max1_data.opened_mins < min1_data.opened_mins and abs(min1_data.cur_price - min2_data.cur_price) < 10:
         min_data = min2_data
-    elif max2_data.opened_mins < min2_data.opened_mins and max1_data.opened_mins > min1_data.opened_mins and abs(max1_data.cur_price - max2_data.cur_price) < 10:
+    # max2 min2 min1 max1 排列形态，反画向上
+    elif max2_data.opened_mins < min2_data.opened_mins < max1_data.opened_mins and max2_data.opened_mins < min1_data.opened_mins < max1_data.opened_mins and abs(max1_data.cur_price - max2_data.cur_price) < 10:
         max_data = max2_data
     min_index = min_data.name
     max_index = max_data.name
