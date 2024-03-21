@@ -304,31 +304,23 @@ def _check_golden_line(need_log=True):
     avg_price = cur_rt_data.avg_price
     check_result = ''
     if golden_line['100'] > golden_line['0']:
-        if avg_price - 50 < cur_price < avg_price - 20:
-            check_result = 'loss_bull'
-        elif avg_price - 20 < cur_price < avg_price:
-            check_result = 'avg_bull'
-        elif avg_price < cur_price < avg_price + 20:
-            check_result = 'too_close'
-        # elif cur_price < golden_line['123.6']:
-        #     check_result = 'null'
-        elif cur_price > golden_line['261.8']:
-            check_result = 'too_far'
-        else:
-            check_result = 'bull'
+        # if avg_price - 50 < cur_price < avg_price - 20:
+        #     check_result = 'loss_bull'
+        # elif avg_price - 20 < cur_price < avg_price:
+        #     check_result = 'avg_bull'
+        # elif avg_price < cur_price < avg_price + 20:
+        #     check_result = 'too_close'
+        # else:
+        check_result = 'bull'
     else:
-        if avg_price + 50 > cur_price > avg_price + 20:
-            check_result = 'loss_bear'
-        elif avg_price + 20 > cur_price > avg_price:
-            check_result = 'avg_bear'
-        elif avg_price > cur_price > avg_price - 20:
-            check_result = 'too_close'
-        # elif cur_price > golden_line['123.6']:
-        #     check_result = 'null'
-        elif cur_price < golden_line['261.8']:
-            check_result = 'too_far'
-        else:
-            check_result = 'bear'
+        # if avg_price + 50 > cur_price > avg_price + 20:
+        #     check_result = 'loss_bear'
+        # elif avg_price + 20 > cur_price > avg_price:
+        #     check_result = 'avg_bear'
+        # elif avg_price > cur_price > avg_price - 20:
+        #     check_result = 'too_close'
+        # else:
+        check_result = 'bear'
     glb['golden_line']['check_result'] = check_result
     if need_log:
         exclude_keys = {'261.8', '300'}
@@ -740,11 +732,8 @@ def _position_list_query(stock_type='', need_log=True):
                 if item.cost_price - item.nominal_price > 0.001:
                     # 破均线处理
                     if item.stock_name.find('牛') > -1:
-                        if check_result == 'loss_bull':
+                        if len(glb['submitted_sell_bull_list']) > 0 and glb['submitted_sell_bull_list'][0].price > item.nominal_price + 0.001:
                             log.info('loss_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                            glb['loss'][item.code] = True
-                        elif check_result == 'avg_bull' and len(glb['submitted_sell_bull_list']) > 0 and glb['submitted_sell_bull_list'][0].price > item.nominal_price + 0.001:
-                            log.info('avg_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                             auto_place_order(item.code, item.qty, item.nominal_price)
                         elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bear'):
                             log.info('sell_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
@@ -752,11 +741,8 @@ def _position_list_query(stock_type='', need_log=True):
                             # has_sold = True
                             glb['loss'][item.code] = True
                     elif item.stock_name.find('熊') > -1:
-                        if check_result == 'loss_bear':
+                        if len(glb['submitted_sell_bear_list']) > 0 and glb['submitted_sell_bear_list'][0].price > item.nominal_price + 0.001:
                             log.info('loss_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                            glb['loss'][item.code] = True
-                        elif check_result == 'avg_bear' and len(glb['submitted_sell_bear_list']) > 0 and glb['submitted_sell_bear_list'][0].price > item.nominal_price + 0.001:
-                            log.info('avg_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                             auto_place_order(item.code, item.qty, item.nominal_price)
                         elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bull'):
                             log.info('sell_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
@@ -764,14 +750,14 @@ def _position_list_query(stock_type='', need_log=True):
                             # has_sold = True
                             glb['loss'][item.code] = True
                     # 分割线反画
-                    if glb['golden_line']['reverse'] == 'bull':
-                        if '熊' in item.stock_name:
-                            log.info('reverse_loss, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                            glb['loss'][item.code] = True
-                    elif glb['golden_line']['reverse'] == 'bear':
-                        if '牛' in item.stock_name:
-                            log.info('reverse_loss, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                            glb['loss'][item.code] = True
+                    # if glb['golden_line']['reverse'] == 'bull':
+                    #     if '熊' in item.stock_name:
+                    #         log.info('reverse_loss, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
+                    #         glb['loss'][item.code] = True
+                    # elif glb['golden_line']['reverse'] == 'bear':
+                    #     if '牛' in item.stock_name:
+                    #         log.info('reverse_loss, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
+                    #         glb['loss'][item.code] = True
         # if has_sold:
         #     return False
         bull_data = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('牛')]
