@@ -54,9 +54,8 @@ conf = {
         [400e3, 100e3, 100e3, 100e3, 100e3],
         [300e3, 50e3, 50e3, 100e3, 100e3],
         [200e3, 50e3, 50e3, 50e3, 50e3],
-        [150e3, 0, 50e3, 50e3, 50e3],
-        [100e3, 0, 50e3, 0, 50e3],
-        [50e3, 0, 50e3, 0, 0]
+        [150e3, 50e3, 0, 50e3, 50e3],
+        [100e3, 50e3, 0, 50e3, 0]
     ],
     'FALL_PRICE_MIN_DIFF': 0.004,                   # 最后一个卖单降档的最小值为第几档
 
@@ -1242,8 +1241,8 @@ class Ticker(ft.TickerHandlerBase):
         if abs(glb['cur_price'] - glb['last_price']) >= 10:
             glb['last_price'] = glb['cur_price']
             position_list_query(need_log=False)
-        # 每10秒查询分割线，方便撤单和止损
-        if s % 10 == 0:
+        # 每20秒查询分割线，方便撤单和止损
+        if s % 20 == 0:
             check_result = check_golden_line(need_log=True if s == 0 else False)
             if check_result is not None:
                 if glb['submitted_buy_bull_data'] is not None and glb['submitted_buy_bull_data'].price > 0.02 and check_result != 'bull':
