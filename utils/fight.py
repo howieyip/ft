@@ -303,23 +303,23 @@ def _check_golden_line(need_log=True):
     avg_price = cur_rt_data.avg_price
     check_result = ''
     if golden_line['100'] > golden_line['0']:
-        # if avg_price - 50 < cur_price < avg_price - 20:
-        #     check_result = 'loss_bull'
+        if avg_price - 50 < cur_price < avg_price - 20:
+            check_result = 'loss_bull'
         # elif avg_price - 20 < cur_price < avg_price:
         #     check_result = 'avg_bull'
         # elif avg_price < cur_price < avg_price + 20:
         #     check_result = 'too_close'
-        # else:
-        check_result = 'bull'
+        else:
+            check_result = 'bull'
     else:
-        # if avg_price + 50 > cur_price > avg_price + 20:
-        #     check_result = 'loss_bear'
+        if avg_price + 50 > cur_price > avg_price + 20:
+            check_result = 'loss_bear'
         # elif avg_price + 20 > cur_price > avg_price:
         #     check_result = 'avg_bear'
         # elif avg_price > cur_price > avg_price - 20:
         #     check_result = 'too_close'
-        # else:
-        check_result = 'bear'
+        else:
+            check_result = 'bear'
     glb['golden_line']['check_result'] = check_result
     if need_log:
         exclude_keys = {'261.8', '300'}
@@ -729,10 +729,12 @@ def _position_list_query(stock_type='', need_log=True):
                 # 亏损大于1格的时候，才考虑止损
                 glb['loss'][item.code] = False
                 if item.cost_price - item.nominal_price > 0.001:
-                    # 破均线处理
                     if item.stock_name.find('牛') > -1:
-                        if len(glb['submitted_sell_bull_list']) > 0 and glb['submitted_sell_bull_list'][0].price > item.nominal_price + 0.001:
+                        if check_result == 'loss_bull':
                             log.info('loss_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
+                            glb['loss'][item.code] = True
+                        elif len(glb['submitted_sell_bull_list']) > 0 and glb['submitted_sell_bull_list'][0].price > item.nominal_price + 0.001:
+                            log.info('loss_order, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                             auto_place_order(item.code, item.qty, item.nominal_price)
                         elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bear'):
                             log.info('sell_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
@@ -740,8 +742,11 @@ def _position_list_query(stock_type='', need_log=True):
                             # has_sold = True
                             glb['loss'][item.code] = True
                     elif item.stock_name.find('熊') > -1:
-                        if len(glb['submitted_sell_bear_list']) > 0 and glb['submitted_sell_bear_list'][0].price > item.nominal_price + 0.001:
+                        if check_result == 'loss_bear':
                             log.info('loss_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
+                            glb['loss'][item.code] = True
+                        elif len(glb['submitted_sell_bear_list']) > 0 and glb['submitted_sell_bear_list'][0].price > item.nominal_price + 0.001:
+                            log.info('loss_order, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                             auto_place_order(item.code, item.qty, item.nominal_price)
                         elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bull'):
                             log.info('sell_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
@@ -1241,8 +1246,8 @@ class Ticker(ft.TickerHandlerBase):
         if abs(glb['cur_price'] - glb['last_price']) >= 10:
             glb['last_price'] = glb['cur_price']
             position_list_query(need_log=False)
-        # 每20秒查询分割线，方便撤单和止损
-        if s % 20 == 0:
+        # 每10秒查询分割线，方便撤单和止损
+        if s % 10 == 0:
             check_result = check_golden_line(need_log=True if s == 0 else False)
             if check_result is not None:
                 if glb['submitted_buy_bull_data'] is not None and glb['submitted_buy_bull_data'].price > 0.02 and check_result != 'bull':
