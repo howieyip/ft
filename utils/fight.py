@@ -817,11 +817,13 @@ def auto_place_order(code, volume, price, batch=True, cancel=True):
     if cancel:
         cancel_all(code)
     if not batch:
+        glb['loss'][code] = True
         data = smart_sell(code, volume)
         if data is False:
             log.info('auto_place_order => smart_sell error')
         glb['auto_place_order_flag'] = False
         return
+    glb['loss'][code] = False
     item = []
     # [[600e3, 150e3, 150e3, 150e3, 150e3]]
     for i in range(0, len(conf['ORDER_LIST'])):
