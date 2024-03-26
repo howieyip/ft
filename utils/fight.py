@@ -303,21 +303,21 @@ def _check_golden_line(need_log=True):
     avg_price = cur_rt_data.avg_price
     check_result = ''
     if golden_line['100'] > golden_line['0']:
-        if avg_price - 50 < cur_price < avg_price - 20:
+        if cur_price < avg_price - 20:
             check_result = 'loss_bull'
-        # elif avg_price - 20 < cur_price < avg_price:
-        #     check_result = 'avg_bull'
-        # elif avg_price < cur_price < avg_price + 20:
-        #     check_result = 'too_close'
+        elif avg_price - 20 < cur_price < avg_price:
+            check_result = 'avg_bull'
+        elif avg_price < cur_price < avg_price + 20:
+            check_result = 'too_close'
         else:
             check_result = 'bull'
     else:
-        if avg_price + 50 > cur_price > avg_price + 20:
+        if cur_price > avg_price + 20:
             check_result = 'loss_bear'
-        # elif avg_price + 20 > cur_price > avg_price:
-        #     check_result = 'avg_bear'
-        # elif avg_price > cur_price > avg_price - 20:
-        #     check_result = 'too_close'
+        elif avg_price + 20 > cur_price > avg_price:
+            check_result = 'avg_bear'
+        elif avg_price > cur_price > avg_price - 20:
+            check_result = 'too_close'
         else:
             check_result = 'bear'
     glb['golden_line']['check_result'] = check_result
