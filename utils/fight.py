@@ -813,7 +813,7 @@ def auto_place_order(code, volume, price, batch=True, cancel=True):
         batch = False
     glb['auto_place_order_flag'] = True
     if cancel:
-        cancel_all(code)
+        cancel_all(code, trd_side=ft.TrdSide.SELL)
     if not batch:
         glb['loss'][code] = True
         data = smart_sell(code, volume)
