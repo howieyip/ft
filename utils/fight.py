@@ -453,7 +453,7 @@ def _order_list_query(code='', status_filter_list=[ft.OrderStatus.SUBMITTED, ft.
     return data
 
 
-def _cancel_all(code='', stock_type='', trd_side=''):
+def _cancel_all(code='', trd_side='', stock_type=''):
     if code == '' and stock_type == '' and trd_side == '':
         ret, data = trade_ctx.cancel_all_order(trd_env=conf['TRADE_ENV'])
         log.info('cancel_all_order, ret: %s, data:\n%s' % (ret, data))
@@ -469,14 +469,16 @@ def _cancel_all(code='', stock_type='', trd_side=''):
     if len(data) > 0:
         for i in range(0, len(data)):
             item = data.iloc[i]
-            if stock_type == '' and trd_side == '':
-                cancel_order(item.order_id)
-            elif item.stock_name.find(CONST[stock_type]) > -1 and trd_side == '':
-                cancel_order(item.order_id)
-            elif item.stock_name.find(CONST[stock_type]) > -1 and trd_side == item.trd_side:
-                cancel_order(item.order_id)
-            elif stock_type == '' and trd_side == item.trd_side:
-                cancel_order(item.order_id)
+            if stock_type == '':
+                if trd_side == '':
+                    cancel_order(item.order_id)
+                elif trd_side == item.trd_side:
+                    cancel_order(item.order_id)
+            else:
+                if CONST[stock_type] in item.stock_name and trd_side == '':
+                    cancel_order(item.order_id)
+                elif CONST[stock_type] in item.stock_name and trd_side == item.trd_side:
+                    cancel_order(item.order_id)
 
 
 # 买一价强制卖掉指定股票
@@ -502,7 +504,7 @@ def sell_all(code='', qty='', stock_type=''):
         cancel_all(code)
         force_sell(code, qty)
         return True
-    cancel_all() # 尽量调用撤销全部订单接口比较快
+    cancel_all(stock_type=stock_type) # 尽量调用撤销全部订单接口比较快
     data = _position_list_query(stock_type=stock_type)
     if data is False or data is None:
         return False
