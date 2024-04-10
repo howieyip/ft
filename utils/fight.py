@@ -26,8 +26,8 @@ conf = {
     'BEAR_CODE': '',                                # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
     'GOLDEN_LINE_DIFF': 80,                         # 黄金分割线0-100之间要间隔多少点
     'BID_ASK_DIFF': 0.002,                          # 买一价和卖一价的价差小于等于多少元，才允许买入
-    'CUR_PRICE_MIN': 0.04,
-    'CUR_PRICE_MAX': 0.12,                          # 这个值非常重要，当天买入的新股票如果低于这个价，会被当成是日内短炒止损
+    'CUR_PRICE_MIN': 0.03,
+    'CUR_PRICE_MAX': 0.10,                          # 这个值非常重要，当天买入的新股票如果低于这个价，会被当成是日内短炒止损
 
     'DELTA_SECONDS': 60,                            # 多少秒内
     'DELTA_PRICE_MIN': 8,                           # 最小波动多少点
@@ -120,8 +120,8 @@ glb = {
     'has_bull_list': [],
     'has_bear_list': [],
     'auto_place_order_flag': False,
-    'pre_buy_bull_flag': True,
-    'pre_buy_bear_flag': True,
+    'can_buy_bull': True,
+    'can_buy_bear': True,
     'move_position': False,
     'cache_get_stock_code': {
         'bull': {
@@ -1074,9 +1074,9 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
                     log.info('code: %s, nominal_price: %s, reference_price: %s, diff: %s < %s, not allow add' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
                     if conf['FOLLOW_TREND']:
                         if stock_type == 'bull':
-                            glb['pre_buy_bull_flag'] = False
+                            glb['can_buy_bull'] = False
                         elif stock_type == 'bear':
-                            glb['pre_buy_bear_flag'] = False
+                            glb['can_buy_bear'] = False
                     return False
                 log.info('code: %s, nominal_price: %s, reference_price: %s, diff: %s >= %s, allow add' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
 
@@ -1101,22 +1101,23 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
         add_unique_element(glb['auto_buy_list'], code)
         # 刚买入，先设置别追买，要等待时机才买
         if stock_type == 'bull':
-            glb['pre_buy_bull_flag'] = False
+            glb['can_buy_bull'] = False
         elif stock_type == 'bear':
-            glb['pre_buy_bear_flag'] = False
+            glb['can_buy_bear'] = False
     return data
 
 
 def auto_buy(stock_type):
-    # log.info('auto_buy，submitted_buy_bear_flag：%s' % glb['submitted_buy_bear_flag'])
+    # log.info('auto_buy: %s, can_buy: %s' % (stock_type, glb['can_buy_' + stock_type]))
     if stock_type == 'bull' and not glb['submitted_buy_bull_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bull_list']) == 0):
-        glb['pre_buy_bear_flag'] = True
+        glb['can_buy_bear'] = True
         if conf['BULL_CODE'] == '':
             return False
-        if not glb['pre_buy_bull_flag']:
-            # log.info('not pre_buy_bull_flag')
+        if not glb['can_buy_bull']:
+            # log.info('not can_buy_bull')
             return False
-        check_result = check_golden_line(need_log=False)
+        # check_result = check_golden_line(need_log=False)
+        check_result = glb['golden_line']['check_result']
         if check_result == 'bull':
             to_buy('bull')
         elif conf['TRY_RECOVERY'] and check_result == 'not_ready':
@@ -1125,13 +1126,14 @@ def auto_buy(stock_type):
         if conf['FOLLOW_TREND'] and glb['submitted_buy_bear_data'] is not None and check_result == 'bear':
             cancel_all(glb['submitted_buy_bear_data'].code)
     elif stock_type == 'bear' and not glb['submitted_buy_bear_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bear_list']) == 0):
-        glb['pre_buy_bull_flag'] = True
+        glb['can_buy_bull'] = True
         if conf['BEAR_CODE'] == '':
             return False
-        if not glb['pre_buy_bear_flag']:
-            # log.info('not pre_buy_bear_flag')
+        if not glb['can_buy_bear']:
+            # log.info('not can_buy_bear')
             return False
-        check_result = check_golden_line(need_log=False)
+        # check_result = check_golden_line(need_log=False)
+        check_result = glb['golden_line']['check_result']
         if check_result == 'bear':
             to_buy('bear')
         elif conf['TRY_RECOVERY'] and check_result == 'not_ready':
@@ -1167,14 +1169,14 @@ def _pre_buy():
             auto_buy('bull')
     elif delta_price > conf['DELTA_PRICE_MAX']:
         if conf['FOLLOW_TREND']:
-            glb['pre_buy_bear_flag'] = True
+            glb['can_buy_bear'] = True
         else:
-            glb['pre_buy_bull_flag'] = True
+            glb['can_buy_bull'] = True
     elif delta_price < -conf['DELTA_PRICE_MAX']:
         if conf['FOLLOW_TREND']:
-            glb['pre_buy_bull_flag'] = True
+            glb['can_buy_bull'] = True
         else:
-            glb['pre_buy_bear_flag'] = True
+            glb['can_buy_bear'] = True
 
 
 # class RTData(ft.RTDataHandlerBase):
@@ -1312,12 +1314,12 @@ def resetData():
     glb['to_over'] = False
     glb['over'] = False
     if conf['FOLLOW_TREND']:
-        glb['pre_buy_bull_flag'] = False
-        glb['pre_buy_bear_flag'] = False
+        glb['can_buy_bull'] = False
+        glb['can_buy_bear'] = False
         conf['ADJUST_BUY_DICT']['rise'][2] = 0
     else:
-        glb['pre_buy_bull_flag'] = True
-        glb['pre_buy_bear_flag'] = True
+        glb['can_buy_bull'] = True
+        glb['can_buy_bear'] = True
         conf['ADJUST_BUY_DICT']['rise'][2] = 1
     request_trading_days()
 
