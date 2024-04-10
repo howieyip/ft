@@ -30,7 +30,8 @@ conf = {
     'CUR_PRICE_MAX': 0.12,                          # 这个值非常重要，当天买入的新股票如果低于这个价，会被当成是日内短炒止损
 
     'DELTA_SECONDS': 60,                            # 多少秒内
-    'DELTA_PRICE': 15,                              # 波动多少点
+    'DELTA_PRICE_MIN': 8,                           # 最小波动多少点
+    'DELTA_PRICE_MAX': 14,                          # 最大波动多少点
     'BUY_VOLUME': 100e3,                            # 下单多少股
     'MAX_VOLUME': 300e3,                            # 最大持仓股数，若超过则不会再买入
     'LOSS_PRICE_DIFF': 0.01,                        # 止损价差，买入后单价亏多少元要强制止损
@@ -1145,8 +1146,8 @@ def _pre_buy():
     # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
     while datestr_to_timestamp(glb['ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['ticker_list'][0].get('time')) > conf['DELTA_SECONDS']:
         glb['ticker_list'].pop(0)
-    # if glb['ticker_list'][-1].get('time').split('.')[0][-2:] != '00':
-    #     return False
+    if glb['ticker_list'][-1].get('time').split('.')[0][-2:] != '00':
+        return False
     filled_all_last_order_time = glb['filled_all_last_order'].get('last', {}).get('updated_time')
     if filled_all_last_order_time:
         delta_seconds = datestr_to_timestamp(glb['ticker_list'][-1].get('time')) - datestr_to_timestamp(filled_all_last_order_time)
@@ -1154,16 +1155,26 @@ def _pre_buy():
             log.info('pre_buy delta_seconds: %s' % delta_seconds)
             return False
     delta_price = glb['ticker_list'][-1].get('price') - glb['ticker_list'][0].get('price')
-    if delta_price >= conf['DELTA_PRICE']:
+    if conf['DELTA_PRICE_MIN'] <= delta_price <= conf['DELTA_PRICE_MAX']:
         if conf['FOLLOW_TREND']:
             auto_buy('bull')
         else:
             auto_buy('bear')
-    elif delta_price <= -conf['DELTA_PRICE']:
+    elif -conf['DELTA_PRICE_MIN'] >= delta_price >= -conf['DELTA_PRICE_MAX']:
         if conf['FOLLOW_TREND']:
             auto_buy('bear')
         else:
             auto_buy('bull')
+    elif delta_price > conf['DELTA_PRICE_MAX']:
+        if conf['FOLLOW_TREND']:
+            glb['pre_buy_bear_flag'] = True
+        else:
+            glb['pre_buy_bull_flag'] = True
+    elif delta_price < -conf['DELTA_PRICE_MAX']:
+        if conf['FOLLOW_TREND']:
+            glb['pre_buy_bull_flag'] = True
+        else:
+            glb['pre_buy_bear_flag'] = True
 
 
 # class RTData(ft.RTDataHandlerBase):
