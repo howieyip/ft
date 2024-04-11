@@ -306,19 +306,19 @@ def _check_golden_line(need_log=True):
     if golden_line['100'] > golden_line['0']:
         if cur_price < avg_price - 20:
             check_result = 'loss_bull'
-        elif avg_price - 20 < cur_price < avg_price:
-            check_result = 'avg_bull'
-        elif avg_price < cur_price < avg_price + 20:
-            check_result = 'too_close'
+        # elif avg_price - 20 < cur_price < avg_price:
+        #     check_result = 'avg_bull'
+        # elif avg_price < cur_price < avg_price + 20:
+        #     check_result = 'too_close'
         else:
             check_result = 'bull'
     else:
         if cur_price > avg_price + 20:
             check_result = 'loss_bear'
-        elif avg_price + 20 > cur_price > avg_price:
-            check_result = 'avg_bear'
-        elif avg_price > cur_price > avg_price - 20:
-            check_result = 'too_close'
+        # elif avg_price + 20 > cur_price > avg_price:
+        #     check_result = 'avg_bear'
+        # elif avg_price > cur_price > avg_price - 20:
+        #     check_result = 'too_close'
         else:
             check_result = 'bear'
     glb['golden_line']['check_result'] = check_result
@@ -1148,7 +1148,8 @@ def _pre_buy():
     # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
     while datestr_to_timestamp(glb['ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['ticker_list'][0].get('time')) > conf['DELTA_SECONDS']:
         glb['ticker_list'].pop(0)
-    if glb['ticker_list'][-1].get('time').split('.')[0][-2:] != '00':
+    cur_seconds = glb['ticker_list'][-1].get('time').split('.')[0][-2:]
+    if cur_seconds != '59' or cur_seconds != '00':
         return False
     filled_all_last_order_time = glb['filled_all_last_order'].get('last', {}).get('updated_time')
     if filled_all_last_order_time:
@@ -1157,6 +1158,7 @@ def _pre_buy():
             log.info('pre_buy delta_seconds: %s' % delta_seconds)
             return False
     delta_price = glb['ticker_list'][-1].get('price') - glb['ticker_list'][0].get('price')
+    log.info('pre_buy delta_price: %s' % delta_price)
     if conf['DELTA_PRICE_MIN'] <= delta_price <= conf['DELTA_PRICE_MAX']:
         if conf['FOLLOW_TREND']:
             auto_buy('bull')
