@@ -717,7 +717,7 @@ def _position_list_query(stock_type='', need_log=True):
     today_buy_hold_data = today_buy_data[today_buy_data.qty > 0]
     if need_log:
         log.info('today_buy_hold_data:\n%s' % today_buy_hold_data)
-    check_result = check_golden_line(need_log)
+    check_result = check_golden_line(need_log) or glb['golden_line']['check_result']
     if len(today_buy_hold_data) > 0:
         # has_sold = False
         for i in range(0, len(today_buy_hold_data)):
@@ -1072,6 +1072,7 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
                 add_price_diff = round(reference_price - data0.nominal_price, 3)
                 if add_price_diff < conf['ADD_PRICE_DIFF']:
                     log.info('code: %s, nominal_price: %s, reference_price: %s, diff: %s < %s, not allow add' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
+                    # 顺势买入的时候，涨是买牛的，但越涨就价差越近，为了避免无意义的频繁调用可以暂时设置为不能补仓买了
                     if conf['FOLLOW_TREND']:
                         if stock_type == 'bull':
                             glb['can_buy_bull'] = False
@@ -1116,8 +1117,7 @@ def auto_buy(stock_type):
         if not glb['can_buy_bull']:
             # log.info('not can_buy_bull')
             return False
-        # check_result = check_golden_line(need_log=False)
-        check_result = glb['golden_line']['check_result']
+        check_result = check_golden_line(need_log=False) or glb['golden_line']['check_result']
         if check_result == 'bull':
             to_buy('bull')
         elif conf['TRY_RECOVERY'] and check_result == 'not_ready':
@@ -1132,8 +1132,7 @@ def auto_buy(stock_type):
         if not glb['can_buy_bear']:
             # log.info('not can_buy_bear')
             return False
-        # check_result = check_golden_line(need_log=False)
-        check_result = glb['golden_line']['check_result']
+        check_result = check_golden_line(need_log=False) or glb['golden_line']['check_result']
         if check_result == 'bear':
             to_buy('bear')
         elif conf['TRY_RECOVERY'] and check_result == 'not_ready':
@@ -1143,42 +1142,41 @@ def auto_buy(stock_type):
             cancel_all(glb['submitted_buy_bull_data'].code)
 
 
-def _pre_buy():
+def pre_buy():
     #       code              time                 price        volume  turnover    ticker_direction       sequence   type      push_data_type
     # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
     while datestr_to_timestamp(glb['ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['ticker_list'][0].get('time')) > conf['DELTA_SECONDS']:
         glb['ticker_list'].pop(0)
     cur_seconds = glb['ticker_list'][-1].get('time').split('.')[0][-2:]
-    if cur_seconds != '59' or cur_seconds != '00':
+    if cur_seconds != '59' and cur_seconds != '00' and cur_seconds != '01':
         return False
-    filled_all_last_order_time = glb['filled_all_last_order'].get('last', {}).get('updated_time')
-    if filled_all_last_order_time:
-        delta_seconds = datestr_to_timestamp(glb['ticker_list'][-1].get('time')) - datestr_to_timestamp(filled_all_last_order_time)
-        if delta_seconds <= conf['DELTA_SECONDS']:
-            log.info('pre_buy delta_seconds: %s' % delta_seconds)
-            return False
+    # 上一单成交1分钟后才考虑买
+    # filled_all_last_order_time = glb['filled_all_last_order'].get('last', {}).get('updated_time')
+    # if filled_all_last_order_time:
+    #     delta_seconds = datestr_to_timestamp(glb['ticker_list'][-1].get('time')) - datestr_to_timestamp(filled_all_last_order_time)
+    #     if delta_seconds <= conf['DELTA_SECONDS']:
+    #         log.info('pre_buy delta_seconds: %s' % delta_seconds)
+    #         return False
     delta_price = glb['ticker_list'][-1].get('price') - glb['ticker_list'][0].get('price')
-    log.info('pre_buy delta_price: %s' % delta_price)
-    if conf['DELTA_PRICE_MIN'] <= delta_price <= conf['DELTA_PRICE_MAX']:
-        if conf['FOLLOW_TREND']:
+    # log.info('pre_buy delta_price: %s' % delta_price)
+    if conf['FOLLOW_TREND']:
+        if delta_price > conf['DELTA_PRICE_MAX']:
             auto_buy('bull')
-        else:
+        elif delta_price < -conf['DELTA_PRICE_MAX']:
             auto_buy('bear')
-    elif -conf['DELTA_PRICE_MIN'] >= delta_price >= -conf['DELTA_PRICE_MAX']:
-        if conf['FOLLOW_TREND']:
+    else:
+        if conf['DELTA_PRICE_MIN'] <= delta_price <= conf['DELTA_PRICE_MAX']:
             auto_buy('bear')
-        else:
+        elif -conf['DELTA_PRICE_MIN'] >= delta_price >= -conf['DELTA_PRICE_MAX']:
             auto_buy('bull')
-    elif delta_price > conf['DELTA_PRICE_MAX']:
-        if conf['FOLLOW_TREND']:
-            glb['can_buy_bear'] = True
-        else:
+        elif delta_price > conf['DELTA_PRICE_MAX']:
             glb['can_buy_bull'] = True
-    elif delta_price < -conf['DELTA_PRICE_MAX']:
-        if conf['FOLLOW_TREND']:
-            glb['can_buy_bull'] = True
-        else:
+            if glb['submitted_buy_bear_data'] is not None:
+                cancel_all(glb['submitted_buy_bear_data'].code)
+        elif delta_price < -conf['DELTA_PRICE_MAX']:
             glb['can_buy_bear'] = True
+            if glb['submitted_buy_bull_data'] is not None:
+                cancel_all(glb['submitted_buy_bull_data'].code)
 
 
 # class RTData(ft.RTDataHandlerBase):
@@ -1264,12 +1262,11 @@ class Ticker(ft.TickerHandlerBase):
             position_list_query(need_log=False)
         # 每10秒查询分割线，方便撤单和止损
         if s % 10 == 0:
-            check_result = check_golden_line(need_log=True if s == 0 else False)
-            if check_result is not None:
-                if glb['submitted_buy_bull_data'] is not None and glb['submitted_buy_bull_data'].price > 0.02 and check_result != 'bull':
-                    cancel_all(glb['submitted_buy_bull_data'].code)
-                elif glb['submitted_buy_bear_data'] is not None and glb['submitted_buy_bear_data'].price > 0.02 and check_result != 'bear':
-                    cancel_all(glb['submitted_buy_bear_data'].code)
+            check_result = check_golden_line(need_log=True if s == 0 else False) or glb['golden_line']['check_result']
+            if glb['submitted_buy_bull_data'] is not None and glb['submitted_buy_bull_data'].price > 0.02 and check_result != 'bull':
+                cancel_all(glb['submitted_buy_bull_data'].code)
+            elif glb['submitted_buy_bear_data'] is not None and glb['submitted_buy_bear_data'].price > 0.02 and check_result != 'bear':
+                cancel_all(glb['submitted_buy_bear_data'].code)
 
         # 自动买入和自动调价
         if conf['AUTO_BUY'] or conf['AUTO_ADJUST']:
@@ -1327,7 +1324,7 @@ def resetData():
 
 
 # 限制2秒内最多查1次足够
-pre_buy = throttle(_pre_buy, 2, False)
+# pre_buy = throttle(_pre_buy, 2, False)
 # 限制3秒内最多查1次足够
 check_golden_line = throttle(_check_golden_line, 3, False)
 # 每 30 秒内最多请求 10 次查询持仓接口
