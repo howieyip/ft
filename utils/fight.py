@@ -104,6 +104,8 @@ glb = {
     'ticker_list': [],
     'cur_price': 0,
     'last_price': 0,
+    'min_price': 99999,
+    'max_price': 0,
     'filled_all_last_order': {},
     'filled_all_buy_order': {},
     'adjust_ticker_list': [],
@@ -1165,9 +1167,9 @@ def pre_buy():
         elif delta_price < -conf['DELTA_PRICE_MAX']:
             auto_buy('bear')
     else:
-        if conf['DELTA_PRICE_MIN'] <= delta_price <= conf['DELTA_PRICE_MAX']:
+        if conf['DELTA_PRICE_MIN'] <= delta_price <= conf['DELTA_PRICE_MAX'] and glb['cur_price'] - glb['min_price'] > 20:
             auto_buy('bear')
-        elif -conf['DELTA_PRICE_MIN'] >= delta_price >= -conf['DELTA_PRICE_MAX']:
+        elif -conf['DELTA_PRICE_MIN'] >= delta_price >= -conf['DELTA_PRICE_MAX'] and glb['max_price'] - glb['cur_price'] > 20:
             auto_buy('bull')
         elif delta_price > conf['DELTA_PRICE_MAX']:
             glb['can_buy_bull'] = True
@@ -1255,8 +1257,13 @@ class Ticker(ft.TickerHandlerBase):
         if glb['to_over']:
             return ret, data
 
-        # 每波动10点查询持仓列表，方便统计盈亏和止损
         glb['cur_price'] = data0.price
+        if glb['max_price'] < glb['cur_price']:
+            glb['max_price'] = glb['cur_price']
+        if glb['min_price'] > glb['cur_price']:
+            glb['min_price'] = glb['cur_price']
+
+        # 每波动10点查询持仓列表，方便统计盈亏和止损
         if abs(glb['cur_price'] - glb['last_price']) >= 10:
             glb['last_price'] = glb['cur_price']
             position_list_query(need_log=False)
