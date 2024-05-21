@@ -735,7 +735,7 @@ def _position_list_query(stock_type='', need_log=True):
                     # 当前价格比下单价低2格的时候，重新挂单
                     if item.nominal_price < round(glb['submitted_sell_bull_list'][-1].price - 0.005, 3):
                         log.info('loss_order, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                        auto_place_order(item.code, item.qty, item.nominal_price)
+                        auto_place_order(item.code, item.qty, item.nominal_price - 0.001)
                 elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bear'):
                     log.info('sell_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                     # sell_all(code=item.code, qty=item.qty)
@@ -749,7 +749,7 @@ def _position_list_query(stock_type='', need_log=True):
                     # 当前价格比下单价低2格的时候，重新挂单
                     if item.nominal_price < round(glb['submitted_sell_bear_list'][-1].price - 0.005, 3):
                         log.info('loss_order, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                        auto_place_order(item.code, item.qty, item.nominal_price)
+                        auto_place_order(item.code, item.qty, item.nominal_price - 0.001)
                 elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bull'):
                     log.info('sell_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                     # sell_all(code=item.code, qty=item.qty)
