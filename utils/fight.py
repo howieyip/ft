@@ -106,6 +106,7 @@ glb = {
     'last_price': 0,
     'min_price': 99999,
     'max_price': 0,
+    'max_nominal_price': 0,
     'filled_all_last_order': {},
     'filled_all_buy_order': {},
     'adjust_ticker_list': [],
@@ -726,16 +727,19 @@ def _position_list_query(stock_type='', need_log=True):
                 log.info('auto_place_order, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                 auto_place_order(item.code, item.qty, max(item.nominal_price, item.cost_price), not glb['almost_over'])
 
+            if item.nominal_price > glb['max_nominal_price']:
+              glb['max_nominal_price'] = item.nominal_price
+
             glb['loss'][item.code] = False
             if item.stock_name.find('牛') > -1:
                 if check_result == 'loss_bull':
                     log.info('loss_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                     glb['loss'][item.code] = True
                 elif len(glb['submitted_sell_bull_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bull_list'][0].price - 0.002, 3):
-                    # 当前价格比下单价低2格的时候，重新挂单
-                    if item.nominal_price < round(glb['submitted_sell_bull_list'][-1].price - conf['FALL_PRICE_MIN_DIFF'] - 0.001, 3):
+                    # 当前价格比最高价低2格的时候，重新挂单
+                    if item.nominal_price < round(glb['max_nominal_price'] - 0.001, 3):
                         log.info('loss_order, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                        auto_place_order(item.code, item.qty, item.nominal_price - 0.001)
+                        auto_place_order(item.code, item.qty, item.nominal_price - 0.002)
                 elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bear'):
                     log.info('sell_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                     # sell_all(code=item.code, qty=item.qty)
@@ -746,10 +750,10 @@ def _position_list_query(stock_type='', need_log=True):
                     log.info('loss_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                     glb['loss'][item.code] = True
                 elif len(glb['submitted_sell_bear_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bear_list'][0].price - 0.002, 3):
-                    # 当前价格比下单价低2格的时候，重新挂单
-                    if item.nominal_price < round(glb['submitted_sell_bear_list'][-1].price - conf['FALL_PRICE_MIN_DIFF'] - 0.001, 3):
+                    # 当前价格比最高价低2格的时候，重新挂单
+                    if item.nominal_price < round(glb['max_nominal_price'] - 0.001, 3):
                         log.info('loss_order, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                        auto_place_order(item.code, item.qty, item.nominal_price - 0.001)
+                        auto_place_order(item.code, item.qty, item.nominal_price - 0.002)
                 elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bull'):
                     log.info('sell_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                     # sell_all(code=item.code, qty=item.qty)
@@ -778,6 +782,7 @@ def _position_list_query(stock_type='', need_log=True):
             return bear_data
         return today_buy_hold_data
     else:
+        glb['max_nominal_price'] = 0
         reset_has()
         if glb['almost_over']:
             glb['over'] = True
