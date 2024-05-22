@@ -48,17 +48,17 @@ conf = {
 
     'AUTO_PLACE_ORDER': False,                      # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
     'ORDER_LIST': [                                 # 下单多少股以上（大的写前面），每单挂多少股，例如下单800k，分3档200k 200k 400k挂单
-        [800e3, 200e3, 200e3, 200e3, 200e3],
-        [700e3, 150e3, 150e3, 200e3, 200e3],
-        [600e3, 150e3, 150e3, 150e3, 150e3],
-        [500e3, 100e3, 100e3, 150e3, 150e3],
-        [400e3, 100e3, 100e3, 100e3, 100e3],
-        [300e3, 50e3, 50e3, 100e3, 100e3],
-        [200e3, 50e3, 50e3, 50e3, 50e3],
-        [150e3, 50e3, 0, 50e3, 50e3],
-        [100e3, 50e3, 0, 50e3, 0]
+        [800e3, 0, 200e3, 200e3, 200e3, 200e3],
+        [700e3, 0, 150e3, 150e3, 200e3, 200e3],
+        [600e3, 0, 150e3, 150e3, 150e3, 150e3],
+        [500e3, 0, 100e3, 100e3, 150e3, 150e3],
+        [400e3, 0, 100e3, 100e3, 100e3, 100e3],
+        [300e3, 0, 50e3, 50e3, 100e3, 100e3],
+        [200e3, 0, 50e3, 50e3, 50e3, 50e3],
+        [150e3, 0, 50e3, 0, 50e3, 50e3],
+        [100e3, 0, 50e3, 0, 50e3, 0]
     ],
-    'FALL_PRICE_MIN_DIFF': 0.004,                   # 最后一个卖单降档的最小值为第几档
+    'FALL_PRICE_MIN_DIFF': 0.005,                   # 最后一个卖单降档的最小值为第几档
 
     'AUTO_ADJUST_SELL': True,                       # 是否自动调整挂的卖单的价格，若是则下面的ADJUST_SELL_DICT有效
     'ADJUST_SELL_DICT': {
@@ -731,9 +731,9 @@ def _position_list_query(stock_type='', need_log=True):
                 if check_result == 'loss_bull':
                     log.info('loss_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                     glb['loss'][item.code] = True
-                elif len(glb['submitted_sell_bull_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bull_list'][0].price - 0.001, 3):
+                elif len(glb['submitted_sell_bull_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bull_list'][0].price - 0.002, 3):
                     # 当前价格比下单价低2格的时候，重新挂单
-                    if item.nominal_price < round(glb['submitted_sell_bull_list'][-1].price - 0.005, 3):
+                    if item.nominal_price < round(glb['submitted_sell_bull_list'][-1].price - conf['FALL_PRICE_MIN_DIFF'] - 0.001, 3):
                         log.info('loss_order, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                         auto_place_order(item.code, item.qty, item.nominal_price - 0.001)
                 elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bear'):
@@ -745,9 +745,9 @@ def _position_list_query(stock_type='', need_log=True):
                 if check_result == 'loss_bear':
                     log.info('loss_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                     glb['loss'][item.code] = True
-                elif len(glb['submitted_sell_bear_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bear_list'][0].price - 0.001, 3):
+                elif len(glb['submitted_sell_bear_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bear_list'][0].price - 0.002, 3):
                     # 当前价格比下单价低2格的时候，重新挂单
-                    if item.nominal_price < round(glb['submitted_sell_bear_list'][-1].price - 0.005, 3):
+                    if item.nominal_price < round(glb['submitted_sell_bear_list'][-1].price - conf['FALL_PRICE_MIN_DIFF'] - 0.001, 3):
                         log.info('loss_order, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                         auto_place_order(item.code, item.qty, item.nominal_price - 0.001)
                 elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bull'):
