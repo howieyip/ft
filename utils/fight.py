@@ -25,13 +25,13 @@ conf = {
     'BULL_CODE': '',                                # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
     'BEAR_CODE': '',                                # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
     'GOLDEN_LINE_DIFF': 80,                         # 黄金分割线0-100之间要间隔多少点
-    'BID_ASK_DIFF': 0.002,                          # 买一价和卖一价的价差小于等于多少元，才允许买入
     'CUR_PRICE_MIN': 0.03,
     'CUR_PRICE_MAX': 0.10,                          # 这个值非常重要，当天买入的新股票如果低于这个价，会被当成是日内短炒止损
 
     'DELTA_SECONDS': 60,                            # 多少秒内
     'DELTA_PRICE_MIN': 8,                           # 最小波动多少点
     'DELTA_PRICE_MAX': 14,                          # 最大波动多少点
+    'FOLLOW_TREND_PRICE': 20,                       # 波动多少点，强制改为顺势买入
     'BUY_VOLUME': 100e3,                            # 下单多少股
     'MAX_VOLUME': 300e3,                            # 最大持仓股数，若超过则不会再买入
     'LOSS_PRICE_DIFF': 0.01,                        # 止损价差，买入后单价亏多少元要强制止损
@@ -455,6 +455,8 @@ def _order_list_query(code='', status_filter_list=[ft.OrderStatus.SUBMITTED, ft.
 
 
 def _cancel_all(code='', trd_side='', stock_type=''):
+    if code is None:
+        return False
     if code == '' and stock_type == '' and trd_side == '':
         ret, data = trade_ctx.cancel_all_order(trd_env=conf['TRADE_ENV'])
         log.info('cancel_all_order, ret: %s, data:\n%s' % (ret, data))
@@ -1022,16 +1024,7 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
                 else:
                     log.info('ibp_diff not allow buy, code: %s, bid_price: %s, ask_price: %s, intrinsic_price: %s' % (data.stock, data.bid_price, data.ask_price, data.intrinsic_price))
             else:
-                data = data.iloc[0]
-                if conf['FOLLOW_TREND']:
-                    bid_ask_diff = round(data.ask_price - data.bid_price, 3)
-                    if bid_ask_diff <= conf['BID_ASK_DIFF']:
-                        log.info('bid_ask_diff allow buy, code: %s, bid_price: %s, ask_price: %s, diff: %s' % (data.stock, data.bid_price, data.ask_price, bid_ask_diff))
-                        cache['data'] = data
-                    else:
-                        log.info('bid_ask_diff not allow buy, code: %s, bid_price: %s, ask_price: %s, diff: %s' % (data.stock, data.bid_price, data.ask_price, bid_ask_diff))
-                else:
-                    cache['data'] = data
+                cache['data'] = data.iloc[0]
         else:
             log.info('_get_stock_code error, conditions not met')
     cache['last_time'] = time.time()
@@ -1131,9 +1124,6 @@ def auto_buy(stock_type):
             to_buy('bull')
         elif conf['TRY_RECOVERY'] and check_result == 'not_ready':
             to_buy('bull', cur_price_min=0.01, cur_price_max=0.018)
-        # 走势反向，撤销买单
-        if conf['FOLLOW_TREND'] and glb['submitted_buy_bear_data'] is not None and check_result == 'bear':
-            cancel_all(glb['submitted_buy_bear_data'].code)
     elif stock_type == 'bear' and not glb['submitted_buy_bear_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bear_list']) == 0):
         glb['can_buy_bull'] = True
         if conf['BEAR_CODE'] == '':
@@ -1146,9 +1136,6 @@ def auto_buy(stock_type):
             to_buy('bear')
         elif conf['TRY_RECOVERY'] and check_result == 'not_ready':
             to_buy('bear', cur_price_min=0.01, cur_price_max=0.018)
-        # 走势反向，撤销买单
-        if conf['FOLLOW_TREND'] and glb['submitted_buy_bull_data'] is not None and check_result == 'bull':
-            cancel_all(glb['submitted_buy_bull_data'].code)
 
 
 def pre_buy():
@@ -1168,24 +1155,27 @@ def pre_buy():
     #         return False
     delta_price = glb['ticker_list'][-1].get('price') - glb['ticker_list'][0].get('price')
     # log.info('pre_buy delta_price: %s' % delta_price)
-    if conf['FOLLOW_TREND']:
-        if delta_price > conf['DELTA_PRICE_MAX']:
+
+    if abs(delta_price) >= conf['FOLLOW_TREND_PRICE']:
+        conf['FOLLOW_TREND'] = True
+        if delta_price >= conf['FOLLOW_TREND_PRICE']:
             auto_buy('bull')
-        elif delta_price < -conf['DELTA_PRICE_MAX']:
+            cancel_all(glb.get('submitted_buy_bear_data', {}).get('code'))
+        elif delta_price <= -conf['FOLLOW_TREND_PRICE']:
             auto_buy('bear')
+            cancel_all(glb.get('submitted_buy_bull_data', {}).get('code'))
     else:
+        conf['FOLLOW_TREND'] = False
         if conf['DELTA_PRICE_MIN'] <= delta_price <= conf['DELTA_PRICE_MAX']:
             auto_buy('bear')
         elif -conf['DELTA_PRICE_MIN'] >= delta_price >= -conf['DELTA_PRICE_MAX']:
             auto_buy('bull')
         elif delta_price > conf['DELTA_PRICE_MAX']:
             glb['can_buy_bull'] = True
-            if glb['submitted_buy_bear_data'] is not None:
-                cancel_all(glb['submitted_buy_bear_data'].code)
+            cancel_all(glb.get('submitted_buy_bear_data', {}).get('code'))
         elif delta_price < -conf['DELTA_PRICE_MAX']:
             glb['can_buy_bear'] = True
-            if glb['submitted_buy_bull_data'] is not None:
-                cancel_all(glb['submitted_buy_bull_data'].code)
+            cancel_all(glb.get('submitted_buy_bull_data', {}).get('code'))
 
 
 # class RTData(ft.RTDataHandlerBase):
@@ -1329,11 +1319,11 @@ def resetData():
     if conf['FOLLOW_TREND']:
         glb['can_buy_bull'] = False
         glb['can_buy_bear'] = False
-        conf['ADJUST_BUY_DICT']['rise'][2] = 0
+        # conf['ADJUST_BUY_DICT']['rise'][2] = 0
     else:
         glb['can_buy_bull'] = True
         glb['can_buy_bear'] = True
-        conf['ADJUST_BUY_DICT']['rise'][2] = 1
+        # conf['ADJUST_BUY_DICT']['rise'][2] = 1
     request_trading_days()
 
 
