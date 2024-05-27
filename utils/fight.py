@@ -1138,6 +1138,14 @@ def auto_buy(stock_type):
             to_buy('bear', cur_price_min=0.01, cur_price_max=0.018)
 
 
+def get_submitted_code(submitted_type):
+    # 必须判断值是否为None，如果用get方法的第二个参数是不会判断的
+    if submitted_type in glb and glb[submitted_type] is not None:
+        return glb[submitted_type].get('code')
+    else:
+        return None
+
+
 def pre_buy():
     #       code              time                 price        volume  turnover    ticker_direction       sequence   type      push_data_type
     # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
@@ -1160,10 +1168,10 @@ def pre_buy():
         conf['FOLLOW_TREND'] = True
         if delta_price >= conf['FOLLOW_TREND_PRICE']:
             auto_buy('bull')
-            cancel_all(glb.get('submitted_buy_bear_data', {}).get('code'))
+            cancel_all(get_submitted_code('submitted_buy_bear_data'))
         elif delta_price <= -conf['FOLLOW_TREND_PRICE']:
             auto_buy('bear')
-            cancel_all(glb.get('submitted_buy_bull_data', {}).get('code'))
+            cancel_all(get_submitted_code('submitted_buy_bull_data'))
     else:
         conf['FOLLOW_TREND'] = False
         if conf['DELTA_PRICE_MIN'] <= delta_price <= conf['DELTA_PRICE_MAX']:
@@ -1172,10 +1180,10 @@ def pre_buy():
             auto_buy('bull')
         elif delta_price > conf['DELTA_PRICE_MAX']:
             glb['can_buy_bull'] = True
-            cancel_all(glb.get('submitted_buy_bear_data', {}).get('code'))
+            cancel_all(get_submitted_code('submitted_buy_bear_data'))
         elif delta_price < -conf['DELTA_PRICE_MAX']:
             glb['can_buy_bear'] = True
-            cancel_all(glb.get('submitted_buy_bull_data', {}).get('code'))
+            cancel_all(get_submitted_code('submitted_buy_bull_data'))
 
 
 # class RTData(ft.RTDataHandlerBase):
