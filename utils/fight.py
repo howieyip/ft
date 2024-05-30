@@ -21,6 +21,7 @@ conf = {
 
     'AUTO_BUY': False,                              # 是否自动买入，若是则下面的配置有效
     'TRY_RECOVERY': False,                          # 是否尝试买快回收的股票
+    'BIG-ONE-WAY': False,                           # 是否采用大单边策略
     'FOLLOW_TREND': False,                          # 买入策略是否为顺势买入，逆势则为False
     'BULL_CODE': '',                                # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
     'BEAR_CODE': '',                                # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
@@ -1164,7 +1165,7 @@ def pre_buy():
     delta_price = glb['ticker_list'][-1].get('price') - glb['ticker_list'][0].get('price')
     # log.info('pre_buy delta_price: %s' % delta_price)
 
-    if abs(delta_price) >= conf['FOLLOW_TREND_PRICE']:
+    if conf['BIG-ONE-WAY'] and abs(delta_price) >= conf['FOLLOW_TREND_PRICE']:
         conf['FOLLOW_TREND'] = True
         if delta_price >= conf['FOLLOW_TREND_PRICE']:
             auto_buy('bull')
@@ -1174,9 +1175,9 @@ def pre_buy():
             cancel_all(get_submitted_code('submitted_buy_bull_data'))
     else:
         conf['FOLLOW_TREND'] = False
-        if conf['DELTA_PRICE_MIN'] <= delta_price <= conf['DELTA_PRICE_MAX']:
+        if conf['DELTA_PRICE_MIN'] <= delta_price <= conf['DELTA_PRICE_MAX'] and (conf['BIG-ONE-WAY'] or glb['cur_price'] - glb['min_price'] > 40):
             auto_buy('bear')
-        elif -conf['DELTA_PRICE_MIN'] >= delta_price >= -conf['DELTA_PRICE_MAX']:
+        elif -conf['DELTA_PRICE_MIN'] >= delta_price >= -conf['DELTA_PRICE_MAX'] and (conf['BIG-ONE-WAY'] or glb['max_price'] - glb['cur_price'] > 40):
             auto_buy('bull')
         elif delta_price > conf['DELTA_PRICE_MAX']:
             glb['can_buy_bull'] = True
