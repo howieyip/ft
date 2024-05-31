@@ -1165,12 +1165,12 @@ def pre_buy():
     delta_price = glb['ticker_list'][-1].get('price') - glb['ticker_list'][0].get('price')
     # log.info('pre_buy delta_price: %s' % delta_price)
 
-    if conf['BIG-ONE-WAY'] and abs(delta_price) >= conf['FOLLOW_TREND_PRICE']:
+    if abs(delta_price) >= conf['FOLLOW_TREND_PRICE']:
         conf['FOLLOW_TREND'] = True
-        if delta_price >= conf['FOLLOW_TREND_PRICE']:
+        if delta_price >= conf['FOLLOW_TREND_PRICE'] and glb['max_price'] - glb['cur_price'] > 20:
             auto_buy('bull')
             cancel_all(get_submitted_code('submitted_buy_bear_data'))
-        elif delta_price <= -conf['FOLLOW_TREND_PRICE']:
+        elif delta_price <= -conf['FOLLOW_TREND_PRICE'] and glb['cur_price'] - glb['min_price'] > 20:
             auto_buy('bear')
             cancel_all(get_submitted_code('submitted_buy_bull_data'))
     else:
@@ -1182,9 +1182,11 @@ def pre_buy():
         elif delta_price > conf['DELTA_PRICE_MAX']:
             glb['can_buy_bull'] = True
             cancel_all(get_submitted_code('submitted_buy_bear_data'))
+            log.info('cancel_all bear, delta_price: %s' % delta_price)
         elif delta_price < -conf['DELTA_PRICE_MAX']:
             glb['can_buy_bear'] = True
             cancel_all(get_submitted_code('submitted_buy_bull_data'))
+            log.info('cancel_all bull, delta_price: %s' % delta_price)
 
 
 # class RTData(ft.RTDataHandlerBase):
