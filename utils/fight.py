@@ -309,14 +309,14 @@ def _check_golden_line(need_log=True):
     avg_price = cur_rt_data.avg_price
     check_result = ''
     if golden_line['100'] > golden_line['0']:
-        if cur_price < avg_price:
+        if glb['almost_over'] or cur_price < avg_price:
             check_result = 'loss_bull'
         elif avg_price < cur_price < avg_price + 20:
             check_result = 'too_close'
         else:
             check_result = 'bull'
     else:
-        if cur_price > avg_price:
+        if glb['almost_over'] or cur_price > avg_price:
             check_result = 'loss_bear'
         elif avg_price > cur_price > avg_price - 20:
             check_result = 'too_close'
@@ -734,9 +734,12 @@ def _position_list_query(stock_type='', need_log=True):
             if item.code not in glb['max_nominal_price']:
                 glb['max_nominal_price'][item.code] = item.nominal_price
             elif item.nominal_price > glb['max_nominal_price'][item.code]:
-              glb['max_nominal_price'][item.code] = item.nominal_price
+                glb['max_nominal_price'][item.code] = item.nominal_price
 
-            glb['loss'][item.code] = False
+            if item.qty < 100e3:
+                glb['loss'][item.code] = True
+            else:
+                glb['loss'][item.code] = False
             if item.stock_name.find('牛') > -1:
                 if check_result == 'loss_bull':
                     log.info('loss_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
@@ -830,13 +833,11 @@ def auto_place_order(code, volume, price, batch=True, cancel=True):
     if cancel:
         cancel_all(code, trd_side=ft.TrdSide.SELL)
     if not batch:
-        glb['loss'][code] = True
         data = smart_sell(code, volume)
         if data is False:
             log.info('auto_place_order => smart_sell error')
         glb['auto_place_order_flag'] = False
         return
-    glb['loss'][code] = False
     item = []
     # [[600e3, 150e3, 150e3, 150e3, 150e3]]
     for i in range(0, len(conf['ORDER_LIST'])):
