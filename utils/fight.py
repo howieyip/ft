@@ -106,8 +106,6 @@ glb = {
     'ticker_list': [],
     'cur_price': 0,
     'last_price': 0,
-    'min_price': 99999,
-    'max_price': 0,
     'max_nominal_price': {},
     'filled_all_last_order': {},
     'filled_all_buy_order': {},
@@ -1149,6 +1147,8 @@ def get_submitted_code(submitted_type):
 
 
 def pre_buy():
+    if glb['rt_data'] is None:
+        return False
     #       code              time                 price        volume  turnover    ticker_direction       sequence   type      push_data_type
     # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
     while datestr_to_timestamp(glb['ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['ticker_list'][0].get('time')) > conf['DELTA_SECONDS']:
@@ -1166,19 +1166,22 @@ def pre_buy():
     delta_price = glb['ticker_list'][-1].get('price') - glb['ticker_list'][0].get('price')
     # log.info('pre_buy delta_price: %s' % delta_price)
 
+    rt_cur_price = glb['rt_data'].iloc[-1]['cur_price']
+    rt_max_price = glb['rt_data'].iloc[-30:]['cur_price'].max()
+    rt_min_price = glb['rt_data'].iloc[-30:]['cur_price'].min()
     if abs(delta_price) >= conf['FOLLOW_TREND_PRICE']:
         conf['FOLLOW_TREND'] = True
-        if delta_price >= conf['FOLLOW_TREND_PRICE'] and glb['max_price'] - glb['cur_price'] > 20:
+        if delta_price >= conf['FOLLOW_TREND_PRICE'] and rt_max_price - rt_cur_price > 20:
             auto_buy('bull')
             cancel_all(get_submitted_code('submitted_buy_bear_data'))
-        elif delta_price <= -conf['FOLLOW_TREND_PRICE'] and glb['cur_price'] - glb['min_price'] > 20:
+        elif delta_price <= -conf['FOLLOW_TREND_PRICE'] and rt_cur_price - rt_min_price > 20:
             auto_buy('bear')
             cancel_all(get_submitted_code('submitted_buy_bull_data'))
     else:
         conf['FOLLOW_TREND'] = False
-        if conf['DELTA_PRICE_MIN'] <= delta_price <= conf['DELTA_PRICE_MAX'] and (conf['BIG-ONE-WAY'] or glb['cur_price'] - glb['min_price'] > 40):
+        if conf['DELTA_PRICE_MIN'] <= delta_price <= conf['DELTA_PRICE_MAX'] and (conf['BIG-ONE-WAY'] or rt_cur_price - rt_min_price > 40):
             auto_buy('bear')
-        elif -conf['DELTA_PRICE_MIN'] >= delta_price >= -conf['DELTA_PRICE_MAX'] and (conf['BIG-ONE-WAY'] or glb['max_price'] - glb['cur_price'] > 40):
+        elif -conf['DELTA_PRICE_MIN'] >= delta_price >= -conf['DELTA_PRICE_MAX'] and (conf['BIG-ONE-WAY'] or rt_max_price - rt_cur_price > 40):
             auto_buy('bull')
         elif delta_price > conf['DELTA_PRICE_MAX']:
             glb['can_buy_bull'] = True
@@ -1267,10 +1270,6 @@ class Ticker(ft.TickerHandlerBase):
             return ret, data
 
         glb['cur_price'] = data0.price
-        if glb['max_price'] < glb['cur_price']:
-            glb['max_price'] = glb['cur_price']
-        if glb['min_price'] > glb['cur_price']:
-            glb['min_price'] = glb['cur_price']
 
         # 每波动10点查询持仓列表，方便统计盈亏和止损
         if abs(glb['cur_price'] - glb['last_price']) >= 10:
