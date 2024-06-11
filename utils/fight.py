@@ -743,9 +743,9 @@ def _position_list_query(stock_type='', need_log=True):
                     log.info('loss_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                     glb['loss'][item.code] = True
                 elif len(glb['submitted_sell_bull_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bull_list'][0].price - conf['FIRST_ORDER_DIFF'], 3):
-                    # 当前价格比最高价低2格的时候，重新挂单
-                    if item.nominal_price < round(glb['max_nominal_price'][item.code] - 0.001, 3):
-                        log.info('loss_order, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
+                    # 当前价格比买入后的最高价低3格的时候，重新挂单
+                    if item.nominal_price < round(glb['max_nominal_price'][item.code] - conf['FIRST_ORDER_DIFF'], 3):
+                        log.info('loss_order, code: %s, nominal_price: %s, max_nominal_price: %s' % (item.code, item.nominal_price, glb['max_nominal_price'][item.code]))
                         auto_place_order(item.code, item.qty, item.nominal_price - conf['FIRST_ORDER_DIFF'] - 0.001)
                 elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bear'):
                     log.info('sell_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
@@ -757,9 +757,9 @@ def _position_list_query(stock_type='', need_log=True):
                     log.info('loss_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                     glb['loss'][item.code] = True
                 elif len(glb['submitted_sell_bear_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bear_list'][0].price - conf['FIRST_ORDER_DIFF'], 3):
-                    # 当前价格比最高价低2格的时候，重新挂单
-                    if item.nominal_price < round(glb['max_nominal_price'][item.code] - 0.001, 3):
-                        log.info('loss_order, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
+                    # 当前价格比买入后的最高价低3格的时候，重新挂单
+                    if item.nominal_price < round(glb['max_nominal_price'][item.code] - conf['FIRST_ORDER_DIFF'], 3):
+                        log.info('loss_order, code: %s, nominal_price: %s, max_nominal_price: %s' % (item.code, item.nominal_price, glb['max_nominal_price'][item.code]))
                         auto_place_order(item.code, item.qty, item.nominal_price - conf['FIRST_ORDER_DIFF'] - 0.001)
                 elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bull'):
                     log.info('sell_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
@@ -885,12 +885,12 @@ class TradeOrder(ft.TradeOrderHandlerBase):
                     auto_place_order(data.code, data.dealt_qty, data.price, cancel=False)
             elif data.trd_side == ft.TrdSide.SELL:
                 reset_submitted_sell(data.code, data.stock_name, data)
-                position_list_query()
+                _position_list_query()
         elif data.order_status == ft.OrderStatus.FILLED_PART:
             if data.trd_side == ft.TrdSide.BUY:
                 set_has(data.code, data.stock_name)
         elif data.order_status == ft.OrderStatus.SUBMIT_FAILED or data.order_status == ft.OrderStatus.FAILED:
-            position_list_query()
+            _position_list_query()
         elif data.order_status == ft.OrderStatus.CANCELLED_ALL:
             if data.trd_side == ft.TrdSide.BUY:
                 reset_submitted_buy(data.code, data.stock_name)
