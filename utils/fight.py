@@ -307,17 +307,17 @@ def _check_golden_line(need_log=True):
     avg_price = cur_rt_data.avg_price
     check_result = ''
     if golden_line['100'] > golden_line['0']:
-        if glb['almost_over'] or cur_price < avg_price:
+        if glb['almost_over']:
             check_result = 'loss_bull'
-        elif avg_price < cur_price < avg_price + 20:
-            check_result = 'too_close'
+        elif cur_price < avg_price + 20:
+            check_result = 'to_reverse'
         else:
             check_result = 'bull'
     else:
-        if glb['almost_over'] or cur_price > avg_price:
+        if glb['almost_over']:
             check_result = 'loss_bear'
-        elif avg_price > cur_price > avg_price - 20:
-            check_result = 'too_close'
+        elif cur_price > avg_price - 20:
+            check_result = 'to_reverse'
         else:
             check_result = 'bear'
     glb['golden_line']['check_result'] = check_result
@@ -727,17 +727,14 @@ def _position_list_query(stock_type='', need_log=True):
             # 还有能挂单的量则重新挂单
             if item.can_sell_qty > 0 and conf['AUTO_PLACE_ORDER'] and not glb['to_over']:
                 log.info('auto_place_order, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                auto_place_order(item.code, item.qty, max(item.nominal_price, item.cost_price), not glb['almost_over'])
+                auto_place_order(item.code, item.qty, max(item.nominal_price, item.cost_price), batch=not glb['almost_over'])
 
             if item.code not in glb['max_nominal_price']:
                 glb['max_nominal_price'][item.code] = item.nominal_price
             elif item.nominal_price > glb['max_nominal_price'][item.code]:
                 glb['max_nominal_price'][item.code] = item.nominal_price
 
-            if item.qty < 100e3:
-                glb['loss'][item.code] = True
-            else:
-                glb['loss'][item.code] = False
+            glb['loss'][item.code] = False
             if item.stock_name.find('牛') > -1:
                 if check_result == 'loss_bull':
                     log.info('loss_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
@@ -878,6 +875,7 @@ class TradeOrder(ft.TradeOrderHandlerBase):
             glb['filled_all_last_order'][data.code] = {'updated_time': data.updated_time, 'price': data.price, 'trd_side': data.trd_side}
             glb['filled_all_last_order']['last'] = {'updated_time': data.updated_time, 'price': data.price, 'trd_side': data.trd_side}
             if data.trd_side == ft.TrdSide.BUY:
+                glb['max_nominal_price'][data.code] = data.price
                 reset_submitted_buy(data.code, data.stock_name)
                 set_has(data.code, data.stock_name)
                 if conf['AUTO_PLACE_ORDER'] and not glb['to_over']:
@@ -885,12 +883,12 @@ class TradeOrder(ft.TradeOrderHandlerBase):
                     auto_place_order(data.code, data.dealt_qty, data.price, cancel=False)
             elif data.trd_side == ft.TrdSide.SELL:
                 reset_submitted_sell(data.code, data.stock_name, data)
-                _position_list_query()
+                position_list_query()
         elif data.order_status == ft.OrderStatus.FILLED_PART:
             if data.trd_side == ft.TrdSide.BUY:
                 set_has(data.code, data.stock_name)
         elif data.order_status == ft.OrderStatus.SUBMIT_FAILED or data.order_status == ft.OrderStatus.FAILED:
-            _position_list_query()
+            position_list_query()
         elif data.order_status == ft.OrderStatus.CANCELLED_ALL:
             if data.trd_side == ft.TrdSide.BUY:
                 reset_submitted_buy(data.code, data.stock_name)
