@@ -822,6 +822,9 @@ def auto_place_order(code, volume, price, batch=True, cancel=True):
         return False
     if price > conf['CUR_PRICE_MAX']:
         return False
+    order_book = get_order_book(code)
+    if order_book:
+        price = max(price, order_book['Bid'][0][0])
     if volume < 100e3:
         batch = False
     glb['auto_place_order_flag'] = True
