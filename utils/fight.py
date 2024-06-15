@@ -743,7 +743,7 @@ def _position_list_query(stock_type='', need_log=True):
                     # 当前价格比买入后的最高价低3格的时候，重新挂单
                     if item.nominal_price < round(glb['max_nominal_price'][item.code] - conf['FIRST_ORDER_DIFF'], 3):
                         log.info('loss_order, code: %s, nominal_price: %s, max_nominal_price: %s' % (item.code, item.nominal_price, glb['max_nominal_price'][item.code]))
-                        auto_place_order(item.code, item.qty, item.nominal_price - conf['FIRST_ORDER_DIFF'] - 0.001)
+                        auto_place_order(item.code, item.qty, item.nominal_price, loss=True)
                 elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bear'):
                     log.info('sell_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                     # sell_all(code=item.code, qty=item.qty)
@@ -757,7 +757,7 @@ def _position_list_query(stock_type='', need_log=True):
                     # 当前价格比买入后的最高价低3格的时候，重新挂单
                     if item.nominal_price < round(glb['max_nominal_price'][item.code] - conf['FIRST_ORDER_DIFF'], 3):
                         log.info('loss_order, code: %s, nominal_price: %s, max_nominal_price: %s' % (item.code, item.nominal_price, glb['max_nominal_price'][item.code]))
-                        auto_place_order(item.code, item.qty, item.nominal_price - conf['FIRST_ORDER_DIFF'] - 0.001)
+                        auto_place_order(item.code, item.qty, item.nominal_price, loss=True)
                 elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bull'):
                     log.info('sell_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
                     # sell_all(code=item.code, qty=item.qty)
@@ -816,15 +816,18 @@ class OrderBook(ft.OrderBookHandlerBase):
         return ret, data
 
 
-def auto_place_order(code, volume, price, batch=True, cancel=True):
+def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
     if glb['auto_place_order_flag']:
         log.info('auto_place_order_flag True')
         return False
     if price > conf['CUR_PRICE_MAX']:
         return False
+    first_order_price = price + conf['FIRST_ORDER_DIFF']
+    if loss:
+        first_order_price = price - 0.001
     order_book = get_order_book(code)
     if order_book:
-        price = max(price, order_book['Bid'][0][0])
+        first_order_price = max(first_order_price, order_book['Bid'][0][0])
     if volume < 100e3:
         batch = False
     glb['auto_place_order_flag'] = True
@@ -846,14 +849,14 @@ def auto_place_order(code, volume, price, batch=True, cancel=True):
             break
     volume_diff = volume - item[0]
     if glb['move_position']:
-        price += 0.02
+        first_order_price += 0.02
     for i in range(1, len(item)): # 从1开始
         vol = item[i]
         if volume_diff > 0 and i == len(item) - 1:
             vol += volume_diff
         if vol == 0:
             continue
-        data = smart_sell(code, vol, price + conf['FIRST_ORDER_DIFF'] + 0.001 * (i - 1))
+        data = smart_sell(code, vol, first_order_price + 0.001 * (i - 1))
         if data is False:
             log.info('auto_place_order => smart_sell error')
         elif glb['move_position']:
