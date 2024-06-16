@@ -106,6 +106,9 @@ glb = {
     'ticker_list': [],
     'cur_price': 0,
     'last_price': 0,
+    'kline_data': None,
+    'MA10': 0,
+    'MA20': 0,
     'max_nominal_price': {},
     'filled_all_last_order': {},
     'filled_all_buy_order': {},
@@ -228,7 +231,7 @@ def get_rt_data():
     ret, rt_data = quote_ctx.get_rt_data(CONST['HSI_CODE'])
     # log.info('get_rt_data, ret: %s, rt_data:%s' % (ret, rt_data))
     if ret != ft.RET_OK:
-        log.info('get_rt_data error, ret: %s, rt_data:%s' % (ret, rt_data))
+        log.info('get_rt_data error, ret: %s, rt_data:\n%s' % (ret, rt_data))
         return False
     #       code                 time  is_blank  opened_mins  cur_price  last_close     avg_price  volume      turnover
     # 0    HK.800000  2023-10-31 09:30:00     False          570   17337.70    17406.36  17337.700000       0  1.682861e+09
@@ -240,6 +243,36 @@ def get_rt_data():
     # data = pd.DataFrame(data)
     glb['rt_data'] = rt_data
     return rt_data
+
+
+def get_cur_kline(num=20):
+    ret, kline_data = quote_ctx.get_cur_kline(CONST['MHI_CODE'], num, ft.KLType.K_1M)
+    # log.info('get_cur_kline, ret: %s, kline_data:%s' % (ret, kline_data))
+    if ret != ft.RET_OK:
+        log.info('get_cur_kline error, ret: %s, kline_data:\n%s' % (ret, kline_data))
+        return False
+    #            code         name             time_key     open    close     high      low  volume  turnover  pe_ratio  turnover_rate  last_close
+    # 0   HK.MHImain  小恒指主连(2406)  2024-06-15 02:42:00  17773.0  17772.0  17773.0  17769.0      18  319883.0       0.0            0.0     17772.0
+    # 1   HK.MHImain  小恒指主连(2406)  2024-06-15 02:43:00  17775.0  17776.0  17776.0  17775.0       8  142205.0       0.0            0.0     17772.0
+    # 18  HK.MHImain  小恒指主连(2406)  2024-06-15 03:00:00  17796.0  17796.0  17796.0  17793.0      30  533842.0       0.0            0.0     17795.0
+    # 19  HK.MHImain  小恒指主连(2406)  2024-06-17 09:16:00  17796.0  17796.0  17796.0  17796.0       0       0.0       0.0            0.0     17796.0
+    glb['kline_data'] = kline_data
+    return kline_data
+
+
+def draw_ma_line():
+    kline_data = get_cur_kline()
+    if kline_data is False or len(kline_data) < 20:
+        return False
+    MA20_SUM = 0
+    MA10_SUM = 0
+    for i in range(-1, -21, -1):
+        MA20_SUM += kline_data.iloc[i].close
+        if i > -11:
+            MA10_SUM += kline_data.iloc[i].close
+    glb['MA10'] = round(MA10_SUM / 10, 3)
+    glb['MA20'] = round(MA20_SUM / 20, 3)
+    log.info('draw_ma_line, MA10: %s, MA20: %s' % (glb['MA10'], glb['MA20']))
 
 
 def draw_golden_line():
@@ -302,6 +335,7 @@ def _check_golden_line(need_log=True):
         log.info('golden_line not ready')
         glb['golden_line']['check_result'] = 'not_ready'
         return 'not_ready'
+    draw_ma_line()
     cur_rt_data = glb['rt_data'].iloc[-1]
     cur_price = cur_rt_data.cur_price
     avg_price = cur_rt_data.avg_price
@@ -309,15 +343,15 @@ def _check_golden_line(need_log=True):
     if golden_line['100'] > golden_line['0']:
         if glb['almost_over']:
             check_result = 'loss_bull'
-        elif cur_price < avg_price + 20:
-            check_result = 'to_reverse'
+        elif glb['MA10'] < glb['MA20']:
+            check_result = 'death_cross'
         else:
             check_result = 'bull'
     else:
         if glb['almost_over']:
             check_result = 'loss_bear'
-        elif cur_price > avg_price - 20:
-            check_result = 'to_reverse'
+        elif glb['MA10'] > glb['MA20']:
+            check_result = 'golden_cross'
         else:
             check_result = 'bear'
     glb['golden_line']['check_result'] = check_result
@@ -1185,9 +1219,9 @@ def pre_buy():
             cancel_all(get_submitted_code('submitted_buy_bull_data'))
     else:
         conf['FOLLOW_TREND'] = False
-        if conf['DELTA_PRICE_MIN'] <= delta_price <= conf['DELTA_PRICE_MAX'] and (conf['BIG-ONE-WAY'] or rt_cur_price - rt_min_price > 40):
+        if conf['DELTA_PRICE_MIN'] <= delta_price <= conf['DELTA_PRICE_MAX'] and (conf['BIG-ONE-WAY'] or rt_cur_price - rt_min_price > 20):
             auto_buy('bear')
-        elif -conf['DELTA_PRICE_MIN'] >= delta_price >= -conf['DELTA_PRICE_MAX'] and (conf['BIG-ONE-WAY'] or rt_max_price - rt_cur_price > 40):
+        elif -conf['DELTA_PRICE_MIN'] >= delta_price >= -conf['DELTA_PRICE_MAX'] and (conf['BIG-ONE-WAY'] or rt_max_price - rt_cur_price > 20):
             auto_buy('bull')
         elif delta_price > conf['DELTA_PRICE_MAX']:
             glb['can_buy_bull'] = True
@@ -1400,6 +1434,9 @@ def start(config=None):
     if data is False:
         return False
     data = subscribe([CONST['MHI_CODE']], [ft.SubType.TICKER])
+    if data is False:
+        return False
+    data = subscribe([CONST['MHI_CODE']], [ft.SubType.K_1M], subscribe_push=False)
     if data is False:
         return False
     quote_ctx.set_handler(SysNotify())
