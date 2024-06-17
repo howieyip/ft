@@ -31,7 +31,7 @@ conf = {
 
     'DELTA_SECONDS': 60,                            # 多少秒内
     'DELTA_PRICE_MIN': 8,                           # 最小波动多少点
-    'DELTA_PRICE_MAX': 14,                          # 最大波动多少点
+    'DELTA_PRICE_MAX': 18,                          # 最大波动多少点
     'FOLLOW_TREND_PRICE': 20,                       # 波动多少点，强制改为顺势买入
     'BUY_VOLUME': 100e3,                            # 下单多少股
     'MAX_VOLUME': 300e3,                            # 最大持仓股数，若超过则不会再买入
@@ -260,7 +260,7 @@ def get_cur_kline(num=20):
     return kline_data
 
 
-def draw_ma_line():
+def draw_ma_line(need_log=True):
     kline_data = get_cur_kline()
     if kline_data is False or len(kline_data) < 20:
         return False
@@ -272,7 +272,8 @@ def draw_ma_line():
             MA10_SUM += kline_data.iloc[i].close
     glb['MA10'] = round(MA10_SUM / 10, 3)
     glb['MA20'] = round(MA20_SUM / 20, 3)
-    log.info('draw_ma_line, MA10: %s, MA20: %s' % (glb['MA10'], glb['MA20']))
+    if need_log:
+        log.info('draw_ma_line, MA10: %s, MA20: %s' % (glb['MA10'], glb['MA20']))
 
 
 def draw_golden_line():
@@ -335,7 +336,7 @@ def _check_golden_line(need_log=True):
         log.info('golden_line not ready')
         glb['golden_line']['check_result'] = 'not_ready'
         return 'not_ready'
-    draw_ma_line()
+    draw_ma_line(need_log)
     cur_rt_data = glb['rt_data'].iloc[-1]
     cur_price = cur_rt_data.cur_price
     avg_price = cur_rt_data.avg_price
@@ -343,16 +344,12 @@ def _check_golden_line(need_log=True):
     if golden_line['100'] > golden_line['0']:
         if glb['almost_over']:
             check_result = 'loss_bull'
-        elif glb['MA10'] < glb['MA20']:
-            check_result = 'death_cross'
-        else:
+        elif glb['MA10'] - glb['MA20'] > 10 and (cur_price > avg_price or cur_price < avg_price - 40):
             check_result = 'bull'
     else:
         if glb['almost_over']:
             check_result = 'loss_bear'
-        elif glb['MA10'] > glb['MA20']:
-            check_result = 'golden_cross'
-        else:
+        elif glb['MA10'] - glb['MA20'] < -10 and (cur_price < avg_price or cur_price > avg_price + 40):
             check_result = 'bear'
     glb['golden_line']['check_result'] = check_result
     if need_log:
