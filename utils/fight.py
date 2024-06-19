@@ -346,11 +346,15 @@ def _check_golden_line(need_log=True):
             check_result = 'loss_bull'
         elif glb['MA10'] - glb['MA20'] > 10 and (cur_price > avg_price or cur_price < avg_price - 40):
             check_result = 'bull'
+        elif glb['MA10'] - glb['MA20'] < 0:
+            check_result = 'cancel_bull'
     else:
         if glb['almost_over']:
             check_result = 'loss_bear'
         elif glb['MA10'] - glb['MA20'] < -10 and (cur_price < avg_price or cur_price > avg_price + 40):
             check_result = 'bear'
+        elif glb['MA10'] - glb['MA20'] > 0:
+            check_result = 'cancel_bear'
     glb['golden_line']['check_result'] = check_result
     if need_log:
         exclude_keys = {'261.8', '300'}
@@ -1184,7 +1188,7 @@ def get_submitted_code(submitted_type):
 
 
 def pre_buy():
-    if glb['rt_data'] is None:
+    if glb['kline_data'] is None:
         return False
     #       code              time                 price        volume  turnover    ticker_direction       sequence   type      push_data_type
     # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
@@ -1203,22 +1207,21 @@ def pre_buy():
     delta_price = glb['ticker_list'][-1].get('price') - glb['ticker_list'][0].get('price')
     # log.info('pre_buy delta_price: %s' % delta_price)
 
-    rt_cur_price = glb['rt_data'].iloc[-1]['cur_price']
-    rt_max_price = glb['rt_data'].iloc[-30:]['cur_price'].max()
-    rt_min_price = glb['rt_data'].iloc[-30:]['cur_price'].min()
+    max_price = glb['kline_data'].iloc[-30:]['close'].max()
+    min_price = glb['kline_data'].iloc[-30:]['close'].min()
     if abs(delta_price) >= conf['FOLLOW_TREND_PRICE']:
         conf['FOLLOW_TREND'] = True
-        if delta_price >= conf['FOLLOW_TREND_PRICE'] and rt_max_price - rt_cur_price > 20:
+        if delta_price >= conf['FOLLOW_TREND_PRICE'] and max_price - glb['cur_price'] > 20:
             auto_buy('bull')
             cancel_all(get_submitted_code('submitted_buy_bear_data'))
-        elif delta_price <= -conf['FOLLOW_TREND_PRICE'] and rt_cur_price - rt_min_price > 20:
+        elif delta_price <= -conf['FOLLOW_TREND_PRICE'] and glb['cur_price'] - min_price > 20:
             auto_buy('bear')
             cancel_all(get_submitted_code('submitted_buy_bull_data'))
     else:
         conf['FOLLOW_TREND'] = False
-        if conf['DELTA_PRICE_MIN'] <= delta_price <= conf['DELTA_PRICE_MAX'] and (conf['BIG-ONE-WAY'] or rt_cur_price - rt_min_price > 20):
+        if conf['DELTA_PRICE_MIN'] <= delta_price <= conf['DELTA_PRICE_MAX'] and (conf['BIG-ONE-WAY'] or glb['cur_price'] - min_price > 15):
             auto_buy('bear')
-        elif -conf['DELTA_PRICE_MIN'] >= delta_price >= -conf['DELTA_PRICE_MAX'] and (conf['BIG-ONE-WAY'] or rt_max_price - rt_cur_price > 20):
+        elif -conf['DELTA_PRICE_MIN'] >= delta_price >= -conf['DELTA_PRICE_MAX'] and (conf['BIG-ONE-WAY'] or max_price - glb['cur_price'] > 15):
             auto_buy('bull')
         elif delta_price > conf['DELTA_PRICE_MAX']:
             glb['can_buy_bull'] = True
@@ -1315,9 +1318,9 @@ class Ticker(ft.TickerHandlerBase):
         # 每10秒查询分割线，方便撤单和止损
         if s % 10 == 0:
             check_result = check_golden_line(need_log=True if s == 0 else False) or glb['golden_line']['check_result']
-            if glb['submitted_buy_bull_data'] is not None and glb['submitted_buy_bull_data'].price > 0.02 and check_result != 'bull':
+            if glb['submitted_buy_bull_data'] is not None and glb['submitted_buy_bull_data'].price > 0.02 and check_result == 'cancel_bull':
                 cancel_all(glb['submitted_buy_bull_data'].code)
-            elif glb['submitted_buy_bear_data'] is not None and glb['submitted_buy_bear_data'].price > 0.02 and check_result != 'bear':
+            elif glb['submitted_buy_bear_data'] is not None and glb['submitted_buy_bear_data'].price > 0.02 and check_result == 'cancel_bear':
                 cancel_all(glb['submitted_buy_bear_data'].code)
 
         # 自动买入和自动调价
