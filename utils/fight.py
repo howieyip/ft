@@ -857,10 +857,11 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
         return False
     first_order_price = price + conf['FIRST_ORDER_DIFF']
     if loss:
-        first_order_price = price - 0.001
-    order_book = get_order_book(code)
-    if order_book:
-        first_order_price = max(first_order_price, order_book['Bid'][0][0])
+        order_book = get_order_book(code)
+        if order_book:
+            first_order_price = order_book['Bid'][0][0]
+        else:
+            first_order_price = price - 0.001
     if volume < 100e3:
         batch = False
     glb['auto_place_order_flag'] = True
