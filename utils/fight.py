@@ -978,13 +978,11 @@ def auto_adjust(delta_price, i, adjust_dict, submitted_type):
             delta_seconds = datestr_to_timestamp(glb['adjust_ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['adjust_ticker_list'][i].get('time'))
             if delta_seconds <= adjust_dict['rise'][0] and data.price < rise_price:
                 log.info('%s order price: %s, rise_price: %s' % (submitted_type, data.price, rise_price))
-                data.price = rise_price
                 modify_order(data.order_id, rise_price, data.qty)
     elif fall_condition:
         delta_seconds = datestr_to_timestamp(glb['adjust_ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['adjust_ticker_list'][i].get('time'))
         if delta_seconds <= adjust_dict['fall'][0] and data.price > fall_price:
             log.info('%s order price: %s, fall_price: %s' % (submitted_type, data.price, fall_price))
-            data.price = fall_price
             modify_order(data.order_id, fall_price, data.qty)
 
 
