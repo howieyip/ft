@@ -1299,7 +1299,7 @@ class Ticker(ft.TickerHandlerBase):
                 log.info('cancel_all bear, check_result: %s' % check_result)
             # 每分钟查询持仓列表
             if s == 0:
-                position_list_query()
+                position_list_query(need_log=False)
 
         # 自动买入和自动调价
         if conf['AUTO_BUY'] or conf['AUTO_ADJUST']:
