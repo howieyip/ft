@@ -867,7 +867,7 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
     if cancel:
         cancel_all(code, trd_side=ft.TrdSide.SELL)
     if not batch:
-        data = smart_sell(code, volume)
+        data = smart_sell(code, volume, type='Bid' if loss else 'Ask')
         if data is False:
             log.info('auto_place_order => smart_sell error')
         glb['auto_place_order_flag'] = False
