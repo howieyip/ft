@@ -755,7 +755,7 @@ def _position_list_query(stock_type='', need_log=True):
             set_has(item.code, item.stock_name)
             # 还有能挂单的量则重新挂单
             if item.can_sell_qty > 0 and conf['AUTO_PLACE_ORDER'] and not glb['to_over']:
-                log.info('auto_place_order, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
+                log.info('auto_place_order, code: %s, nominal_price: %s, can_sell_qty: %s' % (item.code, item.nominal_price, item.can_sell_qty))
                 auto_place_order(item.code, item.qty, max(item.nominal_price, item.cost_price), batch=not glb['almost_over'])
 
             if item.code not in glb['max_nominal_price']:
@@ -963,7 +963,7 @@ def auto_adjust(delta_price, i, adjust_dict, submitted_type):
         if glb['almost_over']:
             fall_price = round(ask_price + (adjust_dict['fall'][2] - 1) * 0.001, 3)
         else:
-            fall_price = round(max(find_buy_price(data) + conf['LAST_ORDER_DIFF'], ask_price - 0.001), 3)
+            fall_price = round(max(find_buy_price(data) + conf['LAST_ORDER_DIFF'], ask_price), 3)
     rise_condition = False
     fall_condition = False
     if submitted_type.find('bull') > -1:
