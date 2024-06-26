@@ -353,7 +353,7 @@ def _check_golden_line(need_log=True):
     if need_log:
         exclude_keys = {'261.8', '300'}
         filtered_obj = {k: v for k, v in glb['golden_line'].items() if k not in exclude_keys}
-        log.info('cur_price: %s, avg_price: %s, golden_line: %s' % (cur_price, round(avg_price, 2), filtered_obj))
+        log.info('HSI cur_price: %s, avg_price: %s, golden_line: %s' % (cur_price, round(avg_price, 2), filtered_obj))
     return check_result
 
 
@@ -770,9 +770,9 @@ def _position_list_query(stock_type='', need_log=True):
             else:
                 first_order_diff = conf['FIRST_ORDER_DIFF']
             if item.stock_name.find('牛') > -1:
-                if len(glb['submitted_sell_bull_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bull_list'][0].price - first_order_diff, 3):
-                    # 当前价格比买入后的最高价低3格的时候，重新挂单
-                    if item.nominal_price < round(glb['max_nominal_price'][item.code] - conf['FIRST_ORDER_DIFF'], 3):
+                if len(glb['submitted_sell_bull_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bull_list'][0].price - conf['FIRST_ORDER_DIFF'], 3):
+                    # 当前价格比买入后的最高价低2-3格的时候，重新挂单
+                    if item.nominal_price < round(glb['max_nominal_price'][item.code] - first_order_diff, 3):
                         log.info('loss_order, code: %s, nominal_price: %s, max_nominal_price: %s' % (item.code, item.nominal_price, glb['max_nominal_price'][item.code]))
                         auto_place_order(item.code, item.qty, item.nominal_price, loss=True)
                 elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bear'):
@@ -781,9 +781,9 @@ def _position_list_query(stock_type='', need_log=True):
                     # has_sold = True
                     # glb['loss'][item.code] = True
             elif item.stock_name.find('熊') > -1:
-                if len(glb['submitted_sell_bear_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bear_list'][0].price - first_order_diff, 3):
-                    # 当前价格比买入后的最高价低3格的时候，重新挂单
-                    if item.nominal_price < round(glb['max_nominal_price'][item.code] - conf['FIRST_ORDER_DIFF'], 3):
+                if len(glb['submitted_sell_bear_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bear_list'][0].price - conf['FIRST_ORDER_DIFF'], 3):
+                    # 当前价格比买入后的最高价低2-3格的时候，重新挂单
+                    if item.nominal_price < round(glb['max_nominal_price'][item.code] - first_order_diff, 3):
                         log.info('loss_order, code: %s, nominal_price: %s, max_nominal_price: %s' % (item.code, item.nominal_price, glb['max_nominal_price'][item.code]))
                         auto_place_order(item.code, item.qty, item.nominal_price, loss=True)
                 elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bull'):
@@ -1298,7 +1298,7 @@ class Ticker(ft.TickerHandlerBase):
                 cancel_all(glb['submitted_buy_bear_data'].code)
                 log.info('cancel_all bear, check_result: %s' % check_result)
             # 每分钟查询持仓列表
-            if s == 0:
+            if s == 30:
                 position_list_query(need_log=False)
 
         # 自动买入和自动调价
