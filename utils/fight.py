@@ -880,7 +880,7 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
             break
     volume_diff = volume - item[0]
     if glb['move_position']:
-        first_order_price += 0.02
+        first_order_price += 0.015
     for i in range(1, len(item)): # 从1开始
         vol = item[i]
         if volume_diff > 0 and i == len(item) - 1:
