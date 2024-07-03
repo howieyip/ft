@@ -275,13 +275,7 @@ def draw_ma_line(need_log=True):
 
 
 def draw_golden_line():
-    rt_data = get_rt_data()
-    if rt_data is False or len(rt_data) < 5:
-        return False
-    if rt_data.iloc[-1].time[0:10] != glb['trade_date'].get('time'):
-        log.info('get_rt_data not today')
-        # return False
-    data = rt_data.iloc[:-1] # 排除最后一个数据，因为在当前分钟未结束时画分割线是不准确的
+    data = glb['rt_data'].iloc[:-1] # 排除最后一个数据，因为在当前分钟未结束时画分割线是不准确的
     # cur_index = data.shape[0] - 1
     nlargest_data = data.nlargest(2, 'cur_price')
     nsmallest_data = data.nsmallest(2, 'cur_price')
@@ -329,31 +323,36 @@ def draw_golden_line():
     return golden_line
 
 def _check_golden_line(need_log=True):
-    golden_line = draw_golden_line()
-    if golden_line is False:
-        log.info('golden_line not ready')
-        glb['golden_line']['check_result'] = 'not_ready'
-        return 'not_ready'
+    # rt_data = get_rt_data()
+    # if rt_data is False or len(rt_data) < 5:
+    #     return False
+    # if rt_data.iloc[-1].time[0:10] != glb['trade_date'].get('time'):
+    #     log.info('get_rt_data not today')
+
+    # golden_line = draw_golden_line()
+    # if golden_line is False:
+    #     log.info('golden_line not ready')
+    #     glb['golden_line']['check_result'] = 'not_ready'
+    #     return 'not_ready'
     draw_ma_line(need_log)
-    cur_rt_data = glb['rt_data'].iloc[-1]
-    cur_price = cur_rt_data.cur_price
-    avg_price = cur_rt_data.avg_price
+    # cur_rt_data = rt_data.iloc[-1]
+    # cur_price = cur_rt_data.cur_price
+    # avg_price = cur_rt_data.avg_price
     check_result = ''
-    if golden_line['100'] > golden_line['0']:
-        if glb['MA10'] - glb['MA20'] > 10 and (cur_price > avg_price or cur_price < avg_price - 40):
-            check_result = 'bull'
-        elif glb['MA10'] - glb['MA20'] < 0:
-            check_result = 'cancel_bull'
-    else:
-        if glb['MA10'] - glb['MA20'] < -10 and (cur_price < avg_price or cur_price > avg_price + 40):
-            check_result = 'bear'
-        elif glb['MA10'] - glb['MA20'] > 0:
-            check_result = 'cancel_bear'
+    if glb['MA10'] - glb['MA20'] < 0:
+        check_result = 'cancel_bull'
+    elif glb['MA10'] - glb['MA20'] > 0:
+        check_result = 'cancel_bear'
+    if glb['MA10'] - glb['MA20'] > 10:
+        check_result = 'bull'
+    elif glb['MA10'] - glb['MA20'] < -10:
+        check_result = 'bear'
     glb['golden_line']['check_result'] = check_result
     if need_log:
         exclude_keys = {'261.8', '300'}
         filtered_obj = {k: v for k, v in glb['golden_line'].items() if k not in exclude_keys}
-        log.info('HSI cur_price: %s, avg_price: %s, golden_line: %s' % (cur_price, round(avg_price, 2), filtered_obj))
+        # log.info('HSI cur_price: %s, avg_price: %s, golden_line: %s' % (cur_price, round(avg_price, 2), filtered_obj))
+        log.info('golden_line: %s' % filtered_obj)
     return check_result
 
 
