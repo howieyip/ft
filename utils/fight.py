@@ -1179,23 +1179,23 @@ def pre_buy():
     #         log.info('pre_buy delta_seconds: %s' % delta_seconds)
     #         return False
     delta_price = glb['ticker_list'][-1].get('price') - glb['ticker_list'][0].get('price')
-    # log.info('pre_buy delta_price: %s' % delta_price)
+    log.info('pre_buy cur_seconds: %s, delta_price: %s' % (cur_seconds, delta_price))
 
     max_price = glb['kline_data'].iloc[-30:]['close'].max()
     min_price = glb['kline_data'].iloc[-30:]['close'].min()
     if abs(delta_price) >= conf['FOLLOW_TREND_PRICE']:
         conf['FOLLOW_TREND'] = True
-        if delta_price >= conf['FOLLOW_TREND_PRICE'] and max_price - glb['cur_price'] > 20:
+        if delta_price >= conf['FOLLOW_TREND_PRICE'] and max_price - glb['cur_price'] > conf['FOLLOW_TREND_PRICE']:
             auto_buy('bull')
             cancel_all(get_submitted_code('submitted_buy_bear_data'))
-        elif delta_price <= -conf['FOLLOW_TREND_PRICE'] and glb['cur_price'] - min_price > 20:
+        elif delta_price <= -conf['FOLLOW_TREND_PRICE'] and glb['cur_price'] - min_price > conf['FOLLOW_TREND_PRICE']:
             auto_buy('bear')
             cancel_all(get_submitted_code('submitted_buy_bull_data'))
     else:
         conf['FOLLOW_TREND'] = False
-        if conf['DELTA_PRICE_MIN'] <= delta_price <= conf['DELTA_PRICE_MAX'] and (conf['BIG-ONE-WAY'] or glb['cur_price'] - min_price > 15):
+        if conf['DELTA_PRICE_MIN'] <= delta_price <= conf['DELTA_PRICE_MAX']:
             auto_buy('bear')
-        elif -conf['DELTA_PRICE_MIN'] >= delta_price >= -conf['DELTA_PRICE_MAX'] and (conf['BIG-ONE-WAY'] or max_price - glb['cur_price'] > 15):
+        elif -conf['DELTA_PRICE_MIN'] >= delta_price >= -conf['DELTA_PRICE_MAX']:
             auto_buy('bull')
         elif delta_price > conf['DELTA_PRICE_MAX'] and get_submitted_code('submitted_buy_bear_data'):
             cancel_all(get_submitted_code('submitted_buy_bear_data'))
