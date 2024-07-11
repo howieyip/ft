@@ -339,10 +339,6 @@ def _check_golden_line(need_log=True):
     # cur_price = cur_rt_data.cur_price
     # avg_price = cur_rt_data.avg_price
     check_result = ''
-    if glb['MA10'] - glb['MA20'] < 5:
-        check_result = 'cancel_bull'
-    elif glb['MA10'] - glb['MA20'] > 5:
-        check_result = 'cancel_bear'
     if glb['MA10'] - glb['MA20'] > 10:
         check_result = 'bull'
     elif glb['MA10'] - glb['MA20'] < -10:
@@ -1290,10 +1286,10 @@ class Ticker(ft.TickerHandlerBase):
         # 每10秒查询分割线，方便撤单和止损
         if s % 10 == 0:
             check_result = check_golden_line(need_log=True if s == 0 else False) or glb['golden_line']['check_result']
-            if glb['submitted_buy_bull_data'] is not None and glb['submitted_buy_bull_data'].price > 0.02 and check_result == 'cancel_bull':
+            if glb['submitted_buy_bull_data'] is not None and glb['submitted_buy_bull_data'].price > 0.02 and check_result != 'bull':
                 cancel_all(glb['submitted_buy_bull_data'].code)
                 log.info('cancel_all bull, check_result: %s' % check_result)
-            elif glb['submitted_buy_bear_data'] is not None and glb['submitted_buy_bear_data'].price > 0.02 and check_result == 'cancel_bear':
+            elif glb['submitted_buy_bear_data'] is not None and glb['submitted_buy_bear_data'].price > 0.02 and check_result != 'bear':
                 cancel_all(glb['submitted_buy_bear_data'].code)
                 log.info('cancel_all bear, check_result: %s' % check_result)
             # 每分钟查询持仓列表
