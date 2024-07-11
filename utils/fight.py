@@ -339,9 +339,9 @@ def _check_golden_line(need_log=True):
     # cur_price = cur_rt_data.cur_price
     # avg_price = cur_rt_data.avg_price
     check_result = ''
-    if glb['MA10'] - glb['MA20'] < 0:
+    if glb['MA10'] - glb['MA20'] < 5:
         check_result = 'cancel_bull'
-    elif glb['MA10'] - glb['MA20'] > 0:
+    elif glb['MA10'] - glb['MA20'] > 5:
         check_result = 'cancel_bear'
     if glb['MA10'] - glb['MA20'] > 10:
         check_result = 'bull'
@@ -916,7 +916,7 @@ class TradeOrder(ft.TradeOrderHandlerBase):
                 set_has(data.code, data.stock_name)
                 if conf['AUTO_PLACE_ORDER'] and not glb['to_over']:
                     time.sleep(2)
-                    auto_place_order(data.code, data.dealt_qty, data.price, cancel=False)
+                    auto_place_order(data.code, data.dealt_qty, data.price)
             elif data.trd_side == ft.TrdSide.SELL:
                 reset_submitted_sell(data.code, data.stock_name, data)
                 position_list_query()
@@ -1179,7 +1179,7 @@ def pre_buy():
     #         log.info('pre_buy delta_seconds: %s' % delta_seconds)
     #         return False
     delta_price = glb['ticker_list'][-1].get('price') - glb['ticker_list'][0].get('price')
-    log.info('pre_buy cur_seconds: %s, delta_price: %s' % (cur_seconds, delta_price))
+    # log.info('pre_buy cur_seconds: %s, delta_price: %s' % (cur_seconds, delta_price))
 
     max_price = glb['kline_data'].iloc[-30:]['close'].max()
     min_price = glb['kline_data'].iloc[-30:]['close'].min()
