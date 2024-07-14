@@ -56,8 +56,8 @@ conf = {
         [400e3, 100e3, 100e3, 100e3, 100e3],
         [300e3, 50e3, 50e3, 100e3, 100e3],
         [200e3, 50e3, 50e3, 50e3, 50e3],
-        [150e3, 50e3, 0, 50e3, 50e3],
-        [100e3, 50e3, 0, 50e3, 0]
+        [150e3, 50e3, 50e3, 30e3, 20e3],
+        [100e3, 30e3, 20e3, 30e3, 20e3]
     ],
     'FIRST_ORDER_DIFF': 0.002,                      # 第一个卖单为第几档
     'LAST_ORDER_DIFF': 0.005,                       # 最后一个卖单为第几档
@@ -765,7 +765,7 @@ def _position_list_query(stock_type='', need_log=True):
             else:
                 first_order_diff = conf['FIRST_ORDER_DIFF']
             if item.stock_name.find('牛') > -1:
-                if len(glb['submitted_sell_bull_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bull_list'][0].price - conf['FIRST_ORDER_DIFF'], 3):
+                if len(glb['submitted_sell_bull_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bull_list'][0].price - 0.002, 3):
                     # 当前价格比买入后的最高价低2-3格的时候，重新挂单
                     if item.nominal_price < round(glb['max_nominal_price'][item.code] - first_order_diff, 3):
                         log.info('loss_order, code: %s, nominal_price: %s, max_nominal_price: %s' % (item.code, item.nominal_price, glb['max_nominal_price'][item.code]))
@@ -776,7 +776,7 @@ def _position_list_query(stock_type='', need_log=True):
                     # has_sold = True
                     # glb['loss'][item.code] = True
             elif item.stock_name.find('熊') > -1:
-                if len(glb['submitted_sell_bear_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bear_list'][0].price - conf['FIRST_ORDER_DIFF'], 3):
+                if len(glb['submitted_sell_bear_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bear_list'][0].price - 0.002, 3):
                     # 当前价格比买入后的最高价低2-3格的时候，重新挂单
                     if item.nominal_price < round(glb['max_nominal_price'][item.code] - first_order_diff, 3):
                         log.info('loss_order, code: %s, nominal_price: %s, max_nominal_price: %s' % (item.code, item.nominal_price, glb['max_nominal_price'][item.code]))
