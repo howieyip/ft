@@ -339,9 +339,9 @@ def _check_golden_line(need_log=True):
     # cur_price = cur_rt_data.cur_price
     # avg_price = cur_rt_data.avg_price
     check_result = ''
-    if glb['MA10'] - glb['MA20'] > 10:
+    if glb['MA10'] - glb['MA20'] > 10 and glb['cur_price'] - glb['MA10'] < 20:
         check_result = 'bull'
-    elif glb['MA10'] - glb['MA20'] < -10:
+    elif glb['MA10'] - glb['MA20'] < -10 and glb['MA10'] - glb['cur_price'] < 20:
         check_result = 'bear'
     glb['golden_line']['check_result'] = check_result
     if need_log:
