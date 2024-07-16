@@ -670,7 +670,7 @@ def reset_submitted_sell(code, stock_name='', data=None):
         log.info('reset_submitted_sell bear: %s' % code)
 
 
-# 统计今日盈亏并止损
+# 统计今日盈亏
 def sum_today_pl_val(today_buy_data):
     glb['today_pl_val_bull'] = 0
     glb['today_pl_val_bear'] = 0
@@ -683,17 +683,17 @@ def sum_today_pl_val(today_buy_data):
     log.info('MHI cur_price: %s, today bull: %s, today bear: %s' % (glb['cur_price'], glb['today_pl_val_bull'], glb['today_pl_val_bear']))
     # 止损
     has_sold = False
-    loss_val = -(conf['BUY_VOLUME'] * conf['LOSS_PRICE_DIFF'] + (conf['MAX_VOLUME'] - conf['BUY_VOLUME']) * conf['ADD_PRICE_DIFF'])
-    if glb['today_pl_val_bull'] <= loss_val and conf['BULL_CODE'] != '':
-        conf['BULL_CODE'] = ''
-        log.info('loss_val: %s' % loss_val)
-        sell_all(stock_type='bull')
-        has_sold = True
-    if glb['today_pl_val_bear'] <= loss_val and conf['BEAR_CODE'] != '':
-        conf['BEAR_CODE'] = ''
-        log.info('loss_val: %s' % loss_val)
-        sell_all(stock_type='bear')
-        has_sold = True
+    # loss_val = -(conf['BUY_VOLUME'] * conf['LOSS_PRICE_DIFF'] + (conf['MAX_VOLUME'] - conf['BUY_VOLUME']) * conf['ADD_PRICE_DIFF'])
+    # if glb['today_pl_val_bull'] <= loss_val and conf['BULL_CODE'] != '':
+    #     conf['BULL_CODE'] = ''
+    #     log.info('loss_val: %s' % loss_val)
+    #     sell_all(stock_type='bull')
+    #     has_sold = True
+    # if glb['today_pl_val_bear'] <= loss_val and conf['BEAR_CODE'] != '':
+    #     conf['BEAR_CODE'] = ''
+    #     log.info('loss_val: %s' % loss_val)
+    #     sell_all(stock_type='bear')
+    #     has_sold = True
     return has_sold
 
 
