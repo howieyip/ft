@@ -109,6 +109,8 @@ glb = {
     'kline_data': None,
     'MA10': 0,
     'MA20': 0,
+    'MA60': 0,
+    'MA120': 0,
     'max_nominal_price': {},
     'filled_all_last_order': {},
     'filled_all_buy_order': {},
@@ -243,7 +245,7 @@ def get_rt_data():
     return rt_data
 
 
-def get_cur_kline(num=20):
+def get_cur_kline(num=120):
     ret, kline_data = quote_ctx.get_cur_kline(CONST['MHI_CODE'], num, ft.KLType.K_1M)
     # log.info('get_cur_kline, ret: %s, kline_data:%s' % (ret, kline_data))
     if ret != ft.RET_OK:
@@ -260,18 +262,27 @@ def get_cur_kline(num=20):
 
 def draw_ma_line(need_log=True):
     kline_data = get_cur_kline()
-    if kline_data is False or len(kline_data) < 20:
+    if kline_data is False or len(kline_data) < 120:
+        log.info('draw_ma_line error, kline_data:\n%s' % kline_data)
         return False
-    MA20_SUM = 0
     MA10_SUM = 0
-    for i in range(-1, -21, -1):
-        MA20_SUM += kline_data.iloc[i].close
+    MA20_SUM = 0
+    MA60_SUM = 0
+    MA120_SUM = 0
+    for i in range(-1, -121, -1):
+        MA120_SUM += kline_data.iloc[i].close
+        if i > -61:
+            MA60_SUM += kline_data.iloc[i].close
+        if i > -21:
+            MA20_SUM += kline_data.iloc[i].close
         if i > -11:
             MA10_SUM += kline_data.iloc[i].close
     glb['MA10'] = round(MA10_SUM / 10, 3)
     glb['MA20'] = round(MA20_SUM / 20, 3)
+    glb['MA60'] = round(MA60_SUM / 60, 3)
+    glb['MA120'] = round(MA120_SUM / 120, 3)
     if need_log:
-        log.info('draw_ma_line, MA10: %s, MA20: %s' % (glb['MA10'], glb['MA20']))
+        log.info('draw_ma_line, MA10: %s, MA20: %s, MA60: %s, MA120: %s' % (glb['MA10'], glb['MA20'], glb['MA60'], glb['MA120']))
 
 
 def draw_golden_line():
@@ -339,9 +350,9 @@ def _check_golden_line(need_log=True):
     # cur_price = cur_rt_data.cur_price
     # avg_price = cur_rt_data.avg_price
     check_result = ''
-    if glb['MA10'] - glb['MA20'] > 10 and glb['cur_price'] - glb['MA10'] < 20:
+    if glb['MA10'] - glb['MA20'] > 10 and glb['cur_price'] - glb['MA10'] < 20 and glb['MA20'] > glb['MA60'] and glb['MA20'] > glb['MA120']:
         check_result = 'bull'
-    elif glb['MA10'] - glb['MA20'] < -10 and glb['MA10'] - glb['cur_price'] < 20:
+    elif glb['MA10'] - glb['MA20'] < -10 and glb['MA10'] - glb['cur_price'] < 20 and glb['MA20'] < glb['MA60'] and glb['MA20'] < glb['MA120']:
         check_result = 'bear'
     glb['golden_line']['check_result'] = check_result
     if need_log:
