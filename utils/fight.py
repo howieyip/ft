@@ -56,8 +56,8 @@ conf = {
         [400e3, 100e3, 100e3, 100e3, 100e3],
         [300e3, 50e3, 50e3, 100e3, 100e3],
         [200e3, 50e3, 50e3, 50e3, 50e3],
-        [150e3, 50e3, 50e3, 30e3, 20e3],
-        [100e3, 30e3, 20e3, 30e3, 20e3]
+        [150e3, 50e3, 50e3, 50e3],
+        [100e3, 50e3, 50e3]
     ],
     'FIRST_ORDER_DIFF': 0.002,                      # 第一个卖单为第几档
     'LAST_ORDER_DIFF': 0.005,                       # 最后一个卖单为第几档
@@ -885,6 +885,12 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
             item = conf['ORDER_LIST'][i]
             break
     volume_diff = volume - item[0]
+    if item[0] == 150e3:
+        conf['LAST_ORDER_DIFF'] = 0.004
+    elif item[0] == 100e3:
+        conf['LAST_ORDER_DIFF'] = 0.003
+    else:
+        conf['LAST_ORDER_DIFF'] = 0.0005
     if glb['move_position']:
         first_order_price += 0.015
     for i in range(1, len(item)): # 从1开始
