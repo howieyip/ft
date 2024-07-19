@@ -890,7 +890,7 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
     elif item[0] == 100e3:
         conf['LAST_ORDER_DIFF'] = 0.003
     else:
-        conf['LAST_ORDER_DIFF'] = 0.0005
+        conf['LAST_ORDER_DIFF'] = 0.005
     if glb['move_position']:
         first_order_price += 0.015
     for i in range(1, len(item)): # 从1开始
