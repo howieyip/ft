@@ -72,8 +72,8 @@ conf = {
         'from_code': 'HK.',                         # 指定code移仓目前是一次性应急用
         'to_code': 'auto',
         'volume': 400e3,
-        'cur_price_min': 0.15,
-        'cur_price_max': 0.19
+        'cur_price_min': 0.13,
+        'cur_price_max': 0.18
     }
 }
 
@@ -711,9 +711,9 @@ def auto_move_position(hsi_data):
             subscribe([item.code], [ft.SubType.ORDER_BOOK]) # 有可能不是今天买的，所以可能没订阅
             sell_all(code=item.code, qty=item.qty)
             if item.stock_name.find('熊') > -1:
-                to_buy('bear', volume=item.qty, force=True)
+                to_buy('bear', volume=item.qty, force=True, cur_price_min=conf['CUR_PRICE_MAX'] + 0.03, cur_price_max=conf['CUR_PRICE_MAX'] + 0.08)
             elif item.stock_name.find('牛') > -1:
-                to_buy('bull', volume=item.qty, force=True)
+                to_buy('bull', volume=item.qty, force=True, cur_price_min=conf['CUR_PRICE_MAX'] + 0.03, cur_price_max=conf['CUR_PRICE_MAX'] + 0.08)
             has_sold = True
         elif conf['MOVE_POSITION_DICT']['from_code'] == item.code:
             conf['AUTO_MOVE_POSITION'] = False
@@ -1079,7 +1079,7 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
 
 
 def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cur_price_max=None):
-    if glb['soon_over']:
+    if not force and glb['soon_over']:
         return False
     log.info('to buy %s' % stock_type)
     if volume is None:
@@ -1096,7 +1096,7 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
     if code == '':
         return False
 
-    if force is False:
+    if not force:
         data = position_list_query(stock_type=stock_type, need_log=False)
         if data is False or data is None:
             return False
