@@ -768,6 +768,7 @@ def _position_list_query(stock_type='', need_log=True):
                 glb['max_nominal_price'][item.code] = item.nominal_price
             elif item.nominal_price > glb['max_nominal_price'][item.code]:
                 glb['max_nominal_price'][item.code] = item.nominal_price
+            log.info('%s max_nominal_price: %s' % (item.code, glb['max_nominal_price'][item.code]))
 
             if item.code not in glb['loss']:
                 glb['loss'][item.code] = False
