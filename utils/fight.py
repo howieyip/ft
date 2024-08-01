@@ -762,7 +762,8 @@ def _position_list_query(stock_type='', need_log=True):
             # 还有能挂单的量则重新挂单
             if item.can_sell_qty > 0 and conf['AUTO_PLACE_ORDER'] and not glb['to_over']:
                 log.info('auto_place_order, code: %s, nominal_price: %s, can_sell_qty: %s' % (item.code, item.nominal_price, item.can_sell_qty))
-                auto_place_order(item.code, item.qty, max(item.nominal_price, item.cost_price), batch=not glb['almost_over'])
+                glb['max_nominal_price'][item.code] = item.nominal_price
+                auto_place_order(item.code, item.qty, item.nominal_price, batch=not glb['almost_over'])
 
             if item.code not in glb['max_nominal_price']:
                 glb['max_nominal_price'][item.code] = item.nominal_price
@@ -930,7 +931,7 @@ class TradeOrder(ft.TradeOrderHandlerBase):
                 set_has(data.code, data.stock_name)
                 if conf['AUTO_PLACE_ORDER'] and not glb['to_over']:
                     time.sleep(2)
-                    auto_place_order(data.code, data.dealt_qty, data.price)
+                    auto_place_order(data.code, data.dealt_qty, data.price, cancel=False)
             elif data.trd_side == ft.TrdSide.SELL:
                 reset_submitted_sell(data.code, data.stock_name, data)
                 position_list_query()
