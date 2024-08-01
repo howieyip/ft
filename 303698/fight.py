@@ -6,14 +6,15 @@ import datetime
 start({
     'log_file': '303698/logs/fight.' + datetime.date.today().strftime('%Y-%m-%d') + '.log',
     'PORT' : 11111,
-    'AUTO_BUY': True,
+    'AUTO_BUY': False,
     'BULL_CODE': 'auto',
     'BEAR_CODE': 'auto',
     'BUY_VOLUME' : 400e3,
     'MAX_VOLUME' : 600e3,
     'AUTO_ADJUST': True,
+    'AUTO_ADJUST_BUY': False,
     'AUTO_PLACE_ORDER': True,
-    'AUTO_MOVE_POSITION': True,
+    'AUTO_MOVE_POSITION': False,
     'MOVE_POSITION_DICT': {
         'from_code': 'HK.',
         'to_code': 'auto',
