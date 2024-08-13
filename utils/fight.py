@@ -92,6 +92,8 @@ log = None
 quote_ctx = None
 trade_ctx = None
 glb = {
+    'recovery_bull': None,
+    'recovery_bear': None,
     'rt_data': None,
     'golden_line': {'0': 0, '100': 0, 'diff': 0, 'reverse': '', 'check_result': ''},
     'loss': {},
@@ -1021,7 +1023,7 @@ def pre_adjust():
         auto_adjust(delta_price, i, conf['ADJUST_SELL_DICT'], 'submitted_sell_bull_data')
 
 
-def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur_price_max=None):
+def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur_price_max=None, sort_field=ft.SortField.VOLUME, ascend=False, get_list=False):
     cache = glb['cache_get_stock_code'].get(stock_type)
     if cache_first and cache['data'] is not None and time.time() - cache['last_time'] < cache['duration']:
         log.info('读取缓存数据：%s' % cache)
@@ -1041,8 +1043,8 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
     req.conversion_min = 10000  # 换股比率过滤起点
     req.conversion_max = 10000  # 换股比率过滤终点
     req.vol_min = 1000  # 成交量的过滤下限，单位K
-    req.sort_field = ft.SortField.VOLUME  # 根据哪个字段排序
-    req.ascend = False  # 升序ture, 降序false
+    req.sort_field = sort_field  # 根据哪个字段排序
+    req.ascend = ascend  # 升序Ture, 降序False
     req.begin = 0  # 数据起始点
     req.num = 20 if cur_price_min == 0.01 else 3  # 返回数据个数，最大200
 
@@ -1056,7 +1058,9 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
         data = data[(data.stock_owner == CONST['HSI_CODE']) & (data.status == ft.WarrantStatus.NORMAL)]
         data = data[data.bid_price >= 0.01]
         if len(data) > 0:
-            if conf['TRY_RECOVERY'] and cur_price_min == 0.01:
+            if get_list:
+                cache['data'] = data
+            elif conf['TRY_RECOVERY'] and cur_price_min == 0.01:
                 rt_data = get_rt_data()
                 if rt_data is False:
                     return False
@@ -1077,6 +1081,7 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
         else:
             log.info('_get_stock_code error, conditions not met')
     cache['last_time'] = time.time()
+    log.info('_get_stock_code, %s code: %s, recovery_price: %s' % (stock_type, cache['data']['stock'], cache['data']['recovery_price']))
     return cache['data']
 
 
@@ -1220,19 +1225,27 @@ def pre_buy():
             log.info('cancel_all bull, delta_price: %s' % delta_price)
 
 
-# class RTData(ft.RTDataHandlerBase):
-#     def on_recv_rsp(self, rsp_str):
-#         # log.info('--------------------分时推送--------------------')
-#         ret, data = super(RTData, self).on_recv_rsp(rsp_str)
-#         if ret != ft.RET_OK:
-#             log.info('RTData push error，ret: %s, data:%s' % (ret, data))
-#             return ret, data
-#         #       code                 time  is_blank  opened_mins  cur_price  last_close     avg_price  volume      turnover
-#         # 0    HK.800000  2023-10-31 09:30:00     False          570   17337.70    17406.36  17337.700000       0  1.682861e+09
+class RTData(ft.RTDataHandlerBase):
+    def on_recv_rsp(self, rsp_str):
+        # log.info('--------------------分时推送--------------------')
+        ret, data = super(RTData, self).on_recv_rsp(rsp_str)
+        if ret != ft.RET_OK:
+            log.info('RTData push error，ret: %s, data: %s' % (ret, data))
+            return ret, data
+        #       code                 time  is_blank  opened_mins  cur_price  last_close     avg_price  volume      turnover
+        # 0    HK.800000  2023-10-31 09:30:00     False          570   17337.70    17406.36  17337.700000       0  1.682861e+09
 
-#         cur_data = data.iloc[-1]
+        rt_data = data.iloc[-1]
+        if glb['recovery_bear'] and rt_data.cur_price >= glb['recovery_bear']['recovery_price']:
+            log.info('recovery_bear, price: %s' % rt_data.cur_price)
+            glb['recovery_bear'] = False
+            to_buy('bull', force=True)
+        elif glb['recovery_bull'] and rt_data.cur_price <= glb['recovery_bull']['recovery_price']:
+            log.info('recovery_bull, price: %s' % rt_data.cur_price)
+            glb['recovery_bull'] = False
+            to_buy('bear', force=True)
 
-#         return ret, data
+        return ret, data
 
 
 class Ticker(ft.TickerHandlerBase):
@@ -1414,7 +1427,7 @@ def start(config=None):
         if ret != ft.RET_OK:
             log.info('unlock_trade error')
             return False
-    data = subscribe([CONST['HSI_CODE']], [ft.SubType.RT_DATA], subscribe_push=False)
+    data = subscribe([CONST['HSI_CODE']], [ft.SubType.RT_DATA], subscribe_push=True)
     if data is False:
         return False
     data = subscribe([CONST['MHI_CODE']], [ft.SubType.TICKER])
@@ -1425,12 +1438,14 @@ def start(config=None):
         return False
     quote_ctx.set_handler(SysNotify())
     quote_ctx.set_handler(Ticker())
+    quote_ctx.set_handler(RTData())
     trade_ctx.set_handler(TradeOrder())
     if conf['AUTO_ADJUST']:
         quote_ctx.set_handler(OrderBook())
     position_list_query()
     order_list_query()
-    # get_stock_code(cur_price_min=0.01, cur_price_max=0.018)
+    glb['recovery_bull'] = _get_stock_code(stock_type='bull', cur_price_min=0.01, cur_price_max=0.1, sort_field=ft.SortField.RECOVERY_PRICE, ascend=False)
+    glb['recovery_bear'] = _get_stock_code(stock_type='bear', cur_price_min=0.01, cur_price_max=0.1, sort_field=ft.SortField.RECOVERY_PRICE, ascend=True)
 
     ret, data = quote_ctx.query_subscription()
     log.info('query_subscription, ret: %s, data:%s' % (ret, data))
