@@ -9,10 +9,10 @@ start({
     'AUTO_BUY': False,
     'BULL_CODE': 'auto',
     'BEAR_CODE': 'auto',
-    'BUY_VOLUME' : 400e3,
-    'MAX_VOLUME' : 600e3,
+    'BUY_VOLUME' : 200e3,
+    'MAX_VOLUME' : 400e3,
     'AUTO_ADJUST': True,
-    'AUTO_ADJUST_BUY': False,
+    'AUTO_ADJUST_BUY': True,
     'AUTO_PLACE_ORDER': True,
     'AUTO_MOVE_POSITION': False,
     'MOVE_POSITION_DICT': {
