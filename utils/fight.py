@@ -20,7 +20,8 @@ conf = {
     'PORT': 11111,
 
     'AUTO_BUY': False,                              # 是否自动买入，若是则下面的配置有效
-    'TRY_RECOVERY': False,                          # 是否尝试买快回收的股票
+    'TRY_RECOVERY': False,                          # 是否买快回收的且价格比正常低很多的股票
+    'TRY_FOLLOW_RECOVERY': False,                   # 是否顺势买回收方向的股票
     'BIG-ONE-WAY': False,                           # 是否采用大单边策略
     'FOLLOW_TREND': False,                          # 买入策略是否为顺势买入，逆势则为False
     'BULL_CODE': '',                                # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
@@ -785,22 +786,12 @@ def _position_list_query(stock_type='', need_log=True):
                     if item.nominal_price < round(glb['max_nominal_price'][item.code] - first_order_diff, 3):
                         log.info('loss_order, code: %s, nominal_price: %s, max_nominal_price: %s' % (item.code, item.nominal_price, glb['max_nominal_price'][item.code]))
                         auto_place_order(item.code, item.qty, item.nominal_price, loss=True)
-                elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bear'):
-                    log.info('sell_bull, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                    # sell_all(code=item.code, qty=item.qty)
-                    # has_sold = True
-                    # glb['loss'][item.code] = True
             elif item.stock_name.find('熊') > -1:
                 if len(glb['submitted_sell_bear_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bear_list'][0].price - 0.002, 3):
                     # 当前价格比买入后的最高价低2-3格的时候，重新挂单
                     if item.nominal_price < round(glb['max_nominal_price'][item.code] - first_order_diff, 3):
                         log.info('loss_order, code: %s, nominal_price: %s, max_nominal_price: %s' % (item.code, item.nominal_price, glb['max_nominal_price'][item.code]))
                         auto_place_order(item.code, item.qty, item.nominal_price, loss=True)
-                elif conf['TRY_RECOVERY'] and (check_result == 'not_ready' or check_result == 'bull'):
-                    log.info('sell_bear, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                    # sell_all(code=item.code, qty=item.qty)
-                    # has_sold = True
-                    # glb['loss'][item.code] = True
                 # 分割线反画
                 # if glb['golden_line']['reverse'] == 'bull':
                 #     if '熊' in item.stock_name:
@@ -1060,7 +1051,7 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
         if len(data) > 0:
             if get_list:
                 cache['data'] = data
-            elif conf['TRY_RECOVERY'] and cur_price_min == 0.01:
+            elif conf['TRY_RECOVERY'] and cur_price_min == 0.01 and cur_price_max == 0.018:
                 rt_data = get_rt_data()
                 if rt_data is False:
                     return False
@@ -1161,16 +1152,12 @@ def auto_buy(stock_type):
         check_result = check_golden_line(need_log=False) or glb['golden_line']['check_result']
         if check_result == 'bull':
             to_buy('bull')
-        elif conf['TRY_RECOVERY'] and check_result == 'not_ready':
-            to_buy('bull', cur_price_min=0.01, cur_price_max=0.018)
     elif stock_type == 'bear' and not glb['submitted_buy_bear_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bear_list']) == 0):
         if conf['BEAR_CODE'] == '':
             return False
         check_result = check_golden_line(need_log=False) or glb['golden_line']['check_result']
         if check_result == 'bear':
             to_buy('bear')
-        elif conf['TRY_RECOVERY'] and check_result == 'not_ready':
-            to_buy('bear', cur_price_min=0.01, cur_price_max=0.018)
 
 
 def get_submitted_code(submitted_type):
@@ -1234,16 +1221,25 @@ class RTData(ft.RTDataHandlerBase):
             return ret, data
         #       code                 time  is_blank  opened_mins  cur_price  last_close     avg_price  volume      turnover
         # 0    HK.800000  2023-10-31 09:30:00     False          570   17337.70    17406.36  17337.700000       0  1.682861e+09
-
         rt_data = data.iloc[-1]
-        if glb['recovery_bear'] is not None and rt_data.cur_price >= glb['recovery_bear']['recovery_price']:
-            log.info('recovery_bear, price: %s' % rt_data.cur_price)
-            glb['recovery_bear'] = False
-            to_buy('bull')
-        elif glb['recovery_bull'] is not None and rt_data.cur_price <= glb['recovery_bull']['recovery_price']:
-            log.info('recovery_bull, price: %s' % rt_data.cur_price)
-            glb['recovery_bull'] = False
-            to_buy('bear')
+        t = rt_data.time
+        s = int(t[17:19])
+
+        if conf['TRY_FOLLOW_RECOVERY']:
+            if glb['recovery_bear'] is not None and rt_data.cur_price >= glb['recovery_bear']['recovery_price']:
+                log.info('recovery_bear, price: %s' % rt_data.cur_price)
+                glb['recovery_bear'] = False
+                to_buy('bull')
+            elif glb['recovery_bull'] is not None and rt_data.cur_price <= glb['recovery_bull']['recovery_price']:
+                log.info('recovery_bull, price: %s' % rt_data.cur_price)
+                glb['recovery_bull'] = False
+                to_buy('bear')
+            if conf['TRY_RECOVERY'] and s == 0:
+                if glb['recovery_bear'] is not None and rt_data.cur_price >= glb['recovery_bear']['recovery_price'] - 200:
+                    to_buy('bear', cur_price_min=0.01, cur_price_max=0.018)
+                elif glb['recovery_bull'] is not None and rt_data.cur_price <= glb['recovery_bull']['recovery_price'] + 200:
+                    to_buy('bull', cur_price_min=0.01, cur_price_max=0.018)
+
 
         return ret, data
 
@@ -1327,8 +1323,8 @@ class Ticker(ft.TickerHandlerBase):
         # 每分钟查询持仓列表
         if s == 30:
             position_list_query(need_log=False)
-        # 每10分钟查询最近回收牛熊
-        if m % 10 == 0:
+        # 每5分钟查询最近回收牛熊
+        if conf['TRY_FOLLOW_RECOVERY'] and m % 5 == 0:
             glb['recovery_bull'] = _get_stock_code(stock_type='bull', cur_price_min=0.01, cur_price_max=0.1, sort_field=ft.SortField.RECOVERY_PRICE, ascend=False)
             glb['recovery_bear'] = _get_stock_code(stock_type='bear', cur_price_min=0.01, cur_price_max=0.1, sort_field=ft.SortField.RECOVERY_PRICE, ascend=True)
 
@@ -1448,8 +1444,9 @@ def start(config=None):
         quote_ctx.set_handler(OrderBook())
     position_list_query()
     order_list_query()
-    glb['recovery_bull'] = _get_stock_code(stock_type='bull', cur_price_min=0.01, cur_price_max=0.1, sort_field=ft.SortField.RECOVERY_PRICE, ascend=False)
-    glb['recovery_bear'] = _get_stock_code(stock_type='bear', cur_price_min=0.01, cur_price_max=0.1, sort_field=ft.SortField.RECOVERY_PRICE, ascend=True)
+    if conf['TRY_FOLLOW_RECOVERY']:
+        glb['recovery_bull'] = _get_stock_code(stock_type='bull', cur_price_min=0.01, cur_price_max=0.1, sort_field=ft.SortField.RECOVERY_PRICE, ascend=False)
+        glb['recovery_bear'] = _get_stock_code(stock_type='bear', cur_price_min=0.01, cur_price_max=0.1, sort_field=ft.SortField.RECOVERY_PRICE, ascend=True)
 
     ret, data = quote_ctx.query_subscription()
     log.info('query_subscription, ret: %s, data:%s' % (ret, data))
