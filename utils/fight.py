@@ -1236,14 +1236,14 @@ class RTData(ft.RTDataHandlerBase):
         # 0    HK.800000  2023-10-31 09:30:00     False          570   17337.70    17406.36  17337.700000       0  1.682861e+09
 
         rt_data = data.iloc[-1]
-        if glb['recovery_bear'] is not None and rt_data.cur_price >= glb['recovery_bear']['recovery_price']:
+        if glb['recovery_bear'] is not None and rt_data.cur_price >= glb['recovery_bear']['recovery_price'] - 30:
             log.info('recovery_bear, price: %s' % rt_data.cur_price)
             glb['recovery_bear'] = False
-            to_buy('bull', force=True)
-        elif glb['recovery_bull'] is not None and rt_data.cur_price <= glb['recovery_bull']['recovery_price']:
+            to_buy('bull')
+        elif glb['recovery_bull'] is not None and rt_data.cur_price <= glb['recovery_bull']['recovery_price'] + 30:
             log.info('recovery_bull, price: %s' % rt_data.cur_price)
             glb['recovery_bull'] = False
-            to_buy('bear', force=True)
+            to_buy('bear')
 
         return ret, data
 
