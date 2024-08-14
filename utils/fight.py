@@ -1327,6 +1327,10 @@ class Ticker(ft.TickerHandlerBase):
         # 每分钟查询持仓列表
         if s == 30:
             position_list_query(need_log=False)
+        # 每10分钟查询最近回收牛熊
+        if m % 10 == 0:
+            glb['recovery_bull'] = _get_stock_code(stock_type='bull', cur_price_min=0.01, cur_price_max=0.1, sort_field=ft.SortField.RECOVERY_PRICE, ascend=False)
+            glb['recovery_bear'] = _get_stock_code(stock_type='bear', cur_price_min=0.01, cur_price_max=0.1, sort_field=ft.SortField.RECOVERY_PRICE, ascend=True)
 
         # 自动买入和自动调价
         if conf['AUTO_BUY'] or conf['AUTO_ADJUST']:
