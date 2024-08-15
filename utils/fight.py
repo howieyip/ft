@@ -1069,7 +1069,8 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
                     log.info('ibp_diff not allow buy, code: %s, bid_price: %s, ask_price: %s, intrinsic_price: %s' % (data.stock, data.bid_price, data.ask_price, data.intrinsic_price))
             else:
                 cache['data'] = data.iloc[0]
-                log.info('_get_stock_code, %s code: %s, recovery_price: %s' % (stock_type, cache['data']['stock'], cache['data']['recovery_price']))
+                if sort_field == ft.SortField.RECOVERY_PRICE:
+                    log.info('_get_stock_code, %s code: %s, recovery_price: %s' % (stock_type, cache['data']['stock'], cache['data']['recovery_price']))
         else:
             log.info('_get_stock_code error, conditions not met')
     cache['last_time'] = time.time()
@@ -1246,12 +1247,12 @@ class RTData(ft.RTDataHandlerBase):
         if conf['TRY_FOLLOW_RECOVERY']:
             if glb['recovery_bear'] is not None and rt_data.cur_price >= glb['recovery_bear']['recovery_price']:
                 log.info('recovery_bear, price: %s' % rt_data.cur_price)
-                glb['recovery_bear'] = False
-                to_buy('bull')
+                glb['recovery_bear'] = None
+                to_buy('bull', force=True)
             elif glb['recovery_bull'] is not None and rt_data.cur_price <= glb['recovery_bull']['recovery_price']:
                 log.info('recovery_bull, price: %s' % rt_data.cur_price)
-                glb['recovery_bull'] = False
-                to_buy('bear')
+                glb['recovery_bull'] = None
+                to_buy('bear', force=True)
             if conf['TRY_RECOVERY']:
                 buy_recovery_code(rt_data)
 
