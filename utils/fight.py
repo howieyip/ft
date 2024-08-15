@@ -1037,7 +1037,7 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
     req.sort_field = sort_field  # 根据哪个字段排序
     req.ascend = ascend  # 升序Ture, 降序False
     req.begin = 0  # 数据起始点
-    req.num = 20 if cur_price_min == 0.01 else 3  # 返回数据个数，最大200
+    req.num = 40 if cur_price_min == 0.01 else 3  # 返回数据个数，最大200
 
     ret, data = quote_ctx.get_warrant(req=req)
     # log.info('get_warrant, ret: %s, data:\n%s' % (ret, data))
