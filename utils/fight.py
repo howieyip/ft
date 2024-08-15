@@ -1069,10 +1069,10 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
                     log.info('ibp_diff not allow buy, code: %s, bid_price: %s, ask_price: %s, intrinsic_price: %s' % (data.stock, data.bid_price, data.ask_price, data.intrinsic_price))
             else:
                 cache['data'] = data.iloc[0]
+                log.info('_get_stock_code, %s code: %s, recovery_price: %s' % (stock_type, cache['data']['stock'], cache['data']['recovery_price']))
         else:
             log.info('_get_stock_code error, conditions not met')
     cache['last_time'] = time.time()
-    log.info('_get_stock_code, %s code: %s, recovery_price: %s' % (stock_type, cache['data']['stock'], cache['data']['recovery_price']))
     return cache['data']
 
 
@@ -1211,6 +1211,18 @@ def pre_buy():
             cancel_all(get_submitted_code('submitted_buy_bull_data'))
             log.info('cancel_all bull, delta_price: %s' % delta_price)
 
+def _get_recovery_code():
+    glb['recovery_bull'] = _get_stock_code(stock_type='bull', cur_price_min=0.01, cur_price_max=0.1, sort_field=ft.SortField.RECOVERY_PRICE, ascend=False)
+    glb['recovery_bear'] = _get_stock_code(stock_type='bear', cur_price_min=0.01, cur_price_max=0.1, sort_field=ft.SortField.RECOVERY_PRICE, ascend=True)
+
+
+def _buy_recovery_code(rt_data):
+    if glb['recovery_bear'] is not None and rt_data.cur_price >= glb['recovery_bear']['recovery_price'] - 200:
+        to_buy('bear', cur_price_min=0.01, cur_price_max=0.018)
+    elif glb['recovery_bull'] is not None and rt_data.cur_price <= glb['recovery_bull']['recovery_price'] + 200:
+        to_buy('bull', cur_price_min=0.01, cur_price_max=0.018)
+
+
 
 class RTData(ft.RTDataHandlerBase):
     def on_recv_rsp(self, rsp_str):
@@ -1222,8 +1234,14 @@ class RTData(ft.RTDataHandlerBase):
         #       code                 time  is_blank  opened_mins  cur_price  last_close     avg_price  volume      turnover
         # 0    HK.800000  2023-10-31 09:30:00     False          570   17337.70    17406.36  17337.700000       0  1.682861e+09
         rt_data = data.iloc[-1]
+        # log.info('rtdata push, data:\n%s' % rt_data)
         t = rt_data.time
+        m = int(t[14:16])
         s = int(t[17:19])
+
+        # 查询最近回收牛熊
+        if conf['TRY_FOLLOW_RECOVERY']:
+            get_recovery_code()
 
         if conf['TRY_FOLLOW_RECOVERY']:
             if glb['recovery_bear'] is not None and rt_data.cur_price >= glb['recovery_bear']['recovery_price']:
@@ -1234,12 +1252,8 @@ class RTData(ft.RTDataHandlerBase):
                 log.info('recovery_bull, price: %s' % rt_data.cur_price)
                 glb['recovery_bull'] = False
                 to_buy('bear')
-            if conf['TRY_RECOVERY'] and s == 0:
-                if glb['recovery_bear'] is not None and rt_data.cur_price >= glb['recovery_bear']['recovery_price'] - 200:
-                    to_buy('bear', cur_price_min=0.01, cur_price_max=0.018)
-                elif glb['recovery_bull'] is not None and rt_data.cur_price <= glb['recovery_bull']['recovery_price'] + 200:
-                    to_buy('bull', cur_price_min=0.01, cur_price_max=0.018)
-
+            if conf['TRY_RECOVERY']:
+                buy_recovery_code(rt_data)
 
         return ret, data
 
@@ -1323,10 +1337,6 @@ class Ticker(ft.TickerHandlerBase):
         # 每分钟查询持仓列表
         if s == 30:
             position_list_query(need_log=False)
-        # 每5分钟查询最近回收牛熊
-        if conf['TRY_FOLLOW_RECOVERY'] and m % 5 == 0:
-            glb['recovery_bull'] = _get_stock_code(stock_type='bull', cur_price_min=0.01, cur_price_max=0.1, sort_field=ft.SortField.RECOVERY_PRICE, ascend=False)
-            glb['recovery_bear'] = _get_stock_code(stock_type='bear', cur_price_min=0.01, cur_price_max=0.1, sort_field=ft.SortField.RECOVERY_PRICE, ascend=True)
 
         # 自动买入和自动调价
         if conf['AUTO_BUY'] or conf['AUTO_ADJUST']:
@@ -1386,6 +1396,10 @@ smart_buy = throttle(_smart_buy, 2)
 smart_sell = delay_execution(_smart_sell, 2) # 自动挂卖单是遍历的，所以不能节流，只能延时
 # 每 30 秒内最多请求 60 次筛选窝轮接口
 get_stock_code = throttle(_get_stock_code, 0.5)
+# 每 300 秒内最多请求 1 次筛选最近回收牛熊接口
+get_recovery_code = throttle(_get_recovery_code, 300)
+# 每 60 秒内最多请求 1 次购买最近回收牛熊接口
+buy_recovery_code = throttle(_buy_recovery_code, 60)
 # 每 30 秒内最多请求 10 次查询今日订单接口
 order_list_query = throttle(_order_list_query, 3)
 # 每 30 秒内最多请求 20 次改单撤单接口，且连续两次请求的间隔不可小于 0.04 秒
@@ -1444,9 +1458,6 @@ def start(config=None):
         quote_ctx.set_handler(OrderBook())
     position_list_query()
     order_list_query()
-    if conf['TRY_FOLLOW_RECOVERY']:
-        glb['recovery_bull'] = _get_stock_code(stock_type='bull', cur_price_min=0.01, cur_price_max=0.1, sort_field=ft.SortField.RECOVERY_PRICE, ascend=False)
-        glb['recovery_bear'] = _get_stock_code(stock_type='bear', cur_price_min=0.01, cur_price_max=0.1, sort_field=ft.SortField.RECOVERY_PRICE, ascend=True)
 
     ret, data = quote_ctx.query_subscription()
     log.info('query_subscription, ret: %s, data:%s' % (ret, data))
