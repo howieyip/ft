@@ -36,7 +36,6 @@ conf = {
     'FOLLOW_TREND_PRICE': 20,                       # 波动多少点，强制改为顺势买入
     'BUY_VOLUME': 100e3,                            # 下单多少股
     'MAX_VOLUME': 300e3,                            # 最大持仓股数，若超过则不会再买入
-    'LOSS_PRICE_DIFF': 0.01,                        # 止损价差，买入后单价亏多少元要强制止损
 
     'AUTO_ADJUST': False,                           # 是否自动调整订单价格，若是则下面的AUTO_ADJUST_BUY和AUTO_ADJUST_SELL有效
     'AUTO_ADJUST_BUY': True,                        # 是否自动调整挂的买单的价格，若是则下面的ADJUST_BUY_DICT有效
@@ -60,8 +59,19 @@ conf = {
         [150e3, 50e3, 50e3, 50e3],
         [100e3, 50e3, 50e3]
     ],
-    'FIRST_ORDER_DIFF': 0.002,                      # 第一个卖单为第几档
-    'LAST_ORDER_DIFF': 0.005,                       # 最后一个卖单为第几档
+    # 'ORDER_LIST': [                                 # 下单多少股以上（大的写前面），每单挂多少股，例如下单800k，分3档200k 200k 400k挂单
+    #     [800e3, 250e3, 250e3, 300e3],
+    #     [700e3, 200e3, 200e3, 300e3],
+    #     [600e3, 200e3, 200e3, 200e3],
+    #     [500e3, 150e3, 150e3, 200e3],
+    #     [400e3, 100e3, 100e3, 200e3],
+    #     [300e3, 100e3, 100e3, 100e3],
+    #     [200e3, 50e3, 50e3, 100e3],
+    #     [150e3, 50e3, 50e3, 50e3],
+    #     [100e3, 50e3, 50e3]
+    # ],
+    'FIRST_ORDER_DIFF': 0.001,                      # 第一个卖单为第几档
+    'LAST_ORDER_DIFF': 0.004,                       # 最后一个卖单为第几档
 
     'AUTO_ADJUST_SELL': True,                       # 是否自动调整挂的卖单的价格，若是则下面的ADJUST_SELL_DICT有效
     'ADJUST_SELL_DICT': {
