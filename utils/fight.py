@@ -1337,14 +1337,14 @@ class Ticker(ft.TickerHandlerBase):
             glb['last_price'] = glb['cur_price']
             position_list_query(need_log=False)
         # 每10秒查询分割线，方便撤单和止损
-        if conf['AUTO_BUY'] and s % 10 == 0:
-            check_result = check_golden_line(need_log=True if s == 0 else False) or glb['golden_line']['check_result']
-            if glb['submitted_buy_bull_data'] is not None and glb['submitted_buy_bull_data'].price > 0.02 and check_result != 'bull':
-                cancel_all(glb['submitted_buy_bull_data'].code)
-                log.info('cancel_all bull, check_result: %s' % check_result)
-            elif glb['submitted_buy_bear_data'] is not None and glb['submitted_buy_bear_data'].price > 0.02 and check_result != 'bear':
-                cancel_all(glb['submitted_buy_bear_data'].code)
-                log.info('cancel_all bear, check_result: %s' % check_result)
+        # if conf['AUTO_BUY'] and s % 10 == 0:
+        #     check_result = check_golden_line(need_log=True if s == 0 else False) or glb['golden_line']['check_result']
+        #     if glb['submitted_buy_bull_data'] is not None and glb['submitted_buy_bull_data'].price > 0.02 and check_result != 'bull':
+        #         cancel_all(glb['submitted_buy_bull_data'].code)
+        #         log.info('cancel_all bull, check_result: %s' % check_result)
+        #     elif glb['submitted_buy_bear_data'] is not None and glb['submitted_buy_bear_data'].price > 0.02 and check_result != 'bear':
+        #         cancel_all(glb['submitted_buy_bear_data'].code)
+        #         log.info('cancel_all bear, check_result: %s' % check_result)
         # 每分钟查询持仓列表
         if s == 30:
             position_list_query(need_log=False)
