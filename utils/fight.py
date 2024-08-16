@@ -1248,11 +1248,11 @@ class RTData(ft.RTDataHandlerBase):
             if glb['recovery_bear'] is not None and rt_data.cur_price >= glb['recovery_bear']['recovery_price']:
                 log.info('recovery_bear, price: %s' % rt_data.cur_price)
                 glb['recovery_bear'] = None
-                to_buy('bull', force=True)
+                to_buy('bull')
             elif glb['recovery_bull'] is not None and rt_data.cur_price <= glb['recovery_bull']['recovery_price']:
                 log.info('recovery_bull, price: %s' % rt_data.cur_price)
                 glb['recovery_bull'] = None
-                to_buy('bear', force=True)
+                to_buy('bear')
             if conf['TRY_RECOVERY']:
                 buy_recovery_code(rt_data)
 
