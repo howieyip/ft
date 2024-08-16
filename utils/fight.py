@@ -891,11 +891,11 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
             break
     volume_diff = volume - item[0]
     if item[0] == 150e3:
-        conf['LAST_ORDER_DIFF'] = 0.004
+        conf['LAST_ORDER_DIFF'] = conf['FIRST_ORDER_DIFF'] + 0.002
     elif item[0] == 100e3:
-        conf['LAST_ORDER_DIFF'] = 0.003
+        conf['LAST_ORDER_DIFF'] = conf['FIRST_ORDER_DIFF'] + 0.001
     else:
-        conf['LAST_ORDER_DIFF'] = 0.005
+        conf['LAST_ORDER_DIFF'] = conf['FIRST_ORDER_DIFF'] + 0.003
     if glb['move_position']:
         first_order_price += 0.015
     for i in range(1, len(item)): # 从1开始
