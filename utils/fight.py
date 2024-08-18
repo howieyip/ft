@@ -747,7 +747,7 @@ def _position_list_query(stock_type='', need_log=True, caller=''):
     log.info('position_list_query, caller: %s' % caller)
     ret, data = trade_ctx.position_list_query(trd_env=conf['TRADE_ENV'], refresh_cache=True)
     if need_log:
-        log.info('position_list_query, ret: %s, data:\n%s' % (ret, data))
+        log.info('position_list_query, caller: %s, data:\n%s' % (caller, data))
     if ret != ft.RET_OK:
         log.info('position_list_query error, ret: %s, data:\n%s' % (ret, data))
         return False
@@ -1070,19 +1070,19 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
                 data.insert(loc=data.columns.get_loc('ask_price') + 1, column='intrinsic_price', value=intrinsic_price)
                 data.insert(loc=data.columns.get_loc('intrinsic_price') + 1, column='ibp_diff', value=data.intrinsic_price - data.bid_price)
                 data = data.sort_values(by='ibp_diff', ascending=False)
-                log.info('ibp_diff, data:\n%s' % data)
+                # log.info('ibp_diff, data:\n%s' % data)
                 data = data.iloc[0]
                 if data.ibp_diff >= 0.008:
-                    log.info('ibp_diff allow buy, code: %s, bid_price: %s, ask_price: %s, intrinsic_price: %s' % (data.stock, data.bid_price, data.ask_price, data.intrinsic_price))
+                    log.info('ibp_diff allow buy, %s code: %s, bid_price: %s, ask_price: %s, intrinsic_price: %s' % (stock_type, data.stock, data.bid_price, data.ask_price, data.intrinsic_price))
                     cache['data'] = data
                 else:
-                    log.info('ibp_diff not allow buy, code: %s, bid_price: %s, ask_price: %s, intrinsic_price: %s' % (data.stock, data.bid_price, data.ask_price, data.intrinsic_price))
+                    log.info('ibp_diff not allow buy, %s code: %s, bid_price: %s, ask_price: %s, intrinsic_price: %s' % (stock_type, data.stock, data.bid_price, data.ask_price, data.intrinsic_price))
             else:
                 cache['data'] = data.iloc[0]
                 if sort_field == ft.SortField.RECOVERY_PRICE:
                     log.info('_get_stock_code, %s code: %s, recovery_price: %s' % (stock_type, cache['data']['stock'], cache['data']['recovery_price']))
         else:
-            log.info('_get_stock_code error, conditions not met')
+            log.info('_get_stock_code error, %s conditions not met' % stock_type)
     cache['last_time'] = time.time()
     return cache['data']
 
@@ -1106,7 +1106,7 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
         return False
 
     if not force:
-        data = _position_list_query(stock_type=stock_type, need_log=False, caller='to_buy')
+        data = _position_list_query(stock_type=stock_type, need_log=False, caller='to_buy-' + stock_type)
         if data is False or data is None:
             return False
         if len(data) > 0:
