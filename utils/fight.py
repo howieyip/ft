@@ -1082,7 +1082,7 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
                 if sort_field == ft.SortField.RECOVERY_PRICE:
                     log.info('_get_stock_code, %s code: %s, recovery_price: %s' % (stock_type, cache['data']['stock'], cache['data']['recovery_price']))
         else:
-            log.info('_get_stock_code error, %s conditions not met' % stock_type)
+            log.info('_get_stock_code, %s conditions not met' % stock_type)
     cache['last_time'] = time.time()
     return cache['data']
 
@@ -1245,11 +1245,9 @@ class RTData(ft.RTDataHandlerBase):
         rt_data = data.iloc[-1]
         # log.info('rtdata push, data:\n%s' % rt_data)
 
-        # 查询最近回收牛熊
-        if conf['TRY_FOLLOW_RECOVERY']:
+        if conf['TRY_FOLLOW_RECOVERY'] and not glb['afternoon']:
+            # 查询最近回收牛熊
             get_recovery_code()
-
-        if conf['TRY_FOLLOW_RECOVERY']:
             if glb['recovery_bear'] is not None and rt_data.cur_price >= glb['recovery_bear']['recovery_price']:
                 log.info('recovery_bear, price: %s' % rt_data.cur_price)
                 glb['recovery_bear'] = None

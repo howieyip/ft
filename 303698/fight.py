@@ -7,7 +7,7 @@ start({
     'log_file': '303698/logs/fight.' + datetime.date.today().strftime('%Y-%m-%d') + '.log',
     'PORT' : 11111,
     'AUTO_BUY': True,
-    'TRY_RECOVERY': True,
+    'TRY_RECOVERY': False,
     'TRY_FOLLOW_RECOVERY': True,
     'BULL_CODE': 'auto',
     'BEAR_CODE': 'auto',
