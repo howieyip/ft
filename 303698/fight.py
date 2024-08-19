@@ -14,6 +14,7 @@ start({
     'BUY_VOLUME' : 200e3,
     'MAX_VOLUME' : 300e3,
     'AUTO_ADJUST': True,
+    'AUTO_ADJUST_BUY': False,
     'AUTO_PLACE_ORDER': True,
     'AUTO_MOVE_POSITION': False,
     'MOVE_POSITION_DICT': {

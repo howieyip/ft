@@ -867,9 +867,9 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
         glb['loss'][code] = True
         order_book = get_order_book(code)
         if order_book:
-            first_order_price = order_book['Bid'][0][0]
+            first_order_price = order_book['Ask'][0][0]
         else:
-            first_order_price = price - 0.001
+            first_order_price = price
     else:
         glb['loss'][code] = False
     if volume < 100e3:
@@ -878,7 +878,7 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
     if cancel:
         cancel_all(code, trd_side=ft.TrdSide.SELL)
     if not batch:
-        data = smart_sell(code, volume, type='Bid' if loss else 'Ask')
+        data = smart_sell(code, volume, 'Ask')
         if data is False:
             log.info('auto_place_order => smart_sell error')
         glb['auto_place_order_flag'] = False
