@@ -190,7 +190,8 @@ def throttle(fn, wait, need_log=True):
             #     log.info(f'{fn.__name__} call success')
             return fn(*args, **kwargs)
         if need_log and not logged:
-            log.info(f'{fn.__name__} call throttling, {countdown}s remaining')
+            caller = kwargs.get('caller', '')
+            log.info(f'{fn.__name__} caller {caller} throttling, {countdown}s remaining')
             logged = True
         return None
 
