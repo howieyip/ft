@@ -977,7 +977,7 @@ def auto_adjust(delta_price, i, adjust_dict, submitted_type):
     elif submitted_type.find('sell') > -1:
         rise_price = round(ask_price + (adjust_dict['rise'][2] - 1) * 0.001, 3)
         # 尾盘或者卖单有2个以上才降价到卖一
-        if glb['almost_over'] or len(glb[submitted_type + '_list']) > 1:
+        if glb['almost_over']:
             fall_price = round(ask_price + (adjust_dict['fall'][2] - 1) * 0.001, 3)
         else:
             fall_price = round(max(find_buy_price(data) + conf['LAST_ORDER_DIFF'], ask_price), 3)
