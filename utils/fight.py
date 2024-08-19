@@ -393,7 +393,7 @@ def _smart_buy(code, volume, price=None, type='Bid'):
             return False
         if conf['TRADE_ENV'] == ft.TrdEnv.SIMULATE:
             type = 'Ask'
-        price = max(0.01, data[type][0 if type == 'Ask' else 1][0])
+        price = max(0.01, data[type][0][0])
     ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.BUY, trd_env=conf['TRADE_ENV'])
     log.info('_smart_buy, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
@@ -1247,12 +1247,10 @@ class RTData(ft.RTDataHandlerBase):
         # log.info('rtdata push, data:\n%s' % rt_data)
 
         if conf['TRY_FOLLOW_RECOVERY'] and not glb['afternoon']:
-            # 查询最近回收牛熊
-            get_recovery_code()
             if glb['recovery_bear'] is not None and rt_data.cur_price >= glb['recovery_bear']['recovery_price']:
                 log.info('recovery_bear, price: %s' % rt_data.cur_price)
                 glb['recovery_bear'] = None
-                to_buy('bull')
+                to_buy('bull', force=True)
             elif glb['recovery_bull'] is not None and rt_data.cur_price <= glb['recovery_bull']['recovery_price']:
                 log.info('recovery_bull, price: %s' % rt_data.cur_price)
                 glb['recovery_bull'] = None
@@ -1455,14 +1453,17 @@ def start(config=None):
     data = subscribe([CONST['MHI_CODE']], [ft.SubType.K_1M], subscribe_push=False)
     if data is False:
         return False
+    # 查询最近回收牛熊
+    get_recovery_code()
+    position_list_query(caller='start')
+    order_list_query()
+
     quote_ctx.set_handler(SysNotify())
     quote_ctx.set_handler(Ticker())
     quote_ctx.set_handler(RTData())
     trade_ctx.set_handler(TradeOrder())
     if conf['AUTO_ADJUST']:
         quote_ctx.set_handler(OrderBook())
-    position_list_query(caller='start')
-    order_list_query()
 
     ret, data = quote_ctx.query_subscription()
     log.info('query_subscription, ret: %s, data:%s' % (ret, data))
