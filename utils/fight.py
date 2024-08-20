@@ -20,6 +20,7 @@ conf = {
     'PORT': 11111,
 
     'AUTO_BUY': False,                              # 是否自动买入，若是则下面的配置有效
+    'NEED_LOSS': True,
     'TRY_RECOVERY': False,                          # 是否买快回收的且价格比正常低很多的股票
     'TRY_FOLLOW_RECOVERY': False,                   # 是否顺势买回收方向的股票
     'BIG-ONE-WAY': False,                           # 是否采用大单边策略
@@ -791,27 +792,19 @@ def _position_list_query(stock_type='', need_log=True, caller=''):
                 first_order_diff = 0.001
             else:
                 first_order_diff = conf['FIRST_ORDER_DIFF']
-            if item.stock_name.find('牛') > -1:
-                # 当前价格比卖单价低等3格的时候
-                if len(glb['submitted_sell_bull_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bull_list'][0].price - 0.002, 3):
-                    # 当前价格比买入后的最高价低等2格的时候，重新挂单
-                    if item.nominal_price < round(glb['max_nominal_price'][item.code] - first_order_diff, 3):
-                        log.info('loss_order, code: %s, nominal_price: %s, max_nominal_price: %s' % (item.code, item.nominal_price, glb['max_nominal_price'][item.code]))
-                        auto_place_order(item.code, item.qty, item.nominal_price, loss=True)
-            elif item.stock_name.find('熊') > -1:
-                if len(glb['submitted_sell_bear_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bear_list'][0].price - 0.002, 3):
-                    if item.nominal_price < round(glb['max_nominal_price'][item.code] - first_order_diff, 3):
-                        log.info('loss_order, code: %s, nominal_price: %s, max_nominal_price: %s' % (item.code, item.nominal_price, glb['max_nominal_price'][item.code]))
-                        auto_place_order(item.code, item.qty, item.nominal_price, loss=True)
-                # 分割线反画
-                # if glb['golden_line']['reverse'] == 'bull':
-                #     if '熊' in item.stock_name:
-                #         log.info('reverse_loss, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                #         glb['loss'][item.code] = True
-                # elif glb['golden_line']['reverse'] == 'bear':
-                #     if '牛' in item.stock_name:
-                #         log.info('reverse_loss, code: %s, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
-                #         glb['loss'][item.code] = True
+            if conf['NEED_LOSS']:
+                if item.stock_name.find('牛') > -1:
+                    # 当前价格比卖单价低等3格的时候
+                    if len(glb['submitted_sell_bull_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bull_list'][0].price - 0.002, 3):
+                        # 当前价格比买入后的最高价低等2格的时候，重新挂单
+                        if item.nominal_price < round(glb['max_nominal_price'][item.code] - first_order_diff, 3):
+                            log.info('loss_order, code: %s, nominal_price: %s, max_nominal_price: %s' % (item.code, item.nominal_price, glb['max_nominal_price'][item.code]))
+                            auto_place_order(item.code, item.qty, item.nominal_price, loss=True)
+                elif item.stock_name.find('熊') > -1:
+                    if len(glb['submitted_sell_bear_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bear_list'][0].price - 0.002, 3):
+                        if item.nominal_price < round(glb['max_nominal_price'][item.code] - first_order_diff, 3):
+                            log.info('loss_order, code: %s, nominal_price: %s, max_nominal_price: %s' % (item.code, item.nominal_price, glb['max_nominal_price'][item.code]))
+                            auto_place_order(item.code, item.qty, item.nominal_price, loss=True)
         # if has_sold:
         #     return False
         bull_data = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('牛')]
@@ -828,6 +821,7 @@ def _position_list_query(stock_type='', need_log=True, caller=''):
     else:
         glb['max_nominal_price'] = {}
         glb['loss'] = {}
+        conf['NEED_LOSS'] = True
         reset_has()
         if glb['almost_over']:
             glb['over'] = True
@@ -864,7 +858,7 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
     if price > conf['CUR_PRICE_MAX']:
         return False
     first_order_price = price + conf['FIRST_ORDER_DIFF']
-    if loss:
+    if conf['NEED_LOSS'] and loss:
         glb['loss'][code] = True
         order_book = get_order_book(code)
         if order_book:
@@ -1251,6 +1245,7 @@ class RTData(ft.RTDataHandlerBase):
                 log.info('recovery_bear, price: %s' % rt_data.cur_price)
                 glb['recovery_bear'] = None
                 to_buy('bull', force=True)
+                conf['NEED_LOSS'] = False
             elif glb['recovery_bull'] is not None and rt_data.cur_price <= glb['recovery_bull']['recovery_price']:
                 log.info('recovery_bull, price: %s' % rt_data.cur_price)
                 glb['recovery_bull'] = None
