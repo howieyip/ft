@@ -18,6 +18,7 @@ conf = {
     'PASSWORD': '',                                       # 如果PASSWORD_MD5为空，则使用 PASSWORD 解锁
     'HOST': '127.0.0.1',
     'PORT': 11111,
+    'acc_id': 281756481226004224,
 
     'AUTO_BUY': False,                              # 是否自动买入，若是则下面的配置有效
     'NEED_LOSS': True,
@@ -401,7 +402,7 @@ def _smart_buy(code, volume, price=None, type='Bid'):
             reference_price = glb['filled_all_last_order'].get(code, {}).get('price')
             if reference_price is not None and data['Ask'][0][0] <= round(reference_price - conf['ADD_PRICE_DIFF'], 3):
                 price = data['Ask'][0][0]
-    ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.BUY, trd_env=conf['TRADE_ENV'])
+    ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.BUY, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
     log.info('_smart_buy, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
         log.info('code %s _smart_buy error, price %s, volume %s' % (code, price, volume))
@@ -419,7 +420,7 @@ def _smart_sell(code, volume, price=None, type='Ask'):
         if not data:
             return False
         price = max(0.01, data[type][0][0])
-    ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.SELL, trd_env=conf['TRADE_ENV'])
+    ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.SELL, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
     log.info('_smart_sell, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
         log.info('code %s _smart_sell error, price %s, volume %s' % (code, price, volume))
@@ -430,7 +431,7 @@ def _smart_sell(code, volume, price=None, type='Ask'):
 
 
 def _cancel_order(order_id):
-    ret, data = trade_ctx.modify_order(modify_order_op=ft.ModifyOrderOp.CANCEL, order_id=order_id, price=0, qty=0, trd_env=conf['TRADE_ENV'])
+    ret, data = trade_ctx.modify_order(modify_order_op=ft.ModifyOrderOp.CANCEL, order_id=order_id, price=0, qty=0, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
     log.info('_cancel_order, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
         log.info('_cancel_order error')
@@ -441,7 +442,7 @@ def _cancel_order(order_id):
 
 
 def _modify_order(order_id, price, qty):
-    ret, data = trade_ctx.modify_order(modify_order_op=ft.ModifyOrderOp.NORMAL, order_id=order_id, price=price, qty=qty, trd_env=conf['TRADE_ENV'])
+    ret, data = trade_ctx.modify_order(modify_order_op=ft.ModifyOrderOp.NORMAL, order_id=order_id, price=price, qty=qty, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
     log.info('modify_order, ret: %s, data:\n%s, order_id: %s, price: %s, qty: %s' % (ret, data, order_id, price, qty))
     if ret != ft.RET_OK:
         log.info('modify_order error')
@@ -475,7 +476,7 @@ def find_buy_price(order):
 
 
 def _order_list_query(code='', status_filter_list=[ft.OrderStatus.SUBMITTED, ft.OrderStatus.FILLED_PART, ft.OrderStatus.FILLED_ALL, ft.OrderStatus.CANCELLED_PART]):
-    ret, data = trade_ctx.order_list_query(status_filter_list=status_filter_list, code=code, trd_env=conf['TRADE_ENV'], refresh_cache=True)
+    ret, data = trade_ctx.order_list_query(status_filter_list=status_filter_list, code=code, trd_env=conf['TRADE_ENV'], refresh_cache=True, acc_id=conf['acc_id'])
     # log.info('查询订单，ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
         log.info('order_list_query error, code: %s' % code)
@@ -513,7 +514,7 @@ def _cancel_all(code='', trd_side='', stock_type=''):
     if code is None:
         return False
     if code == '' and stock_type == '' and trd_side == '':
-        ret, data = trade_ctx.cancel_all_order(trd_env=conf['TRADE_ENV'])
+        ret, data = trade_ctx.cancel_all_order(trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
         log.info('cancel_all_order, ret: %s, data:\n%s' % (ret, data))
         if ret != ft.RET_OK:
             log.info('cancel_all_order error')
@@ -575,11 +576,12 @@ def sell_all(code='', qty='', stock_type=''):
             force_sell(item.code, item.qty)
 
 
-def subscribe(code_list, subtype_list, subscribe_push=True):
+def subscribe(code_list, subtype_list, subscribe_push=True, need_log=True):
     if len(code_list) == 0:
         return False
     ret, data = quote_ctx.subscribe(code_list, subtype_list, subscribe_push=subscribe_push)
-    log.info('subscribe %s %s, ret: %s, data: %s' % (code_list, subtype_list, ret, data))
+    if need_log:
+        log.info('subscribe %s %s, ret: %s, data: %s' % (code_list, subtype_list, ret, data))
     if ret != ft.RET_OK:
         log.info('subscribe %s %s error' % (code_list, subtype_list))
         return False
@@ -606,7 +608,7 @@ def set_has(code, stock_name):
     elif stock_name.find('熊') > -1:
         # log.info('持仓熊证：%s' % code)
         glb['has_bear_list'].append(code)
-    subscribe([code], [ft.SubType.ORDER_BOOK])
+    subscribe([code], [ft.SubType.ORDER_BOOK], need_log=False)
 
 
 def reset_has(stock_name=''):
@@ -753,7 +755,7 @@ def auto_move_position(hsi_data):
 
 def _position_list_query(stock_type='', need_log=True, caller=''):
     log.info('position_list_query, caller: %s' % caller)
-    ret, data = trade_ctx.position_list_query(trd_env=conf['TRADE_ENV'], refresh_cache=True)
+    ret, data = trade_ctx.position_list_query(trd_env=conf['TRADE_ENV'], refresh_cache=True, acc_id=conf['acc_id'])
     if need_log:
         log.info('position_list_query, caller: %s, data:\n%s' % (caller, data))
     if ret != ft.RET_OK:
@@ -787,13 +789,13 @@ def _position_list_query(stock_type='', need_log=True, caller=''):
             #     glb['max_nominal_price'][item.code] = item.nominal_price
             #     auto_place_order(item.code, item.qty, item.nominal_price, batch=not glb['almost_over'])
 
-            if item.code not in glb['max_nominal_price']:
-                glb['max_nominal_price'][item.code] = item.nominal_price
-            elif item.nominal_price > glb['max_nominal_price'][item.code]:
-                glb['max_nominal_price'][item.code] = item.nominal_price
-            log.info('%s max_nominal_price: %s' % (item.code, glb['max_nominal_price'][item.code]))
-
             if conf['NEED_LOSS']:
+                if item.code not in glb['max_nominal_price']:
+                    glb['max_nominal_price'][item.code] = item.nominal_price
+                elif item.nominal_price > glb['max_nominal_price'][item.code]:
+                    glb['max_nominal_price'][item.code] = item.nominal_price
+                log.info('%s max_nominal_price: %s' % (item.code, glb['max_nominal_price'][item.code]))
+
                 if item.code not in glb['loss']:
                     glb['loss'][item.code] = False
                 if glb['loss'].get(item.code):
@@ -882,6 +884,9 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
     if cancel:
         cancel_all(code, trd_side=ft.TrdSide.SELL)
     if not batch:
+        reference_price = glb['filled_all_last_order'].get(code, {}).get('price')
+        if reference_price is not None and first_order_price < reference_price:
+            first_order_price = reference_price
         data = smart_sell(code, volume, first_order_price)
         if data is False:
             log.info('auto_place_order => smart_sell error')
@@ -1442,6 +1447,8 @@ def start(config=None):
         log.info('restart new')
     quote_ctx = ft.OpenQuoteContext(host=conf['HOST'], port=conf['PORT'])
     trade_ctx = ft.OpenSecTradeContext(filter_trdmarket=ft.TrdMarket.HK, host=conf['HOST'], port=conf['PORT'])
+    # ret, data = trade_ctx.get_acc_list()
+    # print(data)
     resetData()
     if conf['TRADE_ENV'] == ft.TrdEnv.REAL:
         ret, data = trade_ctx.unlock_trade(password_md5=conf['PASSWORD_MD5'], password=conf['PASSWORD'])
