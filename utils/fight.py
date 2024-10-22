@@ -1097,7 +1097,7 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
 
 
 def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cur_price_max=None):
-    if not force and glb['soon_over']:
+    if not force:
         return False
     log.info('to buy %s' % stock_type)
     if volume is None:
@@ -1191,7 +1191,7 @@ def get_submitted_code(submitted_type):
 
 
 def pre_buy():
-    if glb['kline_data'] is None:
+    if conf['if_check_line'] and glb['kline_data'] is None:
         return False
     #       code              time                 price        volume  turnover    ticker_direction       sequence   type      push_data_type
     # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
@@ -1314,7 +1314,7 @@ class Ticker(ft.TickerHandlerBase):
             if m >= 55:
                 if not glb['almost_over']:
                     glb['almost_over'] = True
-                    cancel_all()
+                    # cancel_all()
                     position_list_query(caller='almost_over')
                 if m >= 59:
                     if not glb['to_over']:
@@ -1334,32 +1334,33 @@ class Ticker(ft.TickerHandlerBase):
 
         glb['cur_price'] = data0.price
 
-        # 每波动10点查询持仓列表，方便统计盈亏和止损
-        if abs(glb['cur_price'] - glb['last_price']) >= 10:
-            glb['last_price'] = glb['cur_price']
-            position_list_query(need_log=False, caller='fluctuate')
-        # 每10秒查询分割线，方便撤单和止损
-        # if conf['AUTO_BUY'] and s % 10 == 0:
-        #     check_result = check_line(need_log=True if s == 0 else False) or glb['golden_line']['check_result']
-        #     if glb['submitted_buy_bull_data'] is not None and glb['submitted_buy_bull_data'].price > 0.02 and check_result != 'bull':
-        #         cancel_all(glb['submitted_buy_bull_data'].code)
-        #         log.info('cancel_all bull, check_result: %s' % check_result)
-        #     elif glb['submitted_buy_bear_data'] is not None and glb['submitted_buy_bear_data'].price > 0.02 and check_result != 'bear':
-        #         cancel_all(glb['submitted_buy_bear_data'].code)
-        #         log.info('cancel_all bear, check_result: %s' % check_result)
-        # 每分钟查询持仓列表
-        if s == 30:
-            position_list_query(need_log=False, caller='per_min')
+        if conf['if_check_line']:
+            # 每波动10点查询持仓列表，方便统计盈亏和止损
+            if abs(glb['cur_price'] - glb['last_price']) >= 10:
+                glb['last_price'] = glb['cur_price']
+                position_list_query(need_log=False, caller='fluctuate')
+            # 每10秒查询分割线，方便撤单和止损
+            # if conf['AUTO_BUY'] and s % 10 == 0:
+            #     check_result = check_line(need_log=True if s == 0 else False) or glb['golden_line']['check_result']
+            #     if glb['submitted_buy_bull_data'] is not None and glb['submitted_buy_bull_data'].price > 0.02 and check_result != 'bull':
+            #         cancel_all(glb['submitted_buy_bull_data'].code)
+            #         log.info('cancel_all bull, check_result: %s' % check_result)
+            #     elif glb['submitted_buy_bear_data'] is not None and glb['submitted_buy_bear_data'].price > 0.02 and check_result != 'bear':
+            #         cancel_all(glb['submitted_buy_bear_data'].code)
+            #         log.info('cancel_all bear, check_result: %s' % check_result)
+            # 每分钟查询持仓列表
+            if s == 30:
+                position_list_query(need_log=False, caller='per_min')
 
         # 自动买入和自动调价
         if conf['AUTO_BUY'] or conf['AUTO_ADJUST']:
             for index, row in data.iterrows():
-                if conf['AUTO_BUY'] and not glb['soon_over']:
+                if conf['AUTO_BUY']:
                     glb['ticker_list'].append(row)
                 if conf['AUTO_ADJUST']:
                     glb['adjust_ticker_list'].append(row)
             # 尾盘就不买了
-            if conf['AUTO_BUY'] and not glb['soon_over']:
+            if conf['AUTO_BUY']:
                 pre_buy()
             # 自动调价
             if conf['AUTO_ADJUST']:
