@@ -400,6 +400,7 @@ def _smart_buy(code, volume, price=None, type='Bid'):
         price = max(0.01, data[type][0][0])
         if volume < 100e3:
             reference_price = glb['filled_all_last_order'].get(code, {}).get('price')
+            log.info('_smart_buy, bid: %s, ask: %s, reference_price: %s' % (data['Bid'][0][0], data['Ask'][0][0], reference_price))
             if reference_price is not None and data['Ask'][0][0] <= round(reference_price - conf['ADD_PRICE_DIFF'], 3):
                 price = data['Ask'][0][0]
     ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.BUY, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
@@ -1097,8 +1098,6 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
 
 
 def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cur_price_max=None):
-    if not force:
-        return False
     log.info('to buy %s' % stock_type)
     if volume is None:
         volume = conf['BUY_VOLUME']
@@ -1222,10 +1221,10 @@ def pre_buy():
     #         # cancel_all(get_submitted_code('submitted_buy_bull_data'))
     # else:
     conf['FOLLOW_TREND'] = False
-    if conf['DELTA_PRICE_MIN'] <= delta_price <= conf['DELTA_PRICE_MAX']:
-        auto_buy('bear')
-    elif -conf['DELTA_PRICE_MIN'] >= delta_price >= -conf['DELTA_PRICE_MAX']:
+    if -conf['DELTA_PRICE_MIN'] >= delta_price >= -conf['DELTA_PRICE_MAX']:
         auto_buy('bull')
+    elif conf['DELTA_PRICE_MIN'] <= delta_price <= conf['DELTA_PRICE_MAX']:
+        auto_buy('bear')
     # elif delta_price > conf['DELTA_PRICE_MAX'] and get_submitted_code('submitted_buy_bear_data'):
     #     cancel_all(get_submitted_code('submitted_buy_bear_data'))
     #     log.info('cancel_all bear, delta_price: %s' % delta_price)
