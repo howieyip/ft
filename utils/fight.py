@@ -48,7 +48,7 @@ conf = {
     },
 
     'ALLOW_ADD': True,                              # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
-    'ADD_PRICE_DIFF': 0.004,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
+    'ADD_PRICE_DIFF': 0.005,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
     'only_today_buy': True,                         # 仅处理今天新买的，过夜的不管
     'AUTO_PLACE_ORDER': False,                      # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
     'ORDER_LIST': [                                 # 下单多少股以上（大的写前面），每单挂多少股，例如下单800k，分3档200k 200k 400k挂单
@@ -400,9 +400,11 @@ def _smart_buy(code, volume, price=None, type='Bid'):
         price = max(0.01, data[type][0][0])
         if volume < 100e3:
             reference_price = glb['filled_all_last_order'].get(code, {}).get('price')
-            log.info('_smart_buy, bid: %s, ask: %s, reference_price: %s' % (data['Bid'][0][0], data['Ask'][0][0], reference_price))
             if reference_price is not None and data['Ask'][0][0] <= round(reference_price - conf['ADD_PRICE_DIFF'], 3):
                 price = data['Ask'][0][0]
+            else:
+                log.info('_smart_buy not allow, bid: %s, ask: %s, reference_price: %s' % (data['Bid'][0][0], data['Ask'][0][0], reference_price))
+                return False
     ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.BUY, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
     log.info('_smart_buy, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
@@ -869,7 +871,7 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
         return False
     if volume < 100e3:
         batch = False
-        conf['FIRST_ORDER_DIFF'] = 0.004
+        conf['FIRST_ORDER_DIFF'] = conf['ADD_PRICE_DIFF']
     first_order_price = price + conf['FIRST_ORDER_DIFF']
     if conf['NEED_LOSS']:
         if loss:
@@ -1139,7 +1141,7 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
                 if add_price_diff < conf['ADD_PRICE_DIFF']:
                     log.info('code: %s, nominal_price: %s, reference_price: %s, diff: %s < %s, not allow add' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
                     return False
-                log.info('code: %s, nominal_price: %s, reference_price: %s, diff: %s >= %s, allow add' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
+                # log.info('code: %s, nominal_price: %s, reference_price: %s, diff: %s >= %s, allow add' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
 
     if code == 'auto':
         data = _get_stock_code(stock_type=stock_type, cur_price_min=cur_price_min, cur_price_max=cur_price_max)
