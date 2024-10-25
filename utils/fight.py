@@ -887,9 +887,6 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
     if cancel:
         cancel_all(code, trd_side=ft.TrdSide.SELL)
     if not batch:
-        reference_price = glb['filled_all_last_order'].get(code, {}).get('price')
-        if reference_price is not None and first_order_price < reference_price:
-            first_order_price = reference_price
         data = smart_sell(code, volume, first_order_price)
         if data is False:
             log.info('auto_place_order => smart_sell error')
@@ -1141,7 +1138,7 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
                 if add_price_diff < conf['ADD_PRICE_DIFF']:
                     log.info('code: %s, nominal_price: %s, reference_price: %s, diff: %s < %s, not allow add' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
                     return False
-                # log.info('code: %s, nominal_price: %s, reference_price: %s, diff: %s >= %s, allow add' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
+                log.info('code: %s, nominal_price: %s, reference_price: %s, diff: %s >= %s, allow add' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
 
     if code == 'auto':
         data = _get_stock_code(stock_type=stock_type, cur_price_min=cur_price_min, cur_price_max=cur_price_max)
