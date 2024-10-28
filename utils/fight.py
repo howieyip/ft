@@ -31,7 +31,7 @@ conf = {
     'if_check_line': True,                         # 是否检查相关的线
     'GOLDEN_LINE_DIFF': 80,                         # 黄金分割线0-100之间要间隔多少点
     'CUR_PRICE_MIN': 0.03,
-    'CUR_PRICE_MAX': 0.15,                          # 这个值非常重要，当天买入的新股票如果低于这个价，会被当成是日内短炒止损
+    'CUR_PRICE_MAX': 0.1,                          # 这个值非常重要，当天买入的新股票如果低于这个价，会被当成是日内短炒止损
 
     'DELTA_SECONDS': 60,                            # 多少秒内
     'DELTA_PRICE_MIN': 8,                           # 最小波动多少点
@@ -48,7 +48,7 @@ conf = {
     },
 
     'ALLOW_ADD': True,                              # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
-    'ADD_PRICE_DIFF': 0.005,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
+    'ADD_PRICE_DIFF': 0.004,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
     'only_today_buy': True,                         # 仅处理今天新买的，过夜的不管
     'AUTO_PLACE_ORDER': False,                      # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
     'ORDER_LIST': [                                 # 下单多少股以上（大的写前面），每单挂多少股，例如下单800k，分3档200k 200k 400k挂单
@@ -774,7 +774,7 @@ def _position_list_query(stock_type='', need_log=True, caller=''):
     # 统计今日盈亏并确定是否止损停止交易
     today_buy_data = hsi_data[(hsi_data.nominal_price < conf['CUR_PRICE_MAX']) & (hsi_data.today_buy_qty > 0)]
     if conf['only_today_buy']:
-        today_buy_data = today_buy_data[hsi_data.qty == hsi_data.today_buy_qty - hsi_data.today_sell_qty]
+        today_buy_data = today_buy_data[today_buy_data.qty == today_buy_data.today_buy_qty - today_buy_data.today_sell_qty]
     if sum_today_pl_val(today_buy_data):
         return False
 
@@ -807,14 +807,14 @@ def _position_list_query(stock_type='', need_log=True, caller=''):
                     first_order_diff = conf['FIRST_ORDER_DIFF']
 
                 if item.stock_name.find('牛') > -1:
-                    # 当前价格比卖单价低等3格的时候
-                    if len(glb['submitted_sell_bull_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bull_list'][0].price - 0.002, 3):
+                    # 当前价格比卖单价低等2格的时候
+                    if len(glb['submitted_sell_bull_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bull_list'][0].price - 0.001, 3):
                         # 当前价格比买入后的最高价低等2格的时候，重新挂单
                         if item.nominal_price < round(glb['max_nominal_price'][item.code] - first_order_diff, 3):
                             log.info('loss_order, code: %s, nominal_price: %s, max_nominal_price: %s' % (item.code, item.nominal_price, glb['max_nominal_price'][item.code]))
                             auto_place_order(item.code, item.qty, item.nominal_price, loss=True)
                 elif item.stock_name.find('熊') > -1:
-                    if len(glb['submitted_sell_bear_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bear_list'][0].price - 0.002, 3):
+                    if len(glb['submitted_sell_bear_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bear_list'][0].price - 0.001, 3):
                         if item.nominal_price < round(glb['max_nominal_price'][item.code] - first_order_diff, 3):
                             log.info('loss_order, code: %s, nominal_price: %s, max_nominal_price: %s' % (item.code, item.nominal_price, glb['max_nominal_price'][item.code]))
                             auto_place_order(item.code, item.qty, item.nominal_price, loss=True)

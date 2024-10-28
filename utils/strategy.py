@@ -13,18 +13,18 @@ conf = {
 log = Logger(conf['log_file']).get_logger()
 
 
-code = 'HK.50063'
+code = 'HK.51539'
 max_count = 331
-start = '2024-03-01'
+start = '2024-10-01'
 end = start
-end = '2024-03-30'
+end = '2024-10-30'
 need_log = False
 last_filled_price1 = 0
 last_filled_price2 = 0
 last_day_filled_price = 0
 per_volume = 10e3/0.002
-diff1 = 0.004
-diff2 = 0.01
+diff1 = 0.02
+diff2 = 0.03
 sell_times = 0
 buy_times = 0
 sum = 0
