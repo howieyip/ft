@@ -756,7 +756,7 @@ def auto_move_position(hsi_data):
     return has_sold
 
 
-def _position_list_query(stock_type='', need_log=True, caller=''):
+def _position_list_query(stock_type='', need_log=True, caller='', code='', need_loss=True):
     log.info('position_list_query, caller: %s' % caller)
     ret, data = trade_ctx.position_list_query(trd_env=conf['TRADE_ENV'], refresh_cache=True, acc_id=conf['acc_id'])
     if need_log:
@@ -791,33 +791,9 @@ def _position_list_query(stock_type='', need_log=True, caller=''):
             #     log.info('auto_place_order, code: %s, nominal_price: %s, can_sell_qty: %s' % (item.code, item.nominal_price, item.can_sell_qty))
             #     glb['max_nominal_price'][item.code] = item.nominal_price
             #     auto_place_order(item.code, item.qty, item.nominal_price, batch=not glb['almost_over'])
+            if need_loss:
+                loss(item.code, item.stock_name, item.nominal_price, item.nominal_price, item.qty)
 
-            if conf['NEED_LOSS']:
-                if item.code not in glb['max_nominal_price']:
-                    glb['max_nominal_price'][item.code] = item.nominal_price
-                elif item.nominal_price > glb['max_nominal_price'][item.code]:
-                    glb['max_nominal_price'][item.code] = item.nominal_price
-                log.info('%s max_nominal_price: %s' % (item.code, glb['max_nominal_price'][item.code]))
-
-                if item.code not in glb['loss']:
-                    glb['loss'][item.code] = False
-                if glb['loss'].get(item.code):
-                    first_order_diff = 0.001
-                else:
-                    first_order_diff = conf['FIRST_ORDER_DIFF']
-
-                if item.stock_name.find('牛') > -1:
-                    # 当前价格比卖单价低等2格的时候
-                    if len(glb['submitted_sell_bull_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bull_list'][0].price - 0.001, 3):
-                        # 当前价格比买入后的最高价低等2格的时候，重新挂单
-                        if item.nominal_price < round(glb['max_nominal_price'][item.code] - first_order_diff, 3):
-                            log.info('loss_order, code: %s, nominal_price: %s, max_nominal_price: %s' % (item.code, item.nominal_price, glb['max_nominal_price'][item.code]))
-                            auto_place_order(item.code, item.qty, item.nominal_price, loss=True)
-                elif item.stock_name.find('熊') > -1:
-                    if len(glb['submitted_sell_bear_list']) > 0 and item.nominal_price < round(glb['submitted_sell_bear_list'][0].price - 0.001, 3):
-                        if item.nominal_price < round(glb['max_nominal_price'][item.code] - first_order_diff, 3):
-                            log.info('loss_order, code: %s, nominal_price: %s, max_nominal_price: %s' % (item.code, item.nominal_price, glb['max_nominal_price'][item.code]))
-                            auto_place_order(item.code, item.qty, item.nominal_price, loss=True)
         # if has_sold:
         #     return False
         bull_data = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('牛')]
@@ -830,6 +806,8 @@ def _position_list_query(stock_type='', need_log=True, caller=''):
             return bull_data
         elif stock_type == 'bear':
             return bear_data
+        elif code != '':
+            return today_buy_hold_data[today_buy_hold_data.code == code]
         return today_buy_hold_data
     else:
         glb['max_nominal_price'] = {}
@@ -852,6 +830,47 @@ class SysNotify(ft.SysNotifyHandlerBase):
         return ret, data
 
 
+def loss(code, stock_name, bid_price, ask_price, qty=None, need_log=True):
+    if not conf['NEED_LOSS']:
+        return False
+    if code not in glb['max_nominal_price']:
+        glb['max_nominal_price'][code] = bid_price
+    elif bid_price > glb['max_nominal_price'][code]:
+        glb['max_nominal_price'][code] = bid_price
+    if need_log:
+        log.info('%s max_nominal_price: %s' % (code, glb['max_nominal_price'][code]))
+
+    if code not in glb['loss']:
+        glb['loss'][code] = False
+    if glb['loss'].get(code):
+        first_order_diff = 0.001
+    else:
+        first_order_diff = conf['FIRST_ORDER_DIFF']
+
+    if stock_name.find('牛') > -1:
+        # 卖一价比卖单价低等2格的时候
+        if len(glb['submitted_sell_bull_list']) > 0 and ask_price < round(glb['submitted_sell_bull_list'][0].price - 0.001, 3):
+            # 买一价比买入后的最高价低等2格的时候，重新挂单
+            if bid_price < round(glb['max_nominal_price'][code] - first_order_diff, 3):
+                log.info('loss_order, code: %s, nominal_price: %s, max_nominal_price: %s' % (code, bid_price, glb['max_nominal_price'][code]))
+                if qty is None:
+                    data = position_list_query(code=code, need_loss=False, caller='loss')
+                    if data is False or data is None:
+                        return False
+                    qty = data.iloc[0].qty
+                auto_place_order(code, qty, bid_price, loss=True)
+    elif stock_name.find('熊') > -1:
+        if len(glb['submitted_sell_bear_list']) > 0 and ask_price < round(glb['submitted_sell_bear_list'][0].price - 0.001, 3):
+            if bid_price < round(glb['max_nominal_price'][code] - first_order_diff, 3):
+                log.info('loss_order, code: %s, nominal_price: %s, max_nominal_price: %s' % (code, bid_price, glb['max_nominal_price'][code]))
+                if qty is None:
+                    data = position_list_query(code=code, need_loss=False, caller='loss')
+                    if data is False or data is None:
+                        return False
+                    qty = data.iloc[0].qty
+                auto_place_order(code, qty, bid_price, loss=True)
+
+
 class OrderBook(ft.OrderBookHandlerBase):
     def on_recv_rsp(self, rsp_str):
         ret, data = super(OrderBook, self).on_recv_rsp(rsp_str)
@@ -860,6 +879,10 @@ class OrderBook(ft.OrderBookHandlerBase):
             log.info('OrderBook push error，ret: %s, data:%s' % (ret, data))
             return ret, data
         glb['order_book'][data['code']] = data
+        t = data['svr_recv_time_bid']
+        s = int(t[17:19])
+
+        loss(data['code'], data['name'], data['Bid'][0][0], data['Ask'][0][0], need_log=s==0)
         return ret, data
 
 
@@ -869,16 +892,16 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
         return False
     if price > conf['CUR_PRICE_MAX']:
         return False
+    first_order_price = price + conf['FIRST_ORDER_DIFF']
     if volume < 100e3:
         batch = False
-        conf['FIRST_ORDER_DIFF'] = conf['ADD_PRICE_DIFF']
-    first_order_price = price + conf['FIRST_ORDER_DIFF']
+        first_order_price = price + conf['ADD_PRICE_DIFF']
     if conf['NEED_LOSS']:
         if loss:
             glb['loss'][code] = True
             order_book = get_order_book(code)
             if order_book:
-                first_order_price = order_book['Ask'][0][0]
+                first_order_price = order_book['Bid'][0][0]
             else:
                 first_order_price = price
         else:
@@ -1417,7 +1440,7 @@ order_list_query = throttle(_order_list_query, 3)
 # 每 30 秒内最多请求 20 次改单撤单接口，且连续两次请求的间隔不可小于 0.04 秒
 modify_order = delay_execution(_modify_order, 1.5) # 自动调价要连续执行，所以不能节流，只能延时
 cancel_order = delay_execution(_cancel_order, 1.5) # 撤销订单是遍历的，所以不能节流，只能延时
-cancel_all = delay_execution(_cancel_all, 1.5) # 撤销全部订单也是遍历的，所以不能节流，只能延时
+cancel_all = delay_execution(_cancel_all, 1) # 撤销全部订单也是遍历的，所以不能节流，只能延时
 
 
 def set_config(config):
@@ -1473,7 +1496,7 @@ def start(config=None):
     quote_ctx.set_handler(Ticker())
     # quote_ctx.set_handler(RTData())
     trade_ctx.set_handler(TradeOrder())
-    if conf['AUTO_ADJUST']:
+    if conf['AUTO_ADJUST'] or conf['NEED_LOSS']:
         quote_ctx.set_handler(OrderBook())
 
     ret, data = quote_ctx.query_subscription()

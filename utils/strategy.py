@@ -15,16 +15,17 @@ log = Logger(conf['log_file']).get_logger()
 
 code = 'HK.51539'
 max_count = 331
-start = '2024-10-01'
+start = '2024-10-28'
 end = start
-end = '2024-10-30'
+# end = '2024-10-08'
 need_log = False
 last_filled_price1 = 0
 last_filled_price2 = 0
 last_day_filled_price = 0
-per_volume = 10e3/0.002
-diff1 = 0.02
-diff2 = 0.03
+volume1 = 40e3
+volume2 = 40e3
+diff1 = 0.004
+diff2 = 0.002
 sell_times = 0
 buy_times = 0
 sum = 0
@@ -42,15 +43,15 @@ def cal(data):
         return False
     delta = round(data.iloc[-1]['close'] - data.iloc[0]['close'], 3)*1e3
     log.info('**************** %s ********************* %s' % (data.iloc[0]['time_key'], delta))
-    last_filled_price1, d1, m1 = _cal(data, diff1, last_filled_price1)
+    last_filled_price1, d1, m1 = _cal(data, diff1, volume1, last_filled_price1)
     delta_times1 += d1
     money1 += m1
-    last_filled_price2, d2, m2 = _cal(data, diff2, last_filled_price2)
+    last_filled_price2, d2, m2 = _cal(data, diff2, volume2, last_filled_price2)
     delta_times2 += d2
     money2 += m2
 
 
-def _cal(data, diff, last_filled_price):
+def _cal(data, diff, buy_volume, last_filled_price):
     global sell_times, buy_times, sum
     if last_filled_price == 0:
       last_filled_price = data.iloc[0]['close']
@@ -70,7 +71,6 @@ def _cal(data, diff, last_filled_price):
             buy_times += 1
             if need_log:
                 log.info('time: %s, buy: %s, _diff: %s' % (row.time_key, last_filled_price, _diff))
-    buy_volume = per_volume*diff
     money = sum*buy_volume - sell_times*20
     delta_times = sell_times - buy_times
     log.info('buy_volume: %s, diff: %s, buy_times: %s, sell_times: %s, delta_times: %s, last_filled_price: %s, money: %s' % (buy_volume, diff, buy_times, sell_times, delta_times, last_filled_price, money))
