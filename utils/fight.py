@@ -876,10 +876,13 @@ class OrderBook(ft.OrderBookHandlerBase):
         ret, data = super(OrderBook, self).on_recv_rsp(rsp_str)
         # log.info('实时摆盘推送，ret: %s, data:%s' % (ret, data))
         if ret != ft.RET_OK:
-            log.info('OrderBook push error，ret: %s, data:%s' % (ret, data))
+            log.info('OrderBook push error, ret: %s, data:%s' % (ret, data))
             return ret, data
         glb['order_book'][data['code']] = data
         t = data['svr_recv_time_bid']
+        if len(t) < 19: # 部分数据的接收时间为零，例如服务器重启或第一次推送的缓存数据
+            log.info('OrderBook push error, t: %s, data:%s' % (t, data))
+            return ret, data
         s = int(t[17:19])
 
         loss(data['code'], data['name'], data['Bid'][0][0], data['Ask'][0][0], need_log=s==0)
@@ -1155,7 +1158,7 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
                     return False
                 reference_price = glb['filled_all_last_order'].get(data0.code, {}).get('price')
                 if not reference_price:
-                    log.info('code: %s, no filled_all_last_order，\n%s' % (data0.code, glb['filled_all_last_order']))
+                    log.info('code: %s, no filled_all_last_order, \n%s' % (data0.code, glb['filled_all_last_order']))
                     reference_price = data0.cost_price
                 add_price_diff = round(reference_price - data0.nominal_price, 3)
                 if add_price_diff < conf['ADD_PRICE_DIFF']:
@@ -1270,7 +1273,7 @@ class RTData(ft.RTDataHandlerBase):
         # log.info('--------------------分时推送--------------------')
         ret, data = super(RTData, self).on_recv_rsp(rsp_str)
         if ret != ft.RET_OK:
-            log.info('RTData push error，ret: %s, data: %s' % (ret, data))
+            log.info('RTData push error, ret: %s, data: %s' % (ret, data))
             return ret, data
         #       code                 time  is_blank  opened_mins  cur_price  last_close     avg_price  volume      turnover
         # 0    HK.800000  2023-10-31 09:30:00     False          570   17337.70    17406.36  17337.700000       0  1.682861e+09
@@ -1297,7 +1300,7 @@ class Ticker(ft.TickerHandlerBase):
         # log.info('--------------------逐笔明细--------------------')
         ret, data = super(Ticker, self).on_recv_rsp(rsp_str)
         if ret != ft.RET_OK:
-            log.info('Ticker push error，ret: %s, data:%s' % (ret, data))
+            log.info('Ticker push error, ret: %s, data:%s' % (ret, data))
             return ret, data
         #       code              time                 price        volume  turnover    ticker_direction       sequence   type      push_data_type
         # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
