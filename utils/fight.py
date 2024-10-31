@@ -792,7 +792,7 @@ def _position_list_query(stock_type='', need_log=True, caller='', code='', need_
             #     glb['max_nominal_price'][item.code] = item.nominal_price
             #     auto_place_order(item.code, item.qty, item.nominal_price, batch=not glb['almost_over'])
             if need_loss:
-                loss(item.code, item.stock_name, item.nominal_price, item.nominal_price, item.qty)
+                _loss(item.code, item.stock_name, item.nominal_price, item.nominal_price, item.qty)
 
         # if has_sold:
         #     return False
@@ -830,11 +830,14 @@ class SysNotify(ft.SysNotifyHandlerBase):
         return ret, data
 
 
-def loss(code, stock_name, bid_price, ask_price, qty=None, need_log=True):
+def _loss(code, stock_name, bid_price, ask_price, qty=0, need_log=True):
     if not conf['NEED_LOSS']:
         return False
     if code not in glb['max_nominal_price']:
-        glb['max_nominal_price'][code] = bid_price
+        if qty > 0:
+            glb['max_nominal_price'][code] = bid_price
+        else:
+            return False
     elif bid_price > glb['max_nominal_price'][code]:
         glb['max_nominal_price'][code] = bid_price
     if need_log:
@@ -852,20 +855,20 @@ def loss(code, stock_name, bid_price, ask_price, qty=None, need_log=True):
         if len(glb['submitted_sell_bull_list']) > 0 and ask_price < round(glb['submitted_sell_bull_list'][0].price - 0.001, 3):
             # 买一价比买入后的最高价低等2格的时候，重新挂单
             if bid_price < round(glb['max_nominal_price'][code] - first_order_diff, 3):
-                log.info('loss_order, code: %s, nominal_price: %s, max_nominal_price: %s' % (code, bid_price, glb['max_nominal_price'][code]))
-                if qty is None:
+                log.info('loss_order, code: %s, qty: %s, nominal_price: %s, max_nominal_price: %s' % (code, qty, bid_price, glb['max_nominal_price'][code]))
+                if qty == 0:
                     data = position_list_query(code=code, need_loss=False, caller='loss')
-                    if data is False or data is None:
+                    if data is False or data is None or len(data) == 0:
                         return False
                     qty = data.iloc[0].qty
                 auto_place_order(code, qty, bid_price, loss=True)
     elif stock_name.find('熊') > -1:
         if len(glb['submitted_sell_bear_list']) > 0 and ask_price < round(glb['submitted_sell_bear_list'][0].price - 0.001, 3):
             if bid_price < round(glb['max_nominal_price'][code] - first_order_diff, 3):
-                log.info('loss_order, code: %s, nominal_price: %s, max_nominal_price: %s' % (code, bid_price, glb['max_nominal_price'][code]))
-                if qty is None:
+                log.info('loss_order, code: %s, qty: %s, nominal_price: %s, max_nominal_price: %s' % (code, qty, bid_price, glb['max_nominal_price'][code]))
+                if qty == 0:
                     data = position_list_query(code=code, need_loss=False, caller='loss')
-                    if data is False or data is None:
+                    if data is False or data is None or len(data) == 0:
                         return False
                     qty = data.iloc[0].qty
                 auto_place_order(code, qty, bid_price, loss=True)
@@ -1431,7 +1434,7 @@ check_line = throttle(_check_line, 3)
 position_list_query = throttle(_position_list_query, 3)
 # 每 30 秒内最多请求 15 次下单接口，且连续两次请求的间隔不可小于 0.02 秒
 smart_buy = throttle(_smart_buy, 2)
-smart_sell = delay_execution(_smart_sell, 2) # 自动挂卖单是遍历的，所以不能节流，只能延时
+smart_sell = delay_execution(_smart_sell, 1) # 自动挂卖单是遍历的，所以不能节流，只能延时
 # 每 30 秒内最多请求 60 次筛选窝轮接口
 get_stock_code = throttle(_get_stock_code, 0.5)
 # 每 300 秒内最多请求 1 次筛选最近回收牛熊接口
@@ -1442,9 +1445,10 @@ buy_recovery_code = throttle(_buy_recovery_code, 60)
 order_list_query = throttle(_order_list_query, 3)
 # 每 30 秒内最多请求 20 次改单撤单接口，且连续两次请求的间隔不可小于 0.04 秒
 modify_order = delay_execution(_modify_order, 1.5) # 自动调价要连续执行，所以不能节流，只能延时
-cancel_order = delay_execution(_cancel_order, 1.5) # 撤销订单是遍历的，所以不能节流，只能延时
+cancel_order = delay_execution(_cancel_order, 1) # 撤销订单是遍历的，所以不能节流，只能延时
 cancel_all = delay_execution(_cancel_all, 1) # 撤销全部订单也是遍历的，所以不能节流，只能延时
-
+# 限制时长要考虑撤单和下单的时长
+loss = throttle(_loss, 8)
 
 def set_config(config):
     global conf
