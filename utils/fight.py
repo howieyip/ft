@@ -138,8 +138,8 @@ glb = {
     'submitted_buy_bear_data': None,
     'submitted_sell_bull_data': None,
     'submitted_sell_bear_data': None,
-    'submitted_sell_bull_list': [],
-    'submitted_sell_bear_list': [],
+    'submitted_sell_bull_list': {},
+    'submitted_sell_bear_list': {},
     'order_book': {},
     'auto_buy_list': [],
     'has_bull_list': [],
@@ -670,30 +670,50 @@ def del_data(dict_list, key, data):
 
 def set_submitted_sell(code, stock_name, data):
     if stock_name.find('牛') > -1:
-        append_data(glb['submitted_sell_bull_list'], 'order_id', data)
-        glb['submitted_sell_bull_data'] = glb['submitted_sell_bull_list'][-1]
-        log.info('set_submitted_sell bull: %s, price: %s' % (code, data.price))
+        if code not in glb['submitted_sell_bull_list']:
+            glb['submitted_sell_bull_list'][code] = []
+        append_data(glb['submitted_sell_bull_list'][code], 'order_id', data)
+        glb['submitted_sell_bull_data'] = glb['submitted_sell_bull_list'][code][-1]
+        price_list = []
+        for item in glb['submitted_sell_bull_list'][code]:
+            price_list.append(item.price)
+        log.info('set_submitted_sell bull: %s, price_list: %s' % (code, price_list))
     elif stock_name.find('熊') > -1:
-        append_data(glb['submitted_sell_bear_list'], 'order_id', data)
-        glb['submitted_sell_bear_data'] = glb['submitted_sell_bear_list'][-1]
-        log.info('set_submitted_sell bear: %s, price: %s' % (code, data.price))
+        if code not in glb['submitted_sell_bear_list']:
+            glb['submitted_sell_bear_list'][code] = []
+        append_data(glb['submitted_sell_bear_list'][code], 'order_id', data)
+        glb['submitted_sell_bear_data'] = glb['submitted_sell_bear_list'][code][-1]
+        price_list = []
+        for item in glb['submitted_sell_bear_list'][code]:
+            price_list.append(item.price)
+        log.info('set_submitted_sell bear: %s, price_list: %s' % (code, price_list))
 
 
 def reset_submitted_sell(code, stock_name='', data=None):
     if stock_name == '' or stock_name.find('牛') > -1:
-        del_data(glb['submitted_sell_bull_list'], 'order_id', data)
-        if len(glb['submitted_sell_bull_list']) > 0:
-            glb['submitted_sell_bull_data'] = glb['submitted_sell_bull_list'][-1]
+        if code not in glb['submitted_sell_bull_list']:
+            glb['submitted_sell_bull_list'][code] = []
+        del_data(glb['submitted_sell_bull_list'][code], 'order_id', data)
+        if len(glb['submitted_sell_bull_list'][code]) > 0:
+            glb['submitted_sell_bull_data'] = glb['submitted_sell_bull_list'][code][-1]
         else:
             glb['submitted_sell_bull_data'] = None
-        log.info('reset_submitted_sell bull: %s' % code)
+        price_list = []
+        for item in glb['submitted_sell_bull_list'][code]:
+            price_list.append(item.price)
+        log.info('reset_submitted_sell bull: %s, price_list: %s' % (code, price_list))
     if stock_name == '' or stock_name.find('熊') > -1:
-        del_data(glb['submitted_sell_bear_list'], 'order_id', data)
-        if len(glb['submitted_sell_bear_list']) > 0:
-            glb['submitted_sell_bear_data'] = glb['submitted_sell_bear_list'][-1]
+        if code not in glb['submitted_sell_bear_list']:
+            glb['submitted_sell_bear_list'][code] = []
+        del_data(glb['submitted_sell_bear_list'][code], 'order_id', data)
+        if len(glb['submitted_sell_bear_list'][code]) > 0:
+            glb['submitted_sell_bear_data'] = glb['submitted_sell_bear_list'][code][-1]
         else:
             glb['submitted_sell_bear_data'] = None
-        log.info('reset_submitted_sell bear: %s' % code)
+        price_list = []
+        for item in glb['submitted_sell_bear_list'][code]:
+            price_list.append(item.price)
+        log.info('reset_submitted_sell bear: %s, price_list: %s' % (code, price_list))
 
 
 # 统计今日盈亏
@@ -756,7 +776,7 @@ def auto_move_position(hsi_data):
     return has_sold
 
 
-def _position_list_query(stock_type='', need_log=True, caller='', code='', need_loss=True):
+def _position_list_query(stock_type='', need_log=True, caller='', code=''):
     log.info('position_list_query, caller: %s' % caller)
     ret, data = trade_ctx.position_list_query(trd_env=conf['TRADE_ENV'], refresh_cache=True, acc_id=conf['acc_id'])
     if need_log:
@@ -791,7 +811,7 @@ def _position_list_query(stock_type='', need_log=True, caller='', code='', need_
             #     log.info('auto_place_order, code: %s, nominal_price: %s, can_sell_qty: %s' % (item.code, item.nominal_price, item.can_sell_qty))
             #     glb['max_nominal_price'][item.code] = item.nominal_price
             #     auto_place_order(item.code, item.qty, item.nominal_price, batch=not glb['almost_over'])
-            if need_loss:
+            if caller in ['per_min', 'fluctuate']:
                 _loss(item.code, item.stock_name, item.nominal_price, item.nominal_price, item.qty)
 
         # if has_sold:
@@ -852,22 +872,22 @@ def _loss(code, stock_name, bid_price, ask_price, qty=0, need_log=True):
 
     if stock_name.find('牛') > -1:
         # 卖一价比卖单价低等2格的时候
-        if len(glb['submitted_sell_bull_list']) > 0 and ask_price < round(glb['submitted_sell_bull_list'][0].price - 0.001, 3):
+        if len(glb['submitted_sell_bull_list'][code]) > 0 and ask_price < round(glb['submitted_sell_bull_list'][code][0].price - 0.001, 3):
             # 买一价比买入后的最高价低等2格的时候，重新挂单
             if bid_price < round(glb['max_nominal_price'][code] - first_order_diff, 3):
                 log.info('loss_order, code: %s, qty: %s, nominal_price: %s, max_nominal_price: %s' % (code, qty, bid_price, glb['max_nominal_price'][code]))
                 if qty == 0:
-                    data = position_list_query(code=code, need_loss=False, caller='loss')
+                    data = position_list_query(code=code, caller='loss')
                     if data is False or data is None or len(data) == 0:
                         return False
                     qty = data.iloc[0].qty
                 auto_place_order(code, qty, bid_price, loss=True)
     elif stock_name.find('熊') > -1:
-        if len(glb['submitted_sell_bear_list']) > 0 and ask_price < round(glb['submitted_sell_bear_list'][0].price - 0.001, 3):
+        if len(glb['submitted_sell_bear_list'][code]) > 0 and ask_price < round(glb['submitted_sell_bear_list'][code][0].price - 0.001, 3):
             if bid_price < round(glb['max_nominal_price'][code] - first_order_diff, 3):
                 log.info('loss_order, code: %s, qty: %s, nominal_price: %s, max_nominal_price: %s' % (code, qty, bid_price, glb['max_nominal_price'][code]))
                 if qty == 0:
-                    data = position_list_query(code=code, need_loss=False, caller='loss')
+                    data = position_list_query(code=code, caller='loss')
                     if data is False or data is None or len(data) == 0:
                         return False
                     qty = data.iloc[0].qty
