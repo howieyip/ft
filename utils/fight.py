@@ -833,6 +833,8 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
         if glb['almost_over']:
             glb['over'] = True
             log.info('--------------------over--------------------')
+            quote_ctx.close()
+            trade_ctx.close()
         return []
 
 
@@ -1480,18 +1482,11 @@ def set_config(config):
 
 
 def start(config=None):
-    time.sleep(3)
     global log, quote_ctx, trade_ctx
     if config is not None:
         set_config(config)
     ft.set_futu_debug_model(False)
     log = Logger(conf['log_file']).get_logger()
-    temp_quote_ctx = None
-    temp_trade_ctx = None
-    if quote_ctx is not None:
-        temp_quote_ctx = quote_ctx
-        temp_trade_ctx = trade_ctx
-        log.info('restart new')
     quote_ctx = ft.OpenQuoteContext(host=conf['HOST'], port=conf['PORT'])
     trade_ctx = ft.OpenSecTradeContext(filter_trdmarket=ft.TrdMarket.HK, host=conf['HOST'], port=conf['PORT'])
     # ret, data = trade_ctx.get_acc_list()
@@ -1529,12 +1524,3 @@ def start(config=None):
     if ret != ft.RET_OK:
         log.info('query_subscription error')
     quote_ctx.start()
-
-    # ticker = Ticker()
-    # ticker.on_recv_rsp()
-
-    if temp_quote_ctx is not None:
-        temp_quote_ctx.close()
-        temp_trade_ctx.close()
-        log.info('restart success')
-
