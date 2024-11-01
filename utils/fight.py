@@ -136,10 +136,10 @@ glb = {
     'submitted_buy_bear_flag': False,
     'submitted_buy_bull_data': None,
     'submitted_buy_bear_data': None,
-    'submitted_sell_bull_data': None,
-    'submitted_sell_bear_data': None,
-    'submitted_sell_bull_list': {},
-    'submitted_sell_bear_list': {},
+    'submitted_sell_bull_lastdata': None,
+    'submitted_sell_bear_lastdata': None,
+    'submitted_sell_bull_dict': {},
+    'submitted_sell_bear_dict': {},
     'order_book': {},
     'auto_buy_list': [],
     'has_bull_list': [],
@@ -678,37 +678,37 @@ def log_submitted_sell_price(code, submitted_type, caller=''):
 
 def set_submitted_sell(code, stock_name, data):
     if stock_name.find('牛') > -1:
-        if code not in glb['submitted_sell_bull_list']:
-            glb['submitted_sell_bull_list'][code] = []
-        append_data(glb['submitted_sell_bull_list'][code], 'order_id', data)
-        glb['submitted_sell_bull_data'] = glb['submitted_sell_bull_list'][code][-1]
+        if code not in glb['submitted_sell_bull_dict']:
+            glb['submitted_sell_bull_dict'][code] = []
+        append_data(glb['submitted_sell_bull_dict'][code], 'order_id', data)
+        glb['submitted_sell_bull_lastdata'] = glb['submitted_sell_bull_dict'][code][-1]
         log_submitted_sell_price(code, 'submitted_sell_bull', 'set')
     elif stock_name.find('熊') > -1:
-        if code not in glb['submitted_sell_bear_list']:
-            glb['submitted_sell_bear_list'][code] = []
-        append_data(glb['submitted_sell_bear_list'][code], 'order_id', data)
-        glb['submitted_sell_bear_data'] = glb['submitted_sell_bear_list'][code][-1]
+        if code not in glb['submitted_sell_bear_dict']:
+            glb['submitted_sell_bear_dict'][code] = []
+        append_data(glb['submitted_sell_bear_dict'][code], 'order_id', data)
+        glb['submitted_sell_bear_lastdata'] = glb['submitted_sell_bear_dict'][code][-1]
         log_submitted_sell_price(code, 'submitted_sell_bear', 'set')
 
 
 def reset_submitted_sell(code, stock_name='', data=None):
     if stock_name == '' or stock_name.find('牛') > -1:
-        if code not in glb['submitted_sell_bull_list']:
-            glb['submitted_sell_bull_list'][code] = []
-        del_data(glb['submitted_sell_bull_list'][code], 'order_id', data)
-        if len(glb['submitted_sell_bull_list'][code]) > 0:
-            glb['submitted_sell_bull_data'] = glb['submitted_sell_bull_list'][code][-1]
+        if code not in glb['submitted_sell_bull_dict']:
+            glb['submitted_sell_bull_dict'][code] = []
+        del_data(glb['submitted_sell_bull_dict'][code], 'order_id', data)
+        if len(glb['submitted_sell_bull_dict'][code]) > 0:
+            glb['submitted_sell_bull_lastdata'] = glb['submitted_sell_bull_dict'][code][-1]
         else:
-            glb['submitted_sell_bull_data'] = None
+            glb['submitted_sell_bull_lastdata'] = None
         log_submitted_sell_price(code, 'submitted_sell_bull', 'reset')
     if stock_name == '' or stock_name.find('熊') > -1:
-        if code not in glb['submitted_sell_bear_list']:
-            glb['submitted_sell_bear_list'][code] = []
-        del_data(glb['submitted_sell_bear_list'][code], 'order_id', data)
-        if len(glb['submitted_sell_bear_list'][code]) > 0:
-            glb['submitted_sell_bear_data'] = glb['submitted_sell_bear_list'][code][-1]
+        if code not in glb['submitted_sell_bear_dict']:
+            glb['submitted_sell_bear_dict'][code] = []
+        del_data(glb['submitted_sell_bear_dict'][code], 'order_id', data)
+        if len(glb['submitted_sell_bear_dict'][code]) > 0:
+            glb['submitted_sell_bear_lastdata'] = glb['submitted_sell_bear_dict'][code][-1]
         else:
-            glb['submitted_sell_bear_data'] = None
+            glb['submitted_sell_bear_lastdata'] = None
         log_submitted_sell_price(code, 'submitted_sell_bear', 'reset')
 
 
@@ -808,7 +808,7 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
                 auto_place_order(item.code, item.qty, item.nominal_price, batch=not glb['almost_over'])
             # 检查止损
             if caller in ['per_min', 'fluctuate']:
-                _loss(item.code, item.stock_name, item.nominal_price, item.nominal_price, item.qty)
+                loss(item.code, item.stock_name, item.nominal_price, item.nominal_price, caller='position')
 
         # if has_sold:
         #     return False
@@ -849,11 +849,17 @@ class SysNotify(ft.SysNotifyHandlerBase):
         return ret, data
 
 
-def _loss(code, stock_name, bid_price, ask_price, qty=0, need_log=True):
+def loss_modify_order(dict_list, price):
+    for i in range(0, len(dict_list)):
+        item = dict_list[i]
+        modify_order(item.order_id, price + 0.001 * (i + 1), item.qty)
+
+
+def loss(code, stock_name, bid_price, ask_price, caller='', need_log=True):
     if not conf['NEED_LOSS']:
         return False
     if code not in glb['max_nominal_price']:
-        if qty > 0:
+        if caller == 'position':
             glb['max_nominal_price'][code] = bid_price
         else:
             return False
@@ -871,26 +877,16 @@ def _loss(code, stock_name, bid_price, ask_price, qty=0, need_log=True):
 
     if stock_name.find('牛') > -1:
         # 卖一价比第一个卖单价低等2格的时候
-        if code in glb['submitted_sell_bull_list'] and len(glb['submitted_sell_bull_list'][code]) > 0 and ask_price < round(glb['submitted_sell_bull_list'][code][0].price - 0.001, 3):
+        if code in glb['submitted_sell_bull_dict'] and len(glb['submitted_sell_bull_dict'][code]) > 0 and ask_price < round(glb['submitted_sell_bull_dict'][code][0].price - 0.001, 3):
             # 买一价比买入后的最高价低等2格的时候，重新挂单
             if bid_price < round(glb['max_nominal_price'][code] - first_order_diff, 3):
-                log.info('loss_order, code: %s, qty: %s, nominal_price: %s, max_nominal_price: %s' % (code, qty, bid_price, glb['max_nominal_price'][code]))
-                if qty == 0:
-                    data = position_list_query(code=code, caller='loss')
-                    if data is False or data is None or len(data) == 0:
-                        return False
-                    qty = data.iloc[0].qty
-                auto_place_order(code, qty, bid_price, loss=True)
+                log.info('loss_order, bull code: %s, nominal_price: %s, max_nominal_price: %s' % (code, bid_price, glb['max_nominal_price'][code]))
+                loss_modify_order(glb['submitted_sell_bull_dict'][code], bid_price)
     elif stock_name.find('熊') > -1:
-        if code in glb['submitted_sell_bear_list'] and len(glb['submitted_sell_bear_list'][code]) > 0 and ask_price < round(glb['submitted_sell_bear_list'][code][0].price - 0.001, 3):
+        if code in glb['submitted_sell_bear_dict'] and len(glb['submitted_sell_bear_dict'][code]) > 0 and ask_price < round(glb['submitted_sell_bear_dict'][code][0].price - 0.001, 3):
             if bid_price < round(glb['max_nominal_price'][code] - first_order_diff, 3):
-                log.info('loss_order, code: %s, qty: %s, nominal_price: %s, max_nominal_price: %s' % (code, qty, bid_price, glb['max_nominal_price'][code]))
-                if qty == 0:
-                    data = position_list_query(code=code, caller='loss')
-                    if data is False or data is None or len(data) == 0:
-                        return False
-                    qty = data.iloc[0].qty
-                auto_place_order(code, qty, bid_price, loss=True)
+                log.info('loss_order, bear code: %s, nominal_price: %s, max_nominal_price: %s' % (code, bid_price, glb['max_nominal_price'][code]))
+                loss_modify_order(glb['submitted_sell_bear_dict'][code], bid_price)
 
 
 class OrderBook(ft.OrderBookHandlerBase):
@@ -917,6 +913,7 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
         return False
     if price > conf['CUR_PRICE_MAX']:
         return False
+    glb['auto_place_order_flag'] = True
     first_order_price = price + conf['FIRST_ORDER_DIFF']
     if volume < 100e3:
         batch = False
@@ -931,7 +928,6 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
                 first_order_price = price
         else:
             glb['loss'][code] = False
-    glb['auto_place_order_flag'] = True
     if cancel:
         cancel_all(code, trd_side=ft.TrdSide.SELL)
     if not batch:
@@ -1019,7 +1015,7 @@ class TradeOrder(ft.TradeOrderHandlerBase):
 
 
 def auto_adjust(delta_price, i, adjust_dict, submitted_type):
-    data = glb[submitted_type + '_data']
+    data = glb[submitted_type + '_lastdata']
     if data is None or data.code not in glb['order_book'] or (submitted_type.find('buy') > -1 and data.code not in glb['auto_buy_list']):
         return False
     order_book = glb['order_book'].get(data.code)
@@ -1454,7 +1450,7 @@ check_line = throttle(_check_line, 3)
 position_list_query = throttle(_position_list_query, 3)
 # 每 30 秒内最多请求 15 次下单接口，且连续两次请求的间隔不可小于 0.02 秒
 smart_buy = throttle(_smart_buy, 2)
-smart_sell = delay_execution(_smart_sell, 1) # 自动挂卖单是遍历的，所以不能节流，只能延时
+smart_sell = delay_execution(_smart_sell, 1) # 自动挂卖单需要遍历，所以不能节流，只能延时
 # 每 30 秒内最多请求 60 次筛选窝轮接口
 get_stock_code = throttle(_get_stock_code, 0.5)
 # 每 300 秒内最多请求 1 次筛选最近回收牛熊接口
@@ -1464,11 +1460,10 @@ buy_recovery_code = throttle(_buy_recovery_code, 60)
 # 每 30 秒内最多请求 10 次查询今日订单接口
 order_list_query = throttle(_order_list_query, 3)
 # 每 30 秒内最多请求 20 次改单撤单接口，且连续两次请求的间隔不可小于 0.04 秒
-modify_order = delay_execution(_modify_order, 1.5) # 自动调价要连续执行，所以不能节流，只能延时
-cancel_order = delay_execution(_cancel_order, 1) # 撤销订单是遍历的，所以不能节流，只能延时
-cancel_all = delay_execution(_cancel_all, 1) # 撤销全部订单也是遍历的，所以不能节流，只能延时
-# 限制时长要考虑撤单和下单的时长
-loss = throttle(_loss, 8)
+modify_order = delay_execution(_modify_order, 1) # 自动调价需要遍历，所以不能节流，只能延时
+cancel_order = delay_execution(_cancel_order, 1) # 撤销订单需要遍历，所以不能节流，只能延时
+cancel_all = delay_execution(_cancel_all, 1) # 撤销全部订单需要遍历，所以不能节流，只能延时
+
 
 def set_config(config):
     global conf
