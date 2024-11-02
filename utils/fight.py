@@ -20,15 +20,15 @@ conf = {
     'PORT': 11111,
     'acc_id': 281756481226004224,
 
-    'AUTO_BUY': False,                              # 是否自动买入，若是则下面的配置有效
     'NEED_LOSS': True,
+    'AUTO_BUY': False,                              # 是否自动买入，若是则下面的配置有效
     'TRY_RECOVERY': False,                          # 是否买快回收的且价格比正常低很多的股票
-    'TRY_FOLLOW_RECOVERY': False,                   # 是否顺势买回收方向的股票
+    'TRY_FOLLOW_RECOVERY': False,                   # 是否顺势买快回收的反方向的股票
     'BIG-ONE-WAY': False,                           # 是否采用大单边策略
     'FOLLOW_TREND': False,                          # 买入策略是否为顺势买入，逆势则为False
     'BULL_CODE': '',                                # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
     'BEAR_CODE': '',                                # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
-    'if_check_line': True,                         # 是否检查相关的线
+    'if_check_line': True,                          # 是否检查相关的线
     'GOLDEN_LINE_DIFF': 80,                         # 黄金分割线0-100之间要间隔多少点
     'CUR_PRICE_MIN': 0.03,
     'CUR_PRICE_MAX': 0.1,                          # 这个值非常重要，当天买入的新股票如果低于这个价，会被当成是日内短炒止损
@@ -37,20 +37,20 @@ conf = {
     'DELTA_PRICE_MIN': 8,                           # 最小波动多少点
     'DELTA_PRICE_MAX': 18,                          # 最大波动多少点
     'FOLLOW_TREND_PRICE': 20,                       # 波动多少点，强制改为顺势买入
-    'BUY_VOLUME': 100e3,                            # 下单多少股
-    'MAX_VOLUME': 300e3,                            # 最大持仓股数，若超过则不会再买入
+    'BUY_VOLUME': 200e3,                            # 下单多少股
+    'MAX_VOLUME': 400e3,                            # 最大持仓股数，若超过则不会再买入
 
     'AUTO_ADJUST': False,                           # 是否自动调整订单价格，若是则下面的AUTO_ADJUST_BUY和AUTO_ADJUST_SELL有效
-    'AUTO_ADJUST_BUY': True,                        # 是否自动调整挂的买单的价格，若是则下面的ADJUST_BUY_DICT有效
+    'AUTO_ADJUST_BUY': False,                        # 是否自动调整挂的买单的价格，若是则下面的ADJUST_BUY_DICT有效
     'ADJUST_BUY_DICT': {
         'rise': [60, 1, 1],                         # 最近多少秒内，往持仓股票方向波动多少点，调整买单为第几档
         'fall': [60, 1, 2]                          # 最近多少秒内，往持仓股票反向波动多少点，调整买单为第几档
     },
 
-    'ALLOW_ADD': True,                              # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
+    'ALLOW_ADD': False,                              # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
     'ADD_PRICE_DIFF': 0.004,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
     'only_today_buy': True,                         # 仅处理今天新买的，过夜的不管
-    'AUTO_PLACE_ORDER': False,                      # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
+    'AUTO_PLACE_ORDER': True,                      # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
     'ORDER_LIST': [                                 # 下单多少股以上（大的写前面），每单挂多少股，例如下单800k，分3档200k 200k 400k挂单
         [800e3, 200e3, 200e3, 200e3, 200e3],
         [700e3, 150e3, 150e3, 200e3, 200e3],
@@ -76,7 +76,7 @@ conf = {
     'FIRST_ORDER_DIFF': 0.001,                      # 第一个卖单为第几档
     'LAST_ORDER_DIFF': 0.004,                       # 最后一个卖单为第几档
 
-    'AUTO_ADJUST_SELL': True,                       # 是否自动调整挂的卖单的价格，若是则下面的ADJUST_SELL_DICT有效
+    'AUTO_ADJUST_SELL': False,                       # 是否自动调整挂的卖单的价格，若是则下面的ADJUST_SELL_DICT有效
     'ADJUST_SELL_DICT': {
         'rise': [60, 1, 2],                         # 最近多少秒内，往持仓股票方向波动多少点，调整卖单为第几档
         'fall': [60, 1, 1]                          # 最近多少秒内，往持仓股票反向波动多少点，调整卖单为第几档
@@ -89,7 +89,7 @@ conf = {
         'cur_price_min': 0.13,
         'cur_price_max': 0.18
     },
-    'sell_all_to_over': False                       # 尾盘清仓
+    'sell_all_to_over': True                       # 尾盘清仓
 }
 
 
@@ -398,7 +398,7 @@ def _smart_buy(code, volume, price=None, type='Bid'):
         if conf['TRADE_ENV'] == ft.TrdEnv.SIMULATE:
             type = 'Ask'
         price = max(0.01, data[type][0][0])
-        if volume < 100e3:
+        if conf['ALLOW_ADD'] and volume < 100e3:
             reference_price = glb['filled_all_last_order'].get(code, {}).get('price')
             if reference_price is not None and data['Ask'][0][0] <= round(reference_price - conf['ADD_PRICE_DIFF'], 3):
                 price = data['Ask'][0][0]
@@ -866,7 +866,7 @@ def loss(code, stock_name, bid_price, ask_price, caller='', need_log=True):
     elif bid_price > glb['max_nominal_price'][code]:
         glb['max_nominal_price'][code] = bid_price
     if need_log:
-        log.info('%s max_nominal_price: %s' % (code, glb['max_nominal_price'][code]))
+        log.info('%s %s max_nominal_price: %s' % (caller, code, glb['max_nominal_price'][code]))
 
     if code not in glb['loss']:
         glb['loss'][code] = False
@@ -880,12 +880,12 @@ def loss(code, stock_name, bid_price, ask_price, caller='', need_log=True):
         if code in glb['submitted_sell_bull_dict'] and len(glb['submitted_sell_bull_dict'][code]) > 0 and ask_price < round(glb['submitted_sell_bull_dict'][code][0].price - 0.001, 3):
             # 买一价比买入后的最高价低等2格的时候，重新挂单
             if bid_price < round(glb['max_nominal_price'][code] - first_order_diff, 3):
-                log.info('loss_order, bull code: %s, nominal_price: %s, max_nominal_price: %s' % (code, bid_price, glb['max_nominal_price'][code]))
+                log.info('loss bull %s %s, nominal_price: %s, max_nominal_price: %s' % (caller, code, bid_price, glb['max_nominal_price'][code]))
                 loss_modify_order(glb['submitted_sell_bull_dict'][code], bid_price)
     elif stock_name.find('熊') > -1:
         if code in glb['submitted_sell_bear_dict'] and len(glb['submitted_sell_bear_dict'][code]) > 0 and ask_price < round(glb['submitted_sell_bear_dict'][code][0].price - 0.001, 3):
             if bid_price < round(glb['max_nominal_price'][code] - first_order_diff, 3):
-                log.info('loss_order, bear code: %s, nominal_price: %s, max_nominal_price: %s' % (code, bid_price, glb['max_nominal_price'][code]))
+                log.info('loss bear %s %s, nominal_price: %s, max_nominal_price: %s' % (caller, code, bid_price, glb['max_nominal_price'][code]))
                 loss_modify_order(glb['submitted_sell_bear_dict'][code], bid_price)
 
 
@@ -917,7 +917,8 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
     first_order_price = price + conf['FIRST_ORDER_DIFF']
     if volume < 100e3:
         batch = False
-        first_order_price = price + conf['ADD_PRICE_DIFF']
+        if conf['ALLOW_ADD']:
+            first_order_price = price + conf['ADD_PRICE_DIFF']
     if conf['NEED_LOSS']:
         if loss:
             glb['loss'][code] = True
@@ -1162,7 +1163,9 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
         if data is False or data is None:
             return False
         if len(data) > 0:
-            data0 = data.iloc[0]
+            if not conf['ALLOW_ADD']:
+                log.info('not allow add')
+                return False
             total_qty = sum(data.qty)
             if total_qty + volume > conf['MAX_VOLUME']:
                 if conf['MAX_VOLUME'] - total_qty >= 100e3:
@@ -1171,19 +1174,16 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
                 else:
                     log.info('current total_qty: %s, MAX_VOLUME: %s, not allow add' % (total_qty, conf['MAX_VOLUME']))
                     return False
-            if total_qty > 0:
-                if not conf['ALLOW_ADD']:
-                    log.info('not allow add')
-                    return False
-                reference_price = glb['filled_all_last_order'].get(data0.code, {}).get('price')
-                if not reference_price:
-                    log.info('code: %s, no filled_all_last_order, \n%s' % (data0.code, glb['filled_all_last_order']))
-                    reference_price = data0.cost_price
-                add_price_diff = round(reference_price - data0.nominal_price, 3)
-                if add_price_diff < conf['ADD_PRICE_DIFF']:
-                    log.info('code: %s, nominal_price: %s, reference_price: %s, diff: %s < %s, not allow add' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
-                    return False
-                log.info('code: %s, nominal_price: %s, reference_price: %s, diff: %s >= %s, allow add' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
+            data0 = data.iloc[0]
+            reference_price = glb['filled_all_last_order'].get(data0.code, {}).get('price')
+            if not reference_price:
+                log.info('code: %s, no filled_all_last_order, \n%s' % (data0.code, glb['filled_all_last_order']))
+                reference_price = data0.cost_price
+            add_price_diff = round(reference_price - data0.nominal_price, 3)
+            if add_price_diff < conf['ADD_PRICE_DIFF']:
+                log.info('code: %s, nominal_price: %s, reference_price: %s, diff: %s < %s, not allow add' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
+                return False
+            log.info('code: %s, nominal_price: %s, reference_price: %s, diff: %s >= %s, allow add' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
 
     if code == 'auto':
         data = _get_stock_code(stock_type=stock_type, cur_price_min=cur_price_min, cur_price_max=cur_price_max)
@@ -1493,7 +1493,7 @@ def start(config=None):
         if ret != ft.RET_OK:
             log.info('unlock_trade error')
             return False
-    data = subscribe([CONST['HSI_CODE']], [ft.SubType.RT_DATA], subscribe_push=False)
+    data = subscribe([CONST['HSI_CODE']], [ft.SubType.RT_DATA], subscribe_push=conf['TRY_FOLLOW_RECOVERY'])
     if data is False:
         return False
     data = subscribe([CONST['MHI_CODE']], [ft.SubType.TICKER])
@@ -1509,7 +1509,8 @@ def start(config=None):
 
     quote_ctx.set_handler(SysNotify())
     quote_ctx.set_handler(Ticker())
-    # quote_ctx.set_handler(RTData())
+    if conf['TRY_FOLLOW_RECOVERY']:
+        quote_ctx.set_handler(RTData())
     trade_ctx.set_handler(TradeOrder())
     if conf['AUTO_ADJUST'] or conf['NEED_LOSS']:
         quote_ctx.set_handler(OrderBook())
