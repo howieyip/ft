@@ -423,6 +423,7 @@ def _smart_sell(code, volume, price=None, type='Ask'):
         if not data:
             return False
         price = max(0.01, data[type][0][0])
+    price = round(price, 3)
     ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.SELL, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
     log.info('_smart_sell, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
@@ -445,6 +446,7 @@ def _cancel_order(order_id):
 
 
 def _modify_order(order_id, price, qty):
+    price = round(price, 3)
     ret, data = trade_ctx.modify_order(modify_order_op=ft.ModifyOrderOp.NORMAL, order_id=order_id, price=price, qty=qty, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
     log.info('modify_order, ret: %s, data:\n%s, order_id: %s, price: %s, qty: %s' % (ret, data, order_id, price, qty))
     if ret != ft.RET_OK:
@@ -669,9 +671,9 @@ def del_data(dict_list, key, data):
 
 
 def log_submitted_sell_price(code, submitted_type, caller=''):
-    list = glb[submitted_type + '_list']
+    order_list = glb[submitted_type + '_dict'][code]
     price_list = []
-    for item in list[code]:
+    for item in order_list:
         price_list.append(item.price)
     log.info('%s %s, code: %s, price_list: %s' % (caller, submitted_type, code, price_list))
 
@@ -849,10 +851,14 @@ class SysNotify(ft.SysNotifyHandlerBase):
         return ret, data
 
 
-def loss_modify_order(dict_list, price):
-    for i in range(0, len(dict_list)):
-        item = dict_list[i]
-        modify_order(item.order_id, price + 0.001 * (i + 1), item.qty)
+def loss_modify_order(order_list, price):
+    order_list2 = order_list[:] # 用新的数组，因为旧的成交了就会变化
+    for i in range(0, len(order_list2)):
+        item = order_list2[i]
+        if item.order_status == 'SUBMITTED':
+            modify_order(item.order_id, price + 0.001 * (i + 1), item.qty)
+        else:
+            log.info('modify_order warning, status: ', item.order_status)
 
 
 def loss(code, stock_name, bid_price, ask_price, caller='', need_log=True):
@@ -903,7 +909,7 @@ class OrderBook(ft.OrderBookHandlerBase):
             return ret, data
         s = int(t[17:19])
 
-        loss(data['code'], data['name'], data['Bid'][0][0], data['Ask'][0][0], need_log=s==0)
+        loss(data['code'], data['name'], data['Bid'][0][0], data['Ask'][0][0], need_log=s%10==0, caller='order_book')
         return ret, data
 
 
