@@ -406,37 +406,37 @@ def _smart_buy(code, volume, price=None, type='Bid'):
                 log.info('_smart_buy not allow, bid: %s, ask: %s, reference_price: %s' % (data['Bid'][0][0], data['Ask'][0][0], reference_price))
                 return False
     ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.BUY, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
-    log.info('_smart_buy, ret: %s, data:\n%s' % (ret, data))
+    # log.info('_smart_buy, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
-        log.info('code %s _smart_buy error, price %s, volume %s' % (code, price, volume))
+        log.info('_smart_buy error, code: %s, price: %s, volume: %s' % (code, price, volume))
         if '购买力不足' in data:
             conf['AUTO_BUY'] = False
         return False
     else:
-        log.info('code %s _smart_buy success, price %s, volume %s' % (code, price, volume))
+        log.info('_smart_buy success, code: %s, price: %s, volume: %s' % (code, price, volume))
         return data
 
 
 def _smart_sell(code, volume, price=None, type='Ask'):
     if price is None:
         data = get_order_book(code)
-        if not data:
+        if not data or not data[type][0]:
             return False
         price = max(0.01, data[type][0][0])
     price = round(price, 3)
     ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.SELL, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
-    log.info('_smart_sell, ret: %s, data:\n%s' % (ret, data))
+    # log.info('_smart_sell, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
-        log.info('code %s _smart_sell error, price %s, volume %s' % (code, price, volume))
+        log.info('_smart_sell error, code: %s, price: %s, volume: %s' % (code, price, volume))
         return False
     else:
-        log.info('code %s _smart_sell success, price %s, volume %s' % (code, price, volume))
+        log.info('_smart_sell success, code: %s, price: %s, volume: %s' % (code, price, volume))
         return data
 
 
 def _cancel_order(order_id):
     ret, data = trade_ctx.modify_order(modify_order_op=ft.ModifyOrderOp.CANCEL, order_id=order_id, price=0, qty=0, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
-    log.info('_cancel_order, ret: %s, data:\n%s' % (ret, data))
+    # log.info('_cancel_order, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
         log.info('_cancel_order error')
         return False
@@ -448,12 +448,12 @@ def _cancel_order(order_id):
 def _modify_order(order_id, price, qty):
     price = round(price, 3)
     ret, data = trade_ctx.modify_order(modify_order_op=ft.ModifyOrderOp.NORMAL, order_id=order_id, price=price, qty=qty, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
-    log.info('modify_order, ret: %s, data:\n%s, order_id: %s, price: %s, qty: %s' % (ret, data, order_id, price, qty))
+    # log.info('modify_order, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
-        log.info('modify_order error')
+        log.info('modify_order error, ret: %s, order_id: %s, price: %s, qty: %s' % (ret, order_id, price, qty))
         return False
     else:
-        log.info('modify_order success')
+        log.info('modify_order success, ret: %s, order_id: %s, price: %s, qty: %s' % (ret, order_id, price, qty))
         return data
 
 
@@ -482,7 +482,7 @@ def find_buy_price(order):
 
 def _order_list_query(code='', status_filter_list=[ft.OrderStatus.SUBMITTED, ft.OrderStatus.FILLED_PART, ft.OrderStatus.FILLED_ALL, ft.OrderStatus.CANCELLED_PART]):
     ret, data = trade_ctx.order_list_query(status_filter_list=status_filter_list, code=code, trd_env=conf['TRADE_ENV'], refresh_cache=True, acc_id=conf['acc_id'])
-    # log.info('查询订单，ret: %s, data:\n%s' % (ret, data))
+    # log.info('order_list_query, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
         log.info('order_list_query error, code: %s' % code)
         return False
@@ -520,7 +520,7 @@ def _cancel_all(code='', trd_side='', stock_type=''):
         return False
     if code == '' and stock_type == '' and trd_side == '':
         ret, data = trade_ctx.cancel_all_order(trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
-        log.info('cancel_all_order, ret: %s, data:\n%s' % (ret, data))
+        log.info('cancel_all_order, ret: %s, data: %s' % (ret, data))
         if ret != ft.RET_OK:
             log.info('cancel_all_order error')
     data = order_list_query(code, [ft.OrderStatus.SUBMITTED, ft.OrderStatus.FILLED_PART])
@@ -854,11 +854,12 @@ class SysNotify(ft.SysNotifyHandlerBase):
 def loss_modify_order(order_list, price):
     order_list2 = order_list[:] # 用新的数组，因为旧的成交了就会变化
     for i in range(0, len(order_list2)):
-        item = order_list2[i]
-        if item.order_status == 'SUBMITTED':
-            modify_order(item.order_id, price + 0.001 * (i + 1), item.qty)
+        order = order_list2[i]
+        price2 = price + 0.001 * (i + 1)
+        if order.order_status == 'SUBMITTED' and price2 != order.price:
+            modify_order(order.order_id, price2, order.qty)
         else:
-            log.info('modify_order warning, status: ', item.order_status)
+            log.info('modify_order warning, price: %s, order: %s' % (price2, order))
 
 
 def loss(code, stock_name, bid_price, ask_price, caller='', need_log=True):
@@ -908,8 +909,10 @@ class OrderBook(ft.OrderBookHandlerBase):
             log.info('OrderBook push warning, t: %s, data:%s' % (t, data))
             return ret, data
         s = int(t[17:19])
-
-        loss(data['code'], data['name'], data['Bid'][0][0], data['Ask'][0][0], need_log=s%10==0, caller='order_book')
+        if data['Bid'][0] and data['Ask'][0]:
+            loss(data['code'], data['name'], data['Bid'][0][0], data['Ask'][0][0], need_log=s%10==0, caller='order_book')
+        else:
+            log.info('OrderBook push error, ret: %s, data:%s' % (ret, data))
         return ret, data
 
 
@@ -929,7 +932,7 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
         if loss:
             glb['loss'][code] = True
             order_book = get_order_book(code)
-            if order_book:
+            if order_book and order_book['Ask'][0]:
                 first_order_price = order_book['Ask'][0][0]
             else:
                 first_order_price = price
