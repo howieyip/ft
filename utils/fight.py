@@ -408,7 +408,7 @@ def _smart_buy(code, volume, price=None, type='Bid'):
     ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.BUY, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
     # log.info('_smart_buy, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
-        log.info('_smart_buy error, code: %s, price: %s, volume: %s' % (code, price, volume))
+        log.info('_smart_buy error, ret: %s, data:\n%s' % (ret, data))
         if '购买力不足' in data:
             conf['AUTO_BUY'] = False
         return False
@@ -427,7 +427,7 @@ def _smart_sell(code, volume, price=None, type='Ask'):
     ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.SELL, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
     # log.info('_smart_sell, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
-        log.info('_smart_sell error, code: %s, price: %s, volume: %s' % (code, price, volume))
+        log.info('_smart_sell error, ret: %s, data:\n%s' % (ret, data))
         return False
     else:
         log.info('_smart_sell success, code: %s, price: %s, volume: %s' % (code, price, volume))
@@ -438,7 +438,7 @@ def _cancel_order(order_id):
     ret, data = trade_ctx.modify_order(modify_order_op=ft.ModifyOrderOp.CANCEL, order_id=order_id, price=0, qty=0, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
     # log.info('_cancel_order, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
-        log.info('_cancel_order error')
+        log.info('_cancel_order error, ret: %s, data:\n%s' % (ret, data))
         return False
     else:
         log.info('_cancel_order success')
@@ -450,7 +450,7 @@ def _modify_order(order_id, price, qty):
     ret, data = trade_ctx.modify_order(modify_order_op=ft.ModifyOrderOp.NORMAL, order_id=order_id, price=price, qty=qty, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
     # log.info('modify_order, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
-        log.info('modify_order error, ret: %s, order_id: %s, price: %s, qty: %s' % (ret, order_id, price, qty))
+        log.info('modify_order error, ret: %s, data:\n%s' % (ret, data))
         return False
     else:
         log.info('modify_order success, ret: %s, order_id: %s, price: %s, qty: %s' % (ret, order_id, price, qty))
@@ -484,7 +484,7 @@ def _order_list_query(code='', status_filter_list=[ft.OrderStatus.SUBMITTED, ft.
     ret, data = trade_ctx.order_list_query(status_filter_list=status_filter_list, code=code, trd_env=conf['TRADE_ENV'], refresh_cache=True, acc_id=conf['acc_id'])
     # log.info('order_list_query, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
-        log.info('order_list_query error, code: %s' % code)
+        log.info('order_list_query error, ret: %s, data:\n%s, code: %s' % (ret, data, code))
         return False
     log.info('order_list_query success, code: %s' % code)
     if ft.OrderStatus.FILLED_ALL in status_filter_list:
@@ -859,7 +859,7 @@ def loss_modify_order(order_list, price):
         if order.order_status == 'SUBMITTED' and price2 != order.price:
             modify_order(order.order_id, price2, order.qty)
         else:
-            log.info('modify_order warning, price: %s, order: %s' % (price2, order))
+            log.info('modify_order warning, price: %s, order_status: %s' % (price2, order.order_status))
 
 
 def loss(code, stock_name, bid_price, ask_price, caller='', need_log=True):
