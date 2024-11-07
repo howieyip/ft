@@ -111,6 +111,7 @@ glb = {
     'recovery_bear': None,
     'rt_data': None,
     'golden_line': {'0': 0, '100': 0, 'diff': 0, 'reverse': '', 'check_result': ''},
+    'ma_line': {'5': 0, '10': 0, '20': 0, '60': 0, 'check_result': ''},
     'loss': {},
     'today_pl_val_bull': 0,
     'today_pl_val_bear': 0,
@@ -124,18 +125,14 @@ glb = {
     'cur_price': 0,
     'last_price': 0,
     'kline_data': None,
-    'MA10': 0,
-    'MA20': 0,
-    'MA60': 0,
-    'MA120': 0,
     'max_nominal_price': {},
     'filled_all_last_order': {},
     'filled_all_buy_order': {},
     'adjust_ticker_list': [],
     'submitted_buy_bull_flag': False,
     'submitted_buy_bear_flag': False,
-    'submitted_buy_bull_data': None,
-    'submitted_buy_bear_data': None,
+    'submitted_buy_bull_lastdata': None,
+    'submitted_buy_bear_lastdata': None,
     'submitted_sell_bull_lastdata': None,
     'submitted_sell_bear_lastdata': None,
     'submitted_sell_bull_dict': {},
@@ -280,27 +277,27 @@ def get_cur_kline(num=120):
 
 def draw_ma_line(need_log=True):
     kline_data = get_cur_kline()
-    if kline_data is False or len(kline_data) < 120:
+    if kline_data is False or len(kline_data) < 60:
         log.info('draw_ma_line error, kline_data:\n%s' % kline_data)
         return False
+    MA5_SUM = 0
     MA10_SUM = 0
     MA20_SUM = 0
     MA60_SUM = 0
-    MA120_SUM = 0
-    for i in range(-1, -121, -1):
-        MA120_SUM += kline_data.iloc[i].close
-        if i > -61:
-            MA60_SUM += kline_data.iloc[i].close
+    for i in range(-1, -61, -1):
+        MA60_SUM += kline_data.iloc[i].close
         if i > -21:
             MA20_SUM += kline_data.iloc[i].close
         if i > -11:
             MA10_SUM += kline_data.iloc[i].close
-    glb['MA10'] = round(MA10_SUM / 10, 3)
-    glb['MA20'] = round(MA20_SUM / 20, 3)
-    glb['MA60'] = round(MA60_SUM / 60, 3)
-    glb['MA120'] = round(MA120_SUM / 120, 3)
+        if i > -6:
+            MA5_SUM += kline_data.iloc[i].close
+    glb['ma_line']['5'] = round(MA5_SUM / 5, 3)
+    glb['ma_line']['10'] = round(MA10_SUM / 10, 3)
+    glb['ma_line']['20'] = round(MA20_SUM / 20, 3)
+    glb['ma_line']['60'] = round(MA60_SUM / 60, 3)
     if need_log:
-        log.info('draw_ma_line, MA10: %s, MA20: %s, MA60: %s, MA120: %s' % (glb['MA10'], glb['MA20'], glb['MA60'], glb['MA120']))
+        log.info('draw_ma_line: %s' % glb['ma_line'])
 
 
 def draw_golden_line():
@@ -352,32 +349,19 @@ def draw_golden_line():
     return golden_line
 
 def _check_line(need_log=True):
-    # rt_data = get_rt_data()
-    # if rt_data is False or len(rt_data) < 5:
-    #     return False
-    # if rt_data.iloc[-1].time[0:10] != glb['trade_date'].get('time'):
-    #     log.info('get_rt_data not today')
-
-    # golden_line = draw_golden_line()
-    # if golden_line is False:
-    #     log.info('golden_line not ready')
-    #     glb['golden_line']['check_result'] = 'not_ready'
-    #     return 'not_ready'
     draw_ma_line(need_log)
-    # cur_rt_data = rt_data.iloc[-1]
-    # cur_price = cur_rt_data.cur_price
-    # avg_price = cur_rt_data.avg_price
     check_result = ''
-    if glb['MA10'] - glb['MA20'] > 10 and glb['cur_price'] - glb['MA10'] < 20 and glb['MA20'] > glb['MA60'] and glb['MA20'] > glb['MA120']:
+    if glb['ma_line']['5'] - glb['ma_line']['10'] > 10 and glb['ma_line']['10'] - glb['ma_line']['20'] > 10 and glb['cur_price'] - glb['ma_line']['5'] < 20:
         check_result = 'bull'
-    elif glb['MA10'] - glb['MA20'] < -10 and glb['MA10'] - glb['cur_price'] < 20 and glb['MA20'] < glb['MA60'] and glb['MA20'] < glb['MA120']:
+        log.info('check_line bull, ma_line: %s' % glb['ma_line'])
+    elif glb['ma_line']['5'] - glb['ma_line']['10'] < -10 and glb['ma_line']['10'] - glb['ma_line']['20'] < -10 and glb['ma_line']['5'] - glb['cur_price'] < 20:
         check_result = 'bear'
-    glb['golden_line']['check_result'] = check_result
-    if need_log:
-        exclude_keys = {'261.8', '300'}
-        filtered_obj = {k: v for k, v in glb['golden_line'].items() if k not in exclude_keys}
-        # log.info('HSI cur_price: %s, avg_price: %s, golden_line: %s' % (cur_price, round(avg_price, 2), filtered_obj))
-        log.info('golden_line: %s' % filtered_obj)
+        log.info('check_line bear, ma_line: %s' % glb['ma_line'])
+    else:
+        check_result = 'not_ready'
+        if need_log:
+            log.info('check_line not_ready, ma_line: %s' % glb['ma_line'])
+    glb['ma_line']['check_result'] = check_result
     return check_result
 
 
@@ -631,12 +615,12 @@ def set_submitted_buy(code, stock_name, data=None):
     if stock_name.find('牛') > -1:
         glb['submitted_buy_bull_flag'] = True
         if data is not None:
-            glb['submitted_buy_bull_data'] = data
+            glb['submitted_buy_bull_lastdata'] = data
         log.info('set_submitted_buy bull:%s' % code)
     elif stock_name.find('熊') > -1:
         glb['submitted_buy_bear_flag'] = True
         if data is not None:
-            glb['submitted_buy_bear_data'] = data
+            glb['submitted_buy_bear_lastdata'] = data
         log.info('set_submitted_buy bear: %s' % code)
     subscribe([code], [ft.SubType.ORDER_BOOK])
 
@@ -644,11 +628,11 @@ def set_submitted_buy(code, stock_name, data=None):
 def reset_submitted_buy(code, stock_name=''):
     if stock_name == '' or stock_name.find('牛') > -1:
         glb['submitted_buy_bull_flag'] = False
-        glb['submitted_buy_bull_data'] = None
+        glb['submitted_buy_bull_lastdata'] = None
         log.info('reset_submitted_buy bull: %s' % code)
     if stock_name == '' or stock_name.find('熊') > -1:
         glb['submitted_buy_bear_flag'] = False
-        glb['submitted_buy_bear_data'] = None
+        glb['submitted_buy_bear_lastdata'] = None
         log.info('reset_submitted_buy bear: %s' % code)
 
 
@@ -885,7 +869,7 @@ def loss(code, stock_name, bid_price, ask_price, caller='', need_log=True):
     if stock_name.find('牛') > -1:
         # 卖一价比第一个卖单价低等2格的时候
         if code in glb['submitted_sell_bull_dict'] and len(glb['submitted_sell_bull_dict'][code]) > 0 and ask_price < round(glb['submitted_sell_bull_dict'][code][0].price - 0.001, 3):
-            # 买一价比买入后的最高价低等2格的时候，重新挂单
+            # 买一价比买入后的最高价低等2格的时候
             if bid_price < round(glb['max_nominal_price'][code] - first_order_diff, 3):
                 log.info('loss bull %s %s, nominal_price: %s, max_nominal_price: %s' % (caller, code, bid_price, glb['max_nominal_price'][code]))
                 loss_modify_order(glb['submitted_sell_bull_dict'][code], bid_price)
@@ -906,7 +890,7 @@ class OrderBook(ft.OrderBookHandlerBase):
         glb['order_book'][data['code']] = data
         t = data['svr_recv_time_bid']
         if len(t) < 19: # 部分数据的接收时间为空字符串，例如服务器重启或第一次推送的缓存数据
-            log.info('OrderBook push warning, t: %s, data:%s' % (t, data))
+            # log.info('OrderBook push warning, t: %s, data:%s' % (t, data))
             return ret, data
         s = int(t[17:19])
         if data['Bid'][0] and data['Ask'][0]:
@@ -1224,14 +1208,14 @@ def _auto_buy(stock_type):
         if conf['if_check_line']:
             if check_line(need_log=False) == 'bull':
                 to_buy('bull')
-        else:
-            to_buy('bull')
+        # elif conf['ALLOW_ADD'] and conf['BUY_VOLUME'] < 100e3:
+        #     to_buy('bull')
     elif stock_type == 'bear' and not glb['submitted_buy_bear_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bear_list']) == 0):
         if conf['BEAR_CODE'] == '':
             return False
-        check_result = check_line(need_log=False)
-        if check_result == 'bear':
-            to_buy('bear')
+        if conf['if_check_line']:
+            if check_line(need_log=False) == 'bear':
+                to_buy('bear')
 
 
 def get_submitted_code(submitted_type):
@@ -1243,8 +1227,6 @@ def get_submitted_code(submitted_type):
 
 
 def pre_buy():
-    if conf['if_check_line'] and glb['kline_data'] is None:
-        return False
     #       code              time                 price        volume  turnover    ticker_direction       sequence   type      push_data_type
     # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
     while datestr_to_timestamp(glb['ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['ticker_list'][0].get('time')) > conf['DELTA_SECONDS']:
@@ -1252,37 +1234,18 @@ def pre_buy():
     cur_seconds = glb['ticker_list'][-1].get('time').split('.')[0][-2:]
     if cur_seconds != '59' and cur_seconds != '00' and cur_seconds != '01':
         return False
-    # 上一单成交1分钟后才考虑买
-    # filled_all_last_order_time = glb['filled_all_last_order'].get('last', {}).get('updated_time')
-    # if filled_all_last_order_time:
-    #     delta_seconds = datestr_to_timestamp(glb['ticker_list'][-1].get('time')) - datestr_to_timestamp(filled_all_last_order_time)
-    #     if delta_seconds <= conf['DELTA_SECONDS']:
-    #         log.info('pre_buy delta_seconds: %s' % delta_seconds)
-    #         return False
     delta_price = glb['ticker_list'][-1].get('price') - glb['ticker_list'][0].get('price')
     # log.info('pre_buy cur_seconds: %s, delta_price: %s' % (cur_seconds, delta_price))
 
-    # max_price = glb['kline_data'].iloc[-30:]['close'].max()
-    # min_price = glb['kline_data'].iloc[-30:]['close'].min()
-    # if abs(delta_price) >= conf['FOLLOW_TREND_PRICE']:
-    #     conf['FOLLOW_TREND'] = True
-    #     if delta_price >= conf['FOLLOW_TREND_PRICE'] and max_price - glb['cur_price'] > conf['FOLLOW_TREND_PRICE']:
-    #         auto_buy('bull')
-    #         # cancel_all(get_submitted_code('submitted_buy_bear_data'))
-    #     elif delta_price <= -conf['FOLLOW_TREND_PRICE'] and glb['cur_price'] - min_price > conf['FOLLOW_TREND_PRICE']:
-    #         auto_buy('bear')
-    #         # cancel_all(get_submitted_code('submitted_buy_bull_data'))
-    # else:
-    conf['FOLLOW_TREND'] = False
     if -conf['DELTA_PRICE_MIN'] >= delta_price >= -conf['DELTA_PRICE_MAX']:
         auto_buy('bull')
     elif conf['DELTA_PRICE_MIN'] <= delta_price <= conf['DELTA_PRICE_MAX']:
         auto_buy('bear')
-    # elif delta_price > conf['DELTA_PRICE_MAX'] and get_submitted_code('submitted_buy_bear_data'):
-    #     cancel_all(get_submitted_code('submitted_buy_bear_data'))
+    # elif delta_price > conf['DELTA_PRICE_MAX'] and get_submitted_code('submitted_buy_bear_lastdata'):
+    #     cancel_all(get_submitted_code('submitted_buy_bear_lastdata'))
     #     log.info('cancel_all bear, delta_price: %s' % delta_price)
-    # elif delta_price < -conf['DELTA_PRICE_MAX'] and get_submitted_code('submitted_buy_bull_data'):
-    #     cancel_all(get_submitted_code('submitted_buy_bull_data'))
+    # elif delta_price < -conf['DELTA_PRICE_MAX'] and get_submitted_code('submitted_buy_bull_lastdata'):
+    #     cancel_all(get_submitted_code('submitted_buy_bull_lastdata'))
     #     log.info('cancel_all bull, delta_price: %s' % delta_price)
 
 def _get_recovery_code():
@@ -1391,18 +1354,18 @@ class Ticker(ft.TickerHandlerBase):
             if abs(glb['cur_price'] - glb['last_price']) >= 10:
                 glb['last_price'] = glb['cur_price']
                 position_list_query(need_log=False, caller='fluctuate')
-            # 每10秒查询分割线，方便撤单和止损
-            # if conf['AUTO_BUY'] and s % 10 == 0:
-            #     check_result = check_line(need_log=True if s == 0 else False) or glb['golden_line']['check_result']
-            #     if glb['submitted_buy_bull_data'] is not None and glb['submitted_buy_bull_data'].price > 0.02 and check_result != 'bull':
-            #         cancel_all(glb['submitted_buy_bull_data'].code)
-            #         log.info('cancel_all bull, check_result: %s' % check_result)
-            #     elif glb['submitted_buy_bear_data'] is not None and glb['submitted_buy_bear_data'].price > 0.02 and check_result != 'bear':
-            #         cancel_all(glb['submitted_buy_bear_data'].code)
-            #         log.info('cancel_all bear, check_result: %s' % check_result)
             # 每分钟查询持仓列表
             if s == 30:
                 position_list_query(need_log=False, caller='per_min')
+                # 查询指标线，检查撤逆向的单
+                if conf['AUTO_BUY']:
+                    check_result = check_line() or glb['ma_line']['check_result']
+                    if glb['submitted_buy_bull_lastdata'] is not None and glb['submitted_buy_bull_lastdata'].price > 0.02 and check_result == 'bear':
+                        cancel_all(glb['submitted_buy_bull_lastdata'].code)
+                        log.info('cancel_all bull, check_result: %s' % check_result)
+                    elif glb['submitted_buy_bear_lastdata'] is not None and glb['submitted_buy_bear_lastdata'].price > 0.02 and check_result == 'bull':
+                        cancel_all(glb['submitted_buy_bear_lastdata'].code)
+                        log.info('cancel_all bear, check_result: %s' % check_result)
 
         # 自动买入和自动调价
         if conf['AUTO_BUY'] or conf['AUTO_ADJUST']:

@@ -6,10 +6,10 @@ import datetime
 start({
     'log_file': '303698/logs/fight.' + datetime.date.today().strftime('%Y-%m-%d') + '.log',
     'PORT' : 11111,
-    # 'AUTO_BUY': True,
+    'AUTO_BUY': True,
+    'BULL_CODE': 'auto',
+    'BEAR_CODE': 'auto',
     # 'if_check_line': False,
-    # 'BULL_CODE': 'auto',
-    # 'BEAR_CODE': 'auto',
     # 'DELTA_PRICE_MIN': 5,
     # 'DELTA_PRICE_MAX': 20,
     # 'BUY_VOLUME' : 400e3,
