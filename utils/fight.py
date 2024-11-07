@@ -14,11 +14,11 @@ pd.set_option('display.max_columns', 1000)
 conf = {
     'log_file': 'logs/fight',
     'TRADE_ENV': ft.TrdEnv.REAL,                          # 实盘交易：REAL，模拟交易：SIMULATE
-    'PASSWORD_MD5': 'd7866f93b87fc9c1b0a06a6a6669bada',   # 优先使用 PASSWORD_MD5 解锁
+    'PASSWORD_MD5': '',                                   # 优先使用 PASSWORD_MD5 解锁
     'PASSWORD': '',                                       # 如果PASSWORD_MD5为空，则使用 PASSWORD 解锁
     'HOST': '127.0.0.1',
     'PORT': 11111,
-    'acc_id': 281756481226004224,
+    'acc_id': 0,
 
     'NEED_LOSS': True,
     'AUTO_BUY': False,                              # 是否自动买入，若是则下面的配置有效
@@ -43,8 +43,8 @@ conf = {
     'AUTO_ADJUST': False,                           # 是否自动调整订单价格，若是则下面的AUTO_ADJUST_BUY和AUTO_ADJUST_SELL有效
     'AUTO_ADJUST_BUY': False,                        # 是否自动调整挂的买单的价格，若是则下面的ADJUST_BUY_DICT有效
     'ADJUST_BUY_DICT': {
-        'rise': [60, 1, 1],                         # 最近多少秒内，往持仓股票方向波动多少点，调整买单为第几档
-        'fall': [60, 1, 2]                          # 最近多少秒内，往持仓股票反向波动多少点，调整买单为第几档
+        'rise': [60, -8, 1],                         # 最近多少秒内，往持仓股票方向波动多少点，调整买单为第几档
+        'fall': [60, -8, 2]                          # 最近多少秒内，往持仓股票反向波动多少点，调整买单为第几档
     },
 
     'ALLOW_ADD': False,                              # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
@@ -835,7 +835,7 @@ class SysNotify(ft.SysNotifyHandlerBase):
         return ret, data
 
 
-def loss_modify_order(order_list, price):
+def _loss_order(order_list, price):
     order_list2 = order_list[:] # 用新的数组，因为旧的成交了就会变化
     for i in range(0, len(order_list2)):
         order = order_list2[i]
@@ -843,7 +843,7 @@ def loss_modify_order(order_list, price):
         if order.order_status == 'SUBMITTED' and price2 != order.price:
             modify_order(order.order_id, price2, order.qty)
         else:
-            log.info('modify_order warning, price: %s, order_status: %s' % (price2, order.order_status))
+            log.info('modify_order warning, price: %s, order.price: %s' % (price2, order.price))
 
 
 def loss(code, stock_name, bid_price, ask_price, caller='', need_log=True):
@@ -856,8 +856,6 @@ def loss(code, stock_name, bid_price, ask_price, caller='', need_log=True):
             return False
     elif bid_price > glb['max_nominal_price'][code]:
         glb['max_nominal_price'][code] = bid_price
-    if need_log:
-        log.info('%s %s max_nominal_price: %s' % (caller, code, glb['max_nominal_price'][code]))
 
     if code not in glb['loss']:
         glb['loss'][code] = False
@@ -866,18 +864,24 @@ def loss(code, stock_name, bid_price, ask_price, caller='', need_log=True):
     else:
         first_order_diff = conf['FIRST_ORDER_DIFF']
 
+    reference_price = glb['filled_all_last_order'].get(code, {}).get('price')
+    if not reference_price:
+        log.info('loss code: %s, no filled_all_last_order, \n%s' % (code, glb['filled_all_last_order']))
+        reference_price = glb['max_nominal_price'][code]
+    if need_log:
+        log.info('%s loss %s, reference_price: %s' % (caller, code, reference_price))
+
     if stock_name.find('牛') > -1:
-        # 卖一价比第一个卖单价低等2格的时候
-        if code in glb['submitted_sell_bull_dict'] and len(glb['submitted_sell_bull_dict'][code]) > 0 and ask_price < round(glb['submitted_sell_bull_dict'][code][0].price - 0.001, 3):
+        if code in glb['submitted_sell_bull_dict'] and len(glb['submitted_sell_bull_dict'][code]) > 0:
             # 买一价比买入后的最高价低等2格的时候
-            if bid_price < round(glb['max_nominal_price'][code] - first_order_diff, 3):
-                log.info('loss bull %s %s, nominal_price: %s, max_nominal_price: %s' % (caller, code, bid_price, glb['max_nominal_price'][code]))
-                loss_modify_order(glb['submitted_sell_bull_dict'][code], bid_price)
+            if bid_price < round(reference_price - first_order_diff, 3):
+                log.info('%s loss bull %s, nominal_price: %s, max_nominal_price: %s' % (caller, code, bid_price, reference_price))
+                loss_order(glb['submitted_sell_bull_dict'][code], bid_price)
     elif stock_name.find('熊') > -1:
-        if code in glb['submitted_sell_bear_dict'] and len(glb['submitted_sell_bear_dict'][code]) > 0 and ask_price < round(glb['submitted_sell_bear_dict'][code][0].price - 0.001, 3):
-            if bid_price < round(glb['max_nominal_price'][code] - first_order_diff, 3):
-                log.info('loss bear %s %s, nominal_price: %s, max_nominal_price: %s' % (caller, code, bid_price, glb['max_nominal_price'][code]))
-                loss_modify_order(glb['submitted_sell_bear_dict'][code], bid_price)
+        if code in glb['submitted_sell_bear_dict'] and len(glb['submitted_sell_bear_dict'][code]) > 0:
+            if bid_price < round(reference_price - first_order_diff, 3):
+                log.info('%s loss bear %s, nominal_price: %s, max_nominal_price: %s' % (caller, code, bid_price, reference_price))
+                loss_order(glb['submitted_sell_bear_dict'][code], bid_price)
 
 
 class OrderBook(ft.OrderBookHandlerBase):
@@ -1033,10 +1037,10 @@ def auto_adjust(delta_price, i, adjust_dict, submitted_type):
     fall_condition = False
     if submitted_type.find('bull') > -1:
         rise_condition = delta_price >= adjust_dict['rise'][1]
-        fall_condition = delta_price <= -adjust_dict['fall'][1]
+        fall_condition = delta_price < adjust_dict['fall'][1]
     elif submitted_type.find('bear') > -1:
-        rise_condition = delta_price <= -adjust_dict['rise'][1]
-        fall_condition = delta_price >= adjust_dict['fall'][1]
+        rise_condition = delta_price <= adjust_dict['rise'][1]
+        fall_condition = delta_price > adjust_dict['fall'][1]
     # 买单可升可降，卖单在尾盘只降不升
     if rise_condition:
         if submitted_type.find('buy') > -1 or not glb['almost_over']:
@@ -1170,7 +1174,7 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
             data0 = data.iloc[0]
             reference_price = glb['filled_all_last_order'].get(data0.code, {}).get('price')
             if not reference_price:
-                log.info('code: %s, no filled_all_last_order, \n%s' % (data0.code, glb['filled_all_last_order']))
+                log.info('to_buy code: %s, no filled_all_last_order, \n%s' % (data0.code, glb['filled_all_last_order']))
                 reference_price = data0.cost_price
             add_price_diff = round(reference_price - data0.nominal_price, 3)
             if add_price_diff < conf['ADD_PRICE_DIFF']:
@@ -1206,7 +1210,7 @@ def _auto_buy(stock_type):
         if conf['BULL_CODE'] == '':
             return False
         if conf['if_check_line']:
-            if check_line(need_log=False) == 'bull':
+            if check_line() == 'bull':
                 to_buy('bull')
         # elif conf['ALLOW_ADD'] and conf['BUY_VOLUME'] < 100e3:
         #     to_buy('bull')
@@ -1214,7 +1218,7 @@ def _auto_buy(stock_type):
         if conf['BEAR_CODE'] == '':
             return False
         if conf['if_check_line']:
-            if check_line(need_log=False) == 'bear':
+            if check_line() == 'bear':
                 to_buy('bear')
 
 
@@ -1416,6 +1420,7 @@ def resetData():
 
 # 限制2秒内最多查1次足够
 auto_buy = throttle(_auto_buy, 2)
+loss_order = delay_execution(_loss_order, 2)
 # 限制3秒内最多查1次足够
 check_line = throttle(_check_line, 3)
 # 每 30 秒内最多请求 10 次查询持仓接口
@@ -1457,7 +1462,7 @@ def start(config=None):
     quote_ctx = ft.OpenQuoteContext(host=conf['HOST'], port=conf['PORT'])
     trade_ctx = ft.OpenSecTradeContext(filter_trdmarket=ft.TrdMarket.HK, host=conf['HOST'], port=conf['PORT'])
     # ret, data = trade_ctx.get_acc_list()
-    # print(data)
+    # log.info(data)
     resetData()
     if conf['TRADE_ENV'] == ft.TrdEnv.REAL:
         ret, data = trade_ctx.unlock_trade(password_md5=conf['PASSWORD_MD5'], password=conf['PASSWORD'])
