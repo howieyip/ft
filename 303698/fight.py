@@ -8,6 +8,7 @@ start({
     'PORT' : 11111,
     'acc_id': 281756481226004224,
     'PASSWORD_MD5': 'd7866f93b87fc9c1b0a06a6a6669bada',
+    # 'exclude_code_list': ['HK.58498'],
     'AUTO_BUY': True,
     'BULL_CODE': 'auto',
     'BEAR_CODE': 'auto',
