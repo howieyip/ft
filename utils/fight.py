@@ -78,8 +78,8 @@ conf = {
     #     [150e3, 50e3, 50e3, 50e3],
     #     [100e3, 50e3, 50e3]
     # ],
-    'FIRST_ORDER_DIFF': 0.001,                      # 第一个卖单为第几档
-    'LAST_ORDER_DIFF': 0.004,                       # 最后一个卖单为第几档
+    'FIRST_ORDER_DIFF': 0.002,                      # 第一个卖单为第几档
+    'EVERY_ORDER_DIFF': 0.002,                      # 每个卖单间隔多少
 
     'AUTO_MOVE_POSITION': False,                    # 是否自动强制移仓，是则下面的MOVE_POSITION_DICT生效
     'MOVE_POSITION_DICT': {
@@ -136,6 +136,7 @@ glb = {
     'submitted_sell_bull_lastdata': None,
     'submitted_sell_bear_lastdata': None,
     'submitted_sell_order': {},
+    'last_order_diff': 0.008,
     'order_book': {},
     'auto_buy_list': [],
     'has_bull_list': [],
@@ -428,7 +429,7 @@ def _cancel_order(order_id):
         return data
 
 
-def _modify_order(order, price, qty):
+def _modify_order(order, price, qty=None):
     price = round(price, 3)
     if not qty and price == order.price:
         log.info('modify_order warning, old price: %s, new price: %s, qty: %s' % (order.price, price, qty))
@@ -790,7 +791,7 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
                     auto_place_order(item.code, item.qty, item.nominal_price, batch=not glb['almost_over'])
             # 检查止损
             if caller in ['per_min', 'fluctuate']:
-                loss(item.code, item.stock_name, item.nominal_price, item.nominal_price, caller='position')
+                loss(item.code, item.nominal_price, caller='position')
 
         # if has_sold:
         #     return False
@@ -840,7 +841,7 @@ def _loss_order(code, order_list, price):
         modify_order(order, price2)
 
 
-def loss(code, stock_name, bid_price, ask_price, caller='', need_log=True):
+def loss(code, bid_price, caller='', need_log=True):
     if not conf['NEED_LOSS']:
         return False
     if code not in glb['max_nominal_price']:
@@ -885,7 +886,7 @@ class OrderBook(ft.OrderBookHandlerBase):
             return ret, data
         s = int(t[17:19])
         if data['Bid'][0] and data['Ask'][0]:
-            loss(data['code'], data['name'], data['Bid'][0][0], data['Ask'][0][0], need_log=s%10==0, caller='order_book')
+            loss(data['code'], data['Bid'][0][0], need_log=s%10==0, caller='order_book')
         else:
             log.info('OrderBook push error, ret: %s, data:%s' % (ret, data))
         return ret, data
@@ -928,25 +929,22 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
             item = conf['ORDER_LIST'][i]
             break
     volume_diff = volume - item[0]
-    if item[0] == 150e3:
-        conf['LAST_ORDER_DIFF'] = conf['FIRST_ORDER_DIFF'] + 0.002
-    elif item[0] == 100e3:
-        conf['LAST_ORDER_DIFF'] = conf['FIRST_ORDER_DIFF'] + 0.001
-    else:
-        conf['LAST_ORDER_DIFF'] = conf['FIRST_ORDER_DIFF'] + 0.003
     if glb['move_position']:
         first_order_price += 0.015
+    last_order_price = 0
     for i in range(1, len(item)): # 从1开始
         vol = item[i]
         if volume_diff > 0 and i == len(item) - 1:
             vol += volume_diff
         if vol == 0:
             continue
-        data = smart_sell(code, vol, first_order_price + 0.001 * (i - 1))
+        last_order_price = first_order_price + conf['EVERY_ORDER_DIFF'] * (i - 1)
+        data = smart_sell(code, vol, last_order_price)
         if data is False:
             log.info('auto_place_order => smart_sell error')
         elif glb['move_position']:
             glb['move_position'] = False
+    glb['last_order_diff'] = last_order_price - price
     glb['auto_place_order_flag'] = False
 
 
@@ -1015,11 +1013,11 @@ def auto_adjust(delta_price, submitted_type):
         fall_price = max(0.01, round(bid_price - (conf['ADJUST_BUY_FALL_LEVEL'] - 1) * 0.001, 3))
     elif submitted_type.find('sell') > -1:
         rise_price = round(ask_price + (conf['ADJUST_SELL_RISE_LEVEL'] - 1) * 0.001, 3)
-        # 尾盘或者卖单有2个以上才降价到卖一
+        # 尾盘才降价到卖一
         if glb['almost_over']:
             fall_price = round(ask_price + (conf['ADJUST_SELL_FALL_LEVEL'] - 1) * 0.001, 3)
         else:
-            fall_price = round(max(find_buy_price(data) + conf['LAST_ORDER_DIFF'], ask_price), 3)
+            fall_price = round(max(find_buy_price(data) + glb['last_order_diff'], ask_price), 3)
     rise_condition = False
     fall_condition = False
     if submitted_type.find('bull') > -1:

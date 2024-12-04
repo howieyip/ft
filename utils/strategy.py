@@ -13,9 +13,9 @@ conf = {
 log = Logger(conf['log_file']).get_logger()
 
 
-code = 'HK.51539'
+code = 'HK.51033'
 max_count = 331
-start = '2024-10-28'
+start = '2024-11-22'
 end = start
 # end = '2024-10-08'
 need_log = False
@@ -97,7 +97,6 @@ def request(start, end=None):
 
 
 quote_ctx = ft.OpenQuoteContext(host=conf['HOST'], port=conf['PORT'])
-trade_ctx = ft.OpenSecTradeContext(filter_trdmarket=ft.TrdMarket.HK, host=conf['HOST'], port=conf['PORT'])
 request(start, end)
 log.info('money1: %s, money2: %s, delta_times1: %s, delta_times2: %s' % (money1, money2, delta_times1, delta_times2))
 quote_ctx.close() # 结束后记得关闭当条连接，防止连接条数用尽
