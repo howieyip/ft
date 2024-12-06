@@ -432,7 +432,7 @@ def _cancel_order(order_id):
 def _modify_order(order, price, qty=None):
     price = round(price, 3)
     if not qty and price == order.price:
-        log.info('modify_order warning, old price: %s, new price: %s, qty: %s' % (order.price, price, qty))
+        log.info('modify_order %s warning, old price: %s, new price: %s, qty: %s' % (order.code, order.price, price, qty))
         return False
     qty = qty or order.qty
     ret, data = trade_ctx.modify_order(modify_order_op=ft.ModifyOrderOp.NORMAL, order_id=order.order_id, price=price, qty=qty, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
@@ -791,7 +791,7 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
                     auto_place_order(item.code, item.qty, item.nominal_price, batch=not glb['almost_over'])
             # 检查止损
             if caller in ['per_min', 'fluctuate']:
-                loss(item.code, item.nominal_price, caller='position')
+                check_loss(item.code, item.nominal_price, caller='position')
 
         # if has_sold:
         #     return False
@@ -832,24 +832,21 @@ class SysNotify(ft.SysNotifyHandlerBase):
         return ret, data
 
 
-def _loss_order(code, order_list, price):
-    glb['loss'][code] = True
+def _loss_order(order_list, price):
     order_list2 = order_list[:] # 用新的数组，因为旧的成交了就会变化
     for i in range(0, len(order_list2)):
         order = order_list2[i]
-        price2 = price + 0.001 * (i + 1)
-        modify_order(order, price2)
+        price2 = price + conf['EVERY_ORDER_DIFF'] * (i + 1)
+        if price2 < order.price:
+            modify_order(order, price2)
+        else:
+            log.info('modify_order %s warning, old price: %s, new price: %s' % (order.code, order.price, price2))
 
 
-def loss(code, bid_price, caller='', need_log=True):
+def check_loss(code, bid_price, caller='', need_log=True):
     if not conf['NEED_LOSS']:
         return False
-    if code not in glb['max_nominal_price']:
-        if caller == 'position':
-            glb['max_nominal_price'][code] = bid_price
-        else:
-            return False
-    elif bid_price > glb['max_nominal_price'][code]:
+    if code not in glb['max_nominal_price'] or bid_price > glb['max_nominal_price'][code]:
         glb['max_nominal_price'][code] = bid_price
 
     loss_price_diff = conf['LOSS_PRICE_DIFF']
@@ -859,23 +856,23 @@ def loss(code, bid_price, caller='', need_log=True):
         loss_price_diff = 0.002
 
     reference_price = glb['filled_all_last_order'].get(code, {}).get('price')
-    if not reference_price:
-        log.info('loss code: %s, no filled_all_last_order, \n%s' % (code, glb['filled_all_last_order']))
+    if not reference_price or reference_price < glb['max_nominal_price'][code]:
         reference_price = glb['max_nominal_price'][code]
     if need_log:
-        log.info('%s loss %s, reference_price: %s' % (caller, code, reference_price))
+        log.info('%s check_loss %s, bid_price: %s, reference_price: %s' % (caller, code, bid_price, reference_price))
 
     reference_price_diff = round(reference_price - bid_price, 3)
     if code in glb['submitted_sell_order'] and len(glb['submitted_sell_order'][code]) > 0:
         if reference_price_diff >= loss_price_diff:
-            log.info('%s loss %s, nominal_price: %s, max_nominal_price: %s' % (caller, code, bid_price, reference_price))
-            loss_order(code, glb['submitted_sell_order'][code], bid_price)
+            glb['loss'][code] = True
+            log.info('%s loss %s, bid_price: %s, reference_price: %s' % (caller, code, bid_price, reference_price))
+            loss_order(glb['submitted_sell_order'][code], bid_price)
 
 
 class OrderBook(ft.OrderBookHandlerBase):
     def on_recv_rsp(self, rsp_str):
         ret, data = super(OrderBook, self).on_recv_rsp(rsp_str)
-        # log.info('实时摆盘推送，ret: %s, data:%s' % (ret, data))
+        log.info('OrderBook push ret: %s, data:%s' % (ret, data))
         if ret != ft.RET_OK:
             log.info('OrderBook push error, ret: %s, data:%s' % (ret, data))
             return ret, data
@@ -886,7 +883,7 @@ class OrderBook(ft.OrderBookHandlerBase):
             return ret, data
         s = int(t[17:19])
         if data['Bid'][0] and data['Ask'][0]:
-            loss(data['code'], data['Bid'][0][0], need_log=s%10==0, caller='order_book')
+            check_loss(data['code'], data['Bid'][0][0], need_log=s%10==0, caller='order_book')
         else:
             log.info('OrderBook push error, ret: %s, data:%s' % (ret, data))
         return ret, data
@@ -1395,7 +1392,7 @@ def resetData():
 
 # 限制2秒内最多查1次足够
 auto_buy = throttle(_auto_buy, 2)
-loss_order = delay_execution(_loss_order, 2)
+loss_order = throttle(_loss_order, 2)
 # 限制3秒内最多查1次足够
 check_line = throttle(_check_line, 3)
 # 每 30 秒内最多请求 10 次查询持仓接口
