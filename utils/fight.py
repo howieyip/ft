@@ -4,6 +4,7 @@ import datetime
 import math
 import futu as ft
 from utils.logger import Logger
+from utils.timer import Timer
 import pandas as pd
 pd.set_option('display.width', 1000)
 pd.set_option('display.max_rows', 1000)
@@ -21,8 +22,9 @@ conf = {
     'acc_id': 0,
 
     'NEED_LOSS': True,
-    'LOSS_PRICE_DIFF': 0.003,                       # 买一价和买入后的最高价的差距达到多少就止损
+    'LOSS_PRICE_DIFF': 0.002,                       # 卖一价距离买入后的最高价达到多少就止损
     'exclude_code_list': [],
+    'include_code_list': [],
     'AUTO_BUY': False,                              # 是否自动买入，若是则下面的配置有效
     'TRY_RECOVERY': False,                          # 是否买快回收的且价格比正常低很多的股票
     'TRY_FOLLOW_RECOVERY': False,                   # 是否顺势买快回收的反方向的股票
@@ -57,27 +59,17 @@ conf = {
     'only_today_buy': True,                         # 仅处理今天新买的，过夜的不管
     'AUTO_PLACE_ORDER': True,                      # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
     'ORDER_LIST': [                                 # 下单多少股以上（大的写前面），每单挂多少股，例如下单800k，分3档200k 200k 400k挂单
-        [800e3, 200e3, 200e3, 200e3, 200e3],
-        [700e3, 150e3, 150e3, 200e3, 200e3],
-        [600e3, 150e3, 150e3, 150e3, 150e3],
-        [500e3, 100e3, 100e3, 150e3, 150e3],
-        [400e3, 100e3, 100e3, 100e3, 100e3],
-        [300e3, 50e3, 50e3, 100e3, 100e3],
+        [900e3, 50e3, 50e3, 50e3, 50e3, 50e3, 50e3, 300e3, 300e3],
+        [800e3, 50e3, 50e3, 50e3, 50e3, 50e3, 50e3, 250e3, 250e3],
+        [700e3, 50e3, 50e3, 50e3, 50e3, 50e3, 50e3, 200e3, 200e3],
+        [600e3, 50e3, 50e3, 50e3, 50e3, 50e3, 50e3, 150e3, 150e3],
+        [500e3, 50e3, 50e3, 50e3, 50e3, 50e3, 50e3, 100e3, 100e3],
+        [400e3, 50e3, 50e3, 50e3, 50e3, 50e3, 50e3, 50e3, 50e3],
+        [300e3, 50e3, 50e3, 50e3, 50e3, 50e3, 50e3],
         [200e3, 50e3, 50e3, 50e3, 50e3],
         [150e3, 50e3, 50e3, 50e3],
         [100e3, 50e3, 50e3]
     ],
-    # 'ORDER_LIST': [                                 # 下单多少股以上（大的写前面），每单挂多少股，例如下单800k，分3档200k 200k 400k挂单
-    #     [800e3, 250e3, 250e3, 300e3],
-    #     [700e3, 200e3, 200e3, 300e3],
-    #     [600e3, 200e3, 200e3, 200e3],
-    #     [500e3, 150e3, 150e3, 200e3],
-    #     [400e3, 100e3, 100e3, 200e3],
-    #     [300e3, 100e3, 100e3, 100e3],
-    #     [200e3, 50e3, 50e3, 100e3],
-    #     [150e3, 50e3, 50e3, 50e3],
-    #     [100e3, 50e3, 50e3]
-    # ],
     'FIRST_ORDER_DIFF': 0.002,                      # 第一个卖单为第几档
     'EVERY_ORDER_DIFF': 0.002,                      # 每个卖单间隔多少
 
@@ -107,6 +99,7 @@ log = None
 quote_ctx = None
 trade_ctx = None
 glb = {
+    'timer': None,
     'recovery_bull': None,
     'recovery_bear': None,
     'rt_data': None,
@@ -768,11 +761,10 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
         return False
 
     # 统计今日盈亏并确定是否止损停止交易
-    today_buy_data = hsi_data[(hsi_data.nominal_price < conf['CUR_PRICE_MAX']) & (hsi_data.today_buy_qty > 0)]
-    if len(conf['exclude_code_list']) > 0:
-        today_buy_data = today_buy_data[~today_buy_data.code.isin(conf['exclude_code_list'])]
+    today_buy_data = hsi_data[hsi_data.code.isin(conf['include_code_list']) | (hsi_data.nominal_price < conf['CUR_PRICE_MAX']) & (hsi_data.today_buy_qty > 0)]
+    today_buy_data = today_buy_data[~today_buy_data.code.isin(conf['exclude_code_list'])]
     if conf['only_today_buy']:
-        today_buy_data = today_buy_data[today_buy_data.qty == today_buy_data.today_buy_qty - today_buy_data.today_sell_qty]
+        today_buy_data = today_buy_data[today_buy_data.code.isin(conf['include_code_list']) | (today_buy_data.qty == today_buy_data.today_buy_qty - today_buy_data.today_sell_qty)]
     if sum_today_pl_val(today_buy_data):
         return False
 
@@ -791,7 +783,7 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
                     auto_place_order(item.code, item.qty, item.nominal_price, batch=not glb['almost_over'])
             # 检查止损
             if caller in ['per_min', 'fluctuate']:
-                check_loss(item.code, item.nominal_price, caller='position')
+                _check_loss(item.code, item.nominal_price, item.nominal_price, caller='position')
 
         # if has_sold:
         #     return False
@@ -832,18 +824,39 @@ class SysNotify(ft.SysNotifyHandlerBase):
         return ret, data
 
 
-def _loss_order(order_list, price):
+def modify_order2(index, order_list, price):
+    order = order_list[index]
+    if glb['auto_place_order_flag']:
+        log.info('modify_order %s warning, auto_place_order' % order.code)
+        glb['timer'].clearTimeoutHandler()
+        return False
+    price2 = price + conf['EVERY_ORDER_DIFF'] * (index + 1)
+    if price2 < order.price:
+        _modify_order(order, price2)
+    else:
+        log.info('modify_order %s error, old price: %s, new price: %s' % (order.code, order.price, price2))
+
+
+def _loss_order(order_list, price=None):
     order_list2 = order_list[:] # 用新的数组，因为旧的成交了就会变化
-    for i in range(0, len(order_list2)):
-        order = order_list2[i]
-        price2 = price + conf['EVERY_ORDER_DIFF'] * (i + 1)
+    if price > 0:
+        order = order_list2[0]
+        price2 = price + conf['EVERY_ORDER_DIFF']
         if price2 < order.price:
             modify_order(order, price2)
-        else:
-            log.info('modify_order %s warning, old price: %s, new price: %s' % (order.code, order.price, price2))
+    else:
+        price = order_list2[0].price
+        order_list2 = order_list2[1:]
+        for i in range(0, len(order_list2)):
+            order = order_list2[i]
+            price2 = price + conf['EVERY_ORDER_DIFF'] * (i + 1)
+            if price2 < order.price:
+                glb['timer'] = Timer(modify_order2, count=len(order_list2) - i, delay=1.5, order_list=order_list2[i:], price=price + conf['EVERY_ORDER_DIFF'] * i)
+                glb['timer'].repeat()
+                break
 
 
-def check_loss(code, bid_price, caller='', need_log=True):
+def _check_loss(code, bid_price, ask_price, caller='', need_log=True):
     if not conf['NEED_LOSS']:
         return False
     if code not in glb['max_nominal_price'] or bid_price > glb['max_nominal_price'][code]:
@@ -852,27 +865,29 @@ def check_loss(code, bid_price, caller='', need_log=True):
     loss_price_diff = conf['LOSS_PRICE_DIFF']
     if code not in glb['loss']:
         glb['loss'][code] = False
-    if glb['loss'].get(code):
-        loss_price_diff = 0.002
 
-    reference_price = glb['filled_all_last_order'].get(code, {}).get('price')
+    last_filled_price = glb['filled_all_last_order'].get(code, {}).get('price')
+    reference_price = last_filled_price
     if not reference_price or reference_price < glb['max_nominal_price'][code]:
         reference_price = glb['max_nominal_price'][code]
     if need_log:
-        log.info('%s check_loss %s, bid_price: %s, reference_price: %s' % (caller, code, bid_price, reference_price))
+        log.info('%s check_loss %s, ask_price: %s, reference_price: %s' % (caller, code, ask_price, reference_price))
 
-    reference_price_diff = round(reference_price - bid_price, 3)
+    reference_price_diff = round(reference_price - ask_price, 3)
     if code in glb['submitted_sell_order'] and len(glb['submitted_sell_order'][code]) > 0:
         if reference_price_diff >= loss_price_diff:
             glb['loss'][code] = True
-            log.info('%s loss %s, bid_price: %s, reference_price: %s' % (caller, code, bid_price, reference_price))
-            loss_order(glb['submitted_sell_order'][code], bid_price)
+            # log.info('%s loss %s, ask_price: %s, reference_price: %s' % (caller, code, ask_price, reference_price))
+            loss_order(glb['submitted_sell_order'][code], min(ask_price, last_filled_price))
+        else:
+            glb['loss'][code] = False
+            loss_order(glb['submitted_sell_order'][code])
 
 
 class OrderBook(ft.OrderBookHandlerBase):
     def on_recv_rsp(self, rsp_str):
         ret, data = super(OrderBook, self).on_recv_rsp(rsp_str)
-        log.info('OrderBook push ret: %s, data:%s' % (ret, data))
+        # log.info('OrderBook push ret: %s, data:%s' % (ret, data))
         if ret != ft.RET_OK:
             log.info('OrderBook push error, ret: %s, data:%s' % (ret, data))
             return ret, data
@@ -883,7 +898,7 @@ class OrderBook(ft.OrderBookHandlerBase):
             return ret, data
         s = int(t[17:19])
         if data['Bid'][0] and data['Ask'][0]:
-            check_loss(data['code'], data['Bid'][0][0], need_log=s%10==0, caller='order_book')
+            check_loss(data['code'], data['Bid'][0][0], data['Ask'][0][0], need_log=s%10==0, caller='order_book')
         else:
             log.info('OrderBook push error, ret: %s, data:%s' % (ret, data))
         return ret, data
@@ -1392,6 +1407,7 @@ def resetData():
 
 # 限制2秒内最多查1次足够
 auto_buy = throttle(_auto_buy, 2)
+check_loss = throttle(_check_loss, 2, need_log=False)
 loss_order = throttle(_loss_order, 2)
 # 限制3秒内最多查1次足够
 check_line = throttle(_check_line, 3)
