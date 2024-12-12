@@ -839,11 +839,11 @@ def modify_order2(index, order_list, price):
 
 def _loss_order(order_list, price=None):
     order_list2 = order_list[:] # 用新的数组，因为旧的成交了就会变化
-    if price > 0:
+    if price is not None:
         order = order_list2[0]
         price2 = price + conf['EVERY_ORDER_DIFF']
         if price2 < order.price:
-            modify_order(order, price2)
+            _modify_order(order, price2)
     else:
         price = order_list2[0].price
         order_list2 = order_list2[1:]
@@ -857,7 +857,7 @@ def _loss_order(order_list, price=None):
 
 
 def _check_loss(code, bid_price, ask_price, caller='', need_log=True):
-    if not conf['NEED_LOSS']:
+    if not conf['NEED_LOSS'] or code not in glb['submitted_sell_order'] or len(glb['submitted_sell_order'][code] == 0):
         return False
     if code not in glb['max_nominal_price'] or bid_price > glb['max_nominal_price'][code]:
         glb['max_nominal_price'][code] = bid_price
@@ -874,14 +874,13 @@ def _check_loss(code, bid_price, ask_price, caller='', need_log=True):
         log.info('%s check_loss %s, ask_price: %s, reference_price: %s' % (caller, code, ask_price, reference_price))
 
     reference_price_diff = round(reference_price - ask_price, 3)
-    if code in glb['submitted_sell_order'] and len(glb['submitted_sell_order'][code]) > 0:
-        if reference_price_diff >= loss_price_diff:
-            glb['loss'][code] = True
-            # log.info('%s loss %s, ask_price: %s, reference_price: %s' % (caller, code, ask_price, reference_price))
-            loss_order(glb['submitted_sell_order'][code], min(ask_price, last_filled_price))
-        else:
-            glb['loss'][code] = False
-            loss_order(glb['submitted_sell_order'][code])
+    if reference_price_diff >= loss_price_diff:
+        glb['loss'][code] = True
+        # log.info('%s loss %s, ask_price: %s, reference_price: %s' % (caller, code, ask_price, reference_price))
+        loss_order(glb['submitted_sell_order'][code], min(ask_price, last_filled_price))
+    else:
+        glb['loss'][code] = False
+        loss_order(glb['submitted_sell_order'][code])
 
 
 class OrderBook(ft.OrderBookHandlerBase):
