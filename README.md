@@ -11,6 +11,9 @@
 ### 安装
 ```
 pip install futu-api
+pip3 show futu-api
+pip3 install --upgrade futu-api==8.8.4808
+
 ```
 
 ###### 注: 本API支持Python2.7/Python3.x, 推荐安装anaconda2或anaconda3环境，方便快捷。
@@ -179,7 +182,7 @@ trade_hk_ctx.close()
 
 ### API及FutuOpenD客户端交流方式
 
-* 富途开放API群(229850364, 108534288) 
+* 富途开放API群(229850364, 108534288)
 * 有一定交易额或特殊需求的用户请在入群后联系群主
 
 ***

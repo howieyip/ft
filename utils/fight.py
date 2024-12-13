@@ -857,7 +857,7 @@ def _loss_order(order_list, price=None):
 
 
 def _check_loss(code, bid_price, ask_price, caller='', need_log=True):
-    if not conf['NEED_LOSS'] or code not in glb['submitted_sell_order'] or len(glb['submitted_sell_order'][code] == 0):
+    if not conf['NEED_LOSS'] or code not in glb['submitted_sell_order'] or len(glb['submitted_sell_order'][code]) == 0:
         return False
     if code not in glb['max_nominal_price'] or bid_price > glb['max_nominal_price'][code]:
         glb['max_nominal_price'][code] = bid_price
