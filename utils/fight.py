@@ -376,11 +376,11 @@ def _smart_buy(code, volume, price=None, type='Bid'):
             type = 'Ask'
         price = max(0.01, data[type][0][0])
         if conf['ALLOW_ADD'] and volume < 100e3:
-            reference_price = glb['filled_all_last_order'].get(code, {}).get('price')
-            if reference_price is not None and data['Ask'][0][0] <= round(reference_price - conf['ADD_PRICE_DIFF'], 3):
+            ref_price = glb['filled_all_last_order'].get(code, {}).get('price')
+            if ref_price is not None and data['Ask'][0][0] <= round(ref_price - conf['ADD_PRICE_DIFF'], 3):
                 price = data['Ask'][0][0]
             else:
-                log.info('_smart_buy not allow, bid: %s, ask: %s, reference_price: %s' % (data['Bid'][0][0], data['Ask'][0][0], reference_price))
+                log.info('_smart_buy not allow, bid: %s, ask: %s, ref_price: %s' % (data['Bid'][0][0], data['Ask'][0][0], ref_price))
                 return False
     ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.BUY, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
     # log.info('_smart_buy, ret: %s, data:\n%s' % (ret, data))
@@ -746,7 +746,7 @@ def auto_move_position(hsi_data):
 
 
 def _position_list_query(stock_type='', need_log=True, caller='', code=''):
-    log.info('position_list_query, caller: %s' % caller)
+    # log.info('position_list_query, caller: %s' % caller)
     ret, data = trade_ctx.position_list_query(trd_env=conf['TRADE_ENV'], refresh_cache=True, acc_id=conf['acc_id'])
     if need_log:
         log.info('position_list_query, caller: %s, data:\n%s' % (caller, data))
@@ -783,7 +783,7 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
                     auto_place_order(item.code, item.qty, item.nominal_price, batch=not glb['almost_over'])
             # 检查止损
             if caller in ['per_min', 'fluctuate']:
-                _check_loss(item.code, item.nominal_price, item.nominal_price, caller='position')
+                check_loss(item.code, item.nominal_price, item.nominal_price, caller='position')
 
         # if has_sold:
         #     return False
@@ -867,16 +867,16 @@ def _check_loss(code, bid_price, ask_price, caller='', need_log=True):
         glb['loss'][code] = False
 
     last_filled_price = glb['filled_all_last_order'].get(code, {}).get('price')
-    reference_price = last_filled_price
-    if not reference_price or reference_price < glb['max_nominal_price'][code]:
-        reference_price = glb['max_nominal_price'][code]
-    if need_log:
-        log.info('%s check_loss %s, ask_price: %s, reference_price: %s' % (caller, code, ask_price, reference_price))
+    ref_price = last_filled_price
+    if not ref_price or ref_price < glb['max_nominal_price'][code]:
+        ref_price = glb['max_nominal_price'][code]
+    if need_log and not glb['loss'][code]:
+        log.info('%s check_loss %s, ask_price: %s, ref_price: %s' % (caller, code, ask_price, ref_price))
 
-    reference_price_diff = round(reference_price - ask_price, 3)
-    if reference_price_diff >= loss_price_diff:
+    ref_price_diff = round(ref_price - ask_price, 3)
+    if ref_price_diff >= loss_price_diff:
         glb['loss'][code] = True
-        # log.info('%s loss %s, ask_price: %s, reference_price: %s' % (caller, code, ask_price, reference_price))
+        log.info('%s loss %s, ask_price: %s, ref_price: %s' % (caller, code, ask_price, ref_price))
         loss_order(glb['submitted_sell_order'][code], min(ask_price, last_filled_price))
     else:
         glb['loss'][code] = False
@@ -891,13 +891,13 @@ class OrderBook(ft.OrderBookHandlerBase):
             log.info('OrderBook push error, ret: %s, data:%s' % (ret, data))
             return ret, data
         glb['order_book'][data['code']] = data
-        t = data['svr_recv_time_bid']
+        t = data['svr_recv_time_ask']
         if len(t) < 19: # 部分数据的接收时间为空字符串，例如服务器重启或第一次推送的缓存数据
             # log.info('OrderBook push warning, t: %s, data:%s' % (t, data))
             return ret, data
         s = int(t[17:19])
         if data['Bid'][0] and data['Ask'][0]:
-            check_loss(data['code'], data['Bid'][0][0], data['Ask'][0][0], need_log=s%10==0, caller='order_book')
+            check_loss(data['code'], data['Bid'][0][0], data['Ask'][0][0], caller='order_book', need_log=s%10==0)
         else:
             log.info('OrderBook push error, ret: %s, data:%s' % (ret, data))
         return ret, data
@@ -1158,15 +1158,15 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
                     log.info('current total_qty: %s, MAX_VOLUME: %s, not allow add' % (total_qty, conf['MAX_VOLUME']))
                     return False
             data0 = data.iloc[0]
-            reference_price = glb['filled_all_last_order'].get(data0.code, {}).get('price')
-            if not reference_price:
+            ref_price = glb['filled_all_last_order'].get(data0.code, {}).get('price')
+            if not ref_price:
                 log.info('to_buy code: %s, no filled_all_last_order, \n%s' % (data0.code, glb['filled_all_last_order']))
-                reference_price = data0.cost_price
-            add_price_diff = round(reference_price - data0.nominal_price, 3)
+                ref_price = data0.cost_price
+            add_price_diff = round(ref_price - data0.nominal_price, 3)
             if add_price_diff < conf['ADD_PRICE_DIFF']:
-                log.info('code: %s, nominal_price: %s, reference_price: %s, diff: %s < %s, not allow add' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
+                log.info('code: %s, nominal_price: %s, ref_price: %s, diff: %s < %s, not allow add' % (data0.code, data0.nominal_price, ref_price, add_price_diff, conf['ADD_PRICE_DIFF']))
                 return False
-            log.info('code: %s, nominal_price: %s, reference_price: %s, diff: %s >= %s, allow add' % (data0.code, data0.nominal_price, reference_price, add_price_diff, conf['ADD_PRICE_DIFF']))
+            log.info('code: %s, nominal_price: %s, ref_price: %s, diff: %s >= %s, allow add' % (data0.code, data0.nominal_price, ref_price, add_price_diff, conf['ADD_PRICE_DIFF']))
 
     if code == 'auto':
         data = _get_stock_code(stock_type=stock_type, cur_price_min=cur_price_min, cur_price_max=cur_price_max)
