@@ -113,7 +113,6 @@ glb = {
     'soon_over': False,
     'almost_over': False,
     'to_over': False,
-    'over': False,
     'ticker_list': [],
     'cur_price': 0,
     'last_price': 0,
@@ -425,7 +424,7 @@ def _cancel_order(order_id):
 def _modify_order(order, price, qty=None):
     price = round(price, 3)
     if not qty and price == order.price:
-        log.info('modify_order %s warning, old price: %s, new price: %s, qty: %s' % (order.code, order.price, price, qty))
+        log.info('modify_order warning %s, old price: %s, new price: %s, qty: %s' % (order.code, order.price, price, qty))
         return False
     qty = qty or order.qty
     ret, data = trade_ctx.modify_order(modify_order_op=ft.ModifyOrderOp.NORMAL, order_id=order.order_id, price=price, qty=qty, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
@@ -569,7 +568,7 @@ def subscribe(code_list, subtype_list, subscribe_push=True, need_log=True):
     if need_log:
         log.info('subscribe %s %s, ret: %s, data: %s' % (code_list, subtype_list, ret, data))
     if ret != ft.RET_OK:
-        log.info('subscribe %s %s error' % (code_list, subtype_list))
+        log.info('subscribe error %s %s' % (code_list, subtype_list))
         return False
     else:
         return True
@@ -581,7 +580,7 @@ def unsubscribe(code_list, subtype_list):
     ret, data = quote_ctx.unsubscribe(code_list, subtype_list)
     log.info('unsubscribe %s %s, ret: %s, data: %s' % (code_list, subtype_list, ret, data))
     if ret != ft.RET_OK:
-        log.info('unsubscribe %s %s error' % (code_list, subtype_list))
+        log.info('unsubscribe error %s %s' % (code_list, subtype_list))
         return False
     else:
         return True
@@ -806,10 +805,7 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
             glb['loss'] = {}
         reset_has()
         if glb['almost_over']:
-            glb['over'] = True
-            log.info('--------------------over--------------------')
-            quote_ctx.close()
-            trade_ctx.close()
+            end()
         return []
 
 
@@ -827,30 +823,38 @@ class SysNotify(ft.SysNotifyHandlerBase):
 def modify_order2(index, order_list, price):
     order = order_list[index]
     if glb['auto_place_order_flag']:
-        log.info('modify_order %s warning, auto_place_order' % order.code)
+        log.info('modify_order warning %s, auto_place_ordering' % order.code)
         glb['timer'].clearTimeoutHandler()
         return False
-    price2 = price + conf['EVERY_ORDER_DIFF'] * (index + 1)
+    if glb['loss'][order.code]:
+        log.info('modify_order warning %s, lossing' % order.code)
+        glb['timer'].clearTimeoutHandler()
+        return False
+    every_order_diff = conf['EVERY_ORDER_DIFF']
+    # if len(order_list) > 3:
+    #     every_order_diff = 0.001
+    price2 = price + every_order_diff * (index + 1)
     if price2 < order.price:
         _modify_order(order, price2)
     else:
-        log.info('modify_order %s error, old price: %s, new price: %s' % (order.code, order.price, price2))
+        log.info('modify_order warning %s, old price: %s, new price: %s' % (order.code, order.price, price2))
 
 
 def _loss_order(order_list, price=None):
     order_list2 = order_list[:] # 用新的数组，因为旧的成交了就会变化
     if price is not None:
         order = order_list2[0]
-        price2 = price + conf['EVERY_ORDER_DIFF']
+        price2 = price + 0.001
         if price2 < order.price:
             _modify_order(order, price2)
-    else:
+    elif glb['timer'] is None or glb['timer'].running is False:
         price = order_list2[0].price
         order_list2 = order_list2[1:]
         for i in range(0, len(order_list2)):
             order = order_list2[i]
             price2 = price + conf['EVERY_ORDER_DIFF'] * (i + 1)
             if price2 < order.price:
+                log.info('modify_order timer %s, old price: %s, new price: %s' % (order.code, order.price, price2))
                 glb['timer'] = Timer(modify_order2, count=len(order_list2) - i, delay=1.5, order_list=order_list2[i:], price=price + conf['EVERY_ORDER_DIFF'] * i)
                 glb['timer'].repeat()
                 break
@@ -876,7 +880,8 @@ def _check_loss(code, bid_price, ask_price, caller='', need_log=True):
     ref_price_diff = round(ref_price - ask_price, 3)
     if ref_price_diff >= loss_price_diff:
         glb['loss'][code] = True
-        log.info('%s loss %s, ask_price: %s, ref_price: %s' % (caller, code, ask_price, ref_price))
+        if need_log:
+            log.info('%s loss %s, ask_price: %s, ref_price: %s' % (caller, code, ask_price, ref_price))
         loss_order(glb['submitted_sell_order'][code], min(ask_price, last_filled_price))
     else:
         glb['loss'][code] = False
@@ -1305,7 +1310,7 @@ class Ticker(ft.TickerHandlerBase):
         if h < 9 or h == 9 and m < 30 or h >= 16:
             # print(data)
             if h == 16 and m == 0 and s == 0:
-                log.info('[%s]--------------------end--------------------' % t)
+                end()
             return ret, data
 
         if h == 9 and m == 30 and s == 0:
@@ -1325,7 +1330,7 @@ class Ticker(ft.TickerHandlerBase):
                     if not glb['to_over']:
                         glb['to_over'] = True
                         log.info('[%s]--------------------to_over--------------------' % t)
-                        if not glb['over'] and conf['sell_all_to_over']:
+                        if conf['sell_all_to_over']:
                             if conf['BULL_CODE'] != '' and conf['BEAR_CODE'] != '':
                                 sell_all()
                             elif conf['BULL_CODE'] != '':
@@ -1400,7 +1405,6 @@ def resetData():
     glb['soon_over'] = False
     glb['almost_over'] = False
     glb['to_over'] = False
-    glb['over'] = False
     request_trading_days()
 
 
@@ -1482,3 +1486,9 @@ def start(config=None):
     if ret != ft.RET_OK:
         log.info('query_subscription error')
     quote_ctx.start()
+
+
+def end():
+    log.info('--------------------over--------------------')
+    quote_ctx.close()
+    trade_ctx.close()

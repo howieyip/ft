@@ -7,16 +7,19 @@ class Timer:
         self.delay = delay
         self.args = args
         self.kwargs = kwargs
-        self.continue_repeating = True  # 添加一个标志变量来控制定时器的执行
+        self.running = True
 
     def clearTimeoutHandler(self):
-        self.continue_repeating = False  # 设置标志变量为 False，以停止定时器的执行
+        self.running = False
 
     def repeat(self):
         def wrapper(index):
-            if self.continue_repeating and index < self.count:  # 检查标志变量，以决定是否继续执行定时器
-                self.fn(index=index, *self.args, **self.kwargs)
-                self.setTimeout(wrapper, self.delay, index + 1)
+            if index < self.count:
+                if self.running:
+                    self.fn(index=index, *self.args, **self.kwargs)
+                    self.setTimeout(wrapper, self.delay, index + 1)
+            else:
+                self.running = False
         wrapper(0)
 
     def setTimeout(self, fn, delay=2, *args, **kwargs):
@@ -42,7 +45,9 @@ class Timer:
 #     if glb['stop']:
 #         print('modify_order %s warning, auto_place_order' % order['code'])
 #         glb['timer'].clearTimeoutHandler()
+#         print('running: %s' % glb['timer'].running)
 #         return False
+#     print('running: %s' % glb['timer'].running)
 #     price2 = price + glb['EVERY_ORDER_DIFF'] * (index + 1)
 #     if price2 < order['price']:
 #         print('modify_order %s success, old price: %s, new price: %s' % (order['code'], order['price'], price2))
