@@ -833,7 +833,7 @@ def modify_order2(index, order_list, price):
     every_order_diff = conf['EVERY_ORDER_DIFF']
     # if len(order_list) > 3:
     #     every_order_diff = 0.001
-    price2 = price + every_order_diff * (index + 1)
+    price2 = round(price + every_order_diff * (index + 1), 3)
     if price2 < order.price:
         _modify_order(order, price2)
     else:
@@ -852,7 +852,7 @@ def _loss_order(order_list, price=None):
         order_list2 = order_list2[1:]
         for i in range(0, len(order_list2)):
             order = order_list2[i]
-            price2 = price + conf['EVERY_ORDER_DIFF'] * (i + 1)
+            price2 = round(price + conf['EVERY_ORDER_DIFF'] * (i + 1), 3)
             if price2 < order.price:
                 log.info('modify_order timer %s, old price: %s, new price: %s' % (order.code, order.price, price2))
                 glb['timer'] = Timer(modify_order2, count=len(order_list2) - i, delay=1.5, order_list=order_list2[i:], price=price + conf['EVERY_ORDER_DIFF'] * i)
@@ -1415,7 +1415,7 @@ loss_order = throttle(_loss_order, 2)
 # 限制3秒内最多查1次足够
 check_line = throttle(_check_line, 3)
 # 每 30 秒内最多请求 10 次查询持仓接口
-position_list_query = throttle(_position_list_query, 3)
+position_list_query = throttle(_position_list_query, 3, need_log=False)
 # 每 30 秒内最多请求 15 次下单接口，且连续两次请求的间隔不可小于 0.02 秒
 smart_buy = throttle(_smart_buy, 2)
 smart_sell = delay_execution(_smart_sell, 1.5) # 自动挂卖单需要遍历，所以不能节流，只能延时
