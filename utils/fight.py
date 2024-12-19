@@ -131,6 +131,7 @@ glb = {
     'last_order_diff': 0.008,
     'order_book': {},
     'auto_buy_list': [],
+    'past_buy_list': [],
     'has_bull_list': [],
     'has_bear_list': [],
     'auto_place_order_flag': False,
@@ -424,7 +425,7 @@ def _cancel_order(order_id):
 def _modify_order(order, price, qty=None):
     price = round(price, 3)
     if not qty and price == order.price:
-        log.info('modify_order warning %s, old price: %s, new price: %s, qty: %s' % (order.code, order.price, price, qty))
+        log.info('modify_order warning %s, old price: %s == new price: %s, qty: %s' % (order.code, order.price, price, qty))
         return False
     qty = qty or order.qty
     ret, data = trade_ctx.modify_order(modify_order_op=ft.ModifyOrderOp.NORMAL, order_id=order.order_id, price=price, qty=qty, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
@@ -760,8 +761,11 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
         return False
 
     # 统计今日盈亏并确定是否止损停止交易
-    today_buy_data = hsi_data[hsi_data.code.isin(conf['include_code_list']) | (hsi_data.nominal_price < conf['CUR_PRICE_MAX']) & (hsi_data.today_buy_qty > 0)]
-    today_buy_data = today_buy_data[~today_buy_data.code.isin(conf['exclude_code_list'])]
+    hsi_data = hsi_data[hsi_data.code.isin(conf['include_code_list']) | (hsi_data.nominal_price < conf['CUR_PRICE_MAX'])]
+    today_buy_data = hsi_data[~hsi_data.code.isin(conf['exclude_code_list']) & (hsi_data.today_buy_qty > 0)]
+    past_buy_data = hsi_data[hsi_data.code.isin(conf['exclude_code_list']) & (hsi_data.qty != hsi_data.today_buy_qty - hsi_data.today_sell_qty)]
+    for index, row in past_buy_data.iterrows():
+        add_unique_element(glb['past_buy_list'], row.code)
     if conf['only_today_buy']:
         today_buy_data = today_buy_data[today_buy_data.code.isin(conf['include_code_list']) | (today_buy_data.qty == today_buy_data.today_buy_qty - today_buy_data.today_sell_qty)]
     if sum_today_pl_val(today_buy_data):
@@ -822,29 +826,17 @@ class SysNotify(ft.SysNotifyHandlerBase):
 
 def modify_order2(index, order_list, price):
     order = order_list[index]
-    if glb['auto_place_order_flag']:
-        log.info('modify_order warning %s, auto_place_ordering' % order.code)
+    if glb['auto_place_order_flag'] or glb['loss'][order.code]:
         glb['timer'].clearTimeoutHandler()
         return False
-    if glb['loss'][order.code]:
-        log.info('modify_order warning %s, lossing' % order.code)
-        glb['timer'].clearTimeoutHandler()
-        return False
-    every_order_diff = conf['EVERY_ORDER_DIFF']
-    # if len(order_list) > 3:
-    #     every_order_diff = 0.001
-    price2 = round(price + every_order_diff * (index + 1), 3)
-    if price2 < order.price:
-        _modify_order(order, price2)
-    else:
-        log.info('modify_order warning %s, old price: %s, new price: %s' % (order.code, order.price, price2))
+    _modify_order(order, price + conf['EVERY_ORDER_DIFF'] * (index + 1))
 
 
 def _loss_order(order_list, price=None):
     order_list2 = order_list[:] # 用新的数组，因为旧的成交了就会变化
     if price is not None:
         order = order_list2[0]
-        price2 = price + 0.001
+        price2 = price + conf['EVERY_ORDER_DIFF']
         if price2 < order.price:
             _modify_order(order, price2)
     elif glb['timer'] is None or glb['timer'].running is False:
@@ -909,10 +901,10 @@ class OrderBook(ft.OrderBookHandlerBase):
 
 
 def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
+    if code in glb['past_buy_list'] or price > conf['CUR_PRICE_MAX']:
+        return False
     if glb['auto_place_order_flag']:
         log.info('auto_place_order_flag True')
-        return False
-    if price > conf['CUR_PRICE_MAX']:
         return False
     glb['auto_place_order_flag'] = True
     first_order_price = price + conf['FIRST_ORDER_DIFF']
