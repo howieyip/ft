@@ -763,11 +763,11 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
     # 统计今日盈亏并确定是否止损停止交易
     hsi_data = hsi_data[hsi_data.code.isin(conf['include_code_list']) | (hsi_data.nominal_price < conf['CUR_PRICE_MAX'])]
     today_buy_data = hsi_data[~hsi_data.code.isin(conf['exclude_code_list']) & (hsi_data.today_buy_qty > 0)]
+    if conf['only_today_buy']:
+        today_buy_data = today_buy_data[today_buy_data.code.isin(conf['include_code_list']) | (today_buy_data.qty == today_buy_data.today_buy_qty - today_buy_data.today_sell_qty)]
     past_buy_data = hsi_data[hsi_data.code.isin(conf['exclude_code_list']) & (hsi_data.qty != hsi_data.today_buy_qty - hsi_data.today_sell_qty)]
     for index, row in past_buy_data.iterrows():
         add_unique_element(glb['past_buy_list'], row.code)
-    if conf['only_today_buy']:
-        today_buy_data = today_buy_data[today_buy_data.code.isin(conf['include_code_list']) | (today_buy_data.qty == today_buy_data.today_buy_qty - today_buy_data.today_sell_qty)]
     if sum_today_pl_val(today_buy_data):
         return False
 
@@ -845,8 +845,7 @@ def _loss_order(order_list, price=None):
         for i in range(0, len(order_list2)):
             order = order_list2[i]
             price2 = round(price + conf['EVERY_ORDER_DIFF'] * (i + 1), 3)
-            if price2 < order.price:
-                log.info('modify_order timer %s, old price: %s, new price: %s' % (order.code, order.price, price2))
+            if price2 != order.price:
                 glb['timer'] = Timer(modify_order2, count=len(order_list2) - i, delay=1.5, order_list=order_list2[i:], price=price + conf['EVERY_ORDER_DIFF'] * i)
                 glb['timer'].repeat()
                 break
@@ -886,6 +885,8 @@ class OrderBook(ft.OrderBookHandlerBase):
         # log.info('OrderBook push ret: %s, data:%s' % (ret, data))
         if ret != ft.RET_OK:
             log.info('OrderBook push error, ret: %s, data:%s' % (ret, data))
+            return ret, data
+        if data['code'] not in glb['has_bull_list'] and data['code'] not in glb['has_bear_list']:
             return ret, data
         glb['order_book'][data['code']] = data
         t = data['svr_recv_time_ask']
