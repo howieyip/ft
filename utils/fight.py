@@ -908,9 +908,10 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
         log.info('auto_place_order_flag True')
         return False
     glb['auto_place_order_flag'] = True
-    if code in glb['submitted_sell_order'] and len(glb['submitted_sell_order'][code]) > 0:
-        price = glb['submitted_sell_order'][code][-1].price
     first_order_price = price + conf['FIRST_ORDER_DIFF']
+    if code in glb['submitted_sell_order'] and len(glb['submitted_sell_order'][code]) > 0:
+        _modify_order(glb['submitted_sell_order'][code][0], first_order_price)
+        first_order_price += 0.004
     if volume < 100e3:
         batch = False
         if conf['ALLOW_ADD']:
