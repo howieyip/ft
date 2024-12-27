@@ -37,10 +37,8 @@ conf = {
     'CUR_PRICE_MIN': 0.04,
     'CUR_PRICE_MAX': 0.12,                          # 这个值非常重要，当天买入的新股票如果低于这个价，会被当成是日内短炒止损
 
-    'DELTA_SECONDS': 60,                            # 多少秒内
-    'DELTA_PRICE_MIN': 8,                           # 最小波动多少点
-    'DELTA_PRICE_MAX': 18,                          # 最大波动多少点
-    'FOLLOW_TREND_PRICE': 20,                       # 波动多少点，强制改为顺势买入
+    'DELTA_PRICE_MIN': 0,                           # K线最小波动多少点
+    'DELTA_PRICE_MAX': 30,                          # K线最大波动多少点
     'BUY_VOLUME': 200e3,                            # 下单多少股
     'MAX_VOLUME': 400e3,                            # 最大持仓股数，若超过则不会再买入
 
@@ -59,13 +57,13 @@ conf = {
     'only_today_buy': True,                         # 仅处理今天新买的，过夜的不管
     'AUTO_PLACE_ORDER': True,                      # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
     'ORDER_LIST': [                                 # 下单多少股以上（大的写前面），每单挂多少股，例如下单800k，分3档200k 200k 400k挂单
-        [900e3, 50e3, 50e3, 50e3, 50e3, 50e3, 50e3, 300e3, 300e3],
-        [800e3, 50e3, 50e3, 50e3, 50e3, 50e3, 50e3, 250e3, 250e3],
-        [700e3, 50e3, 50e3, 50e3, 50e3, 50e3, 50e3, 200e3, 200e3],
-        [600e3, 50e3, 50e3, 50e3, 50e3, 50e3, 50e3, 150e3, 150e3],
-        [500e3, 50e3, 50e3, 50e3, 50e3, 50e3, 50e3, 100e3, 100e3],
-        [400e3, 50e3, 50e3, 50e3, 50e3, 50e3, 50e3, 50e3, 50e3],
-        [300e3, 50e3, 50e3, 50e3, 50e3, 50e3, 50e3],
+        [900e3, 300e3, 200e3, 200e3, 200e3],
+        [800e3, 200e3, 200e3, 200e3, 200e3],
+        [700e3, 200e3, 200e3, 200e3, 100e3],
+        [600e3, 200e3, 200e3, 100e3, 100e3],
+        [500e3, 200e3, 100e3, 100e3, 100e3],
+        [400e3, 100e3, 100e3, 100e3, 100e3],
+        [300e3, 100e3, 100e3, 50e3, 50e3],
         [200e3, 50e3, 50e3, 50e3, 50e3],
         [150e3, 50e3, 50e3, 50e3],
         [100e3, 50e3, 50e3]
@@ -81,7 +79,7 @@ conf = {
         'cur_price_min': 0.15,
         'cur_price_max': 0.2
     },
-    'sell_all_to_over': True                       # 尾盘清仓
+    'sell_all_to_over': True                       # 尾盘清仓，只对自动购买的生效
 }
 
 
@@ -104,7 +102,7 @@ glb = {
     'recovery_bear': None,
     'rt_data': None,
     'golden_line': {'0': 0, '100': 0, 'diff': 0, 'reverse': '', 'check_result': ''},
-    'ma_line': {'5': 0, '10': 0, '20': 0, '60': 0, 'check_result': ''},
+    'line': {'5': 0, '10': 0, '20': 0, '60': 0, '100': 0, 'check_result': ''},
     'loss': {},
     'today_pl_val_bull': 0,
     'today_pl_val_bear': 0,
@@ -116,6 +114,7 @@ glb = {
     'ticker_list': [],
     'cur_price': 0,
     'last_price': 0,
+    'last_seconds_price': 0,
     'kline_data': None,
     'max_nominal_price': {},
     'filled_all_last_order': {},
@@ -253,7 +252,7 @@ def get_rt_data():
     return rt_data
 
 
-def get_cur_kline(num=120):
+def get_cur_kline(num=100):
     ret, kline_data = quote_ctx.get_cur_kline(CONST['MHI_CODE'], num, ft.KLType.K_1M)
     # log.info('get_cur_kline, ret: %s, kline_data:%s' % (ret, kline_data))
     if ret != ft.RET_OK:
@@ -270,27 +269,40 @@ def get_cur_kline(num=120):
 
 def draw_ma_line(need_log=True):
     kline_data = get_cur_kline()
-    if kline_data is False or len(kline_data) < 60:
+    if kline_data is False or len(kline_data) < 100:
         log.info('draw_ma_line error, kline_data:\n%s' % kline_data)
         return False
     MA5_SUM = 0
     MA10_SUM = 0
     MA20_SUM = 0
     MA60_SUM = 0
-    for i in range(-1, -61, -1):
-        MA60_SUM += kline_data.iloc[i].close
+    MA100_SUM = 0
+    boll_data = []
+    for i in range(-1, -101, -1):
+        price = kline_data.iloc[i].close
+        MA100_SUM += price
+        if i > -61:
+            MA60_SUM += price
         if i > -21:
-            MA20_SUM += kline_data.iloc[i].close
+            MA20_SUM += price
+            boll_data.insert(0, price)
         if i > -11:
-            MA10_SUM += kline_data.iloc[i].close
+            MA10_SUM += price
         if i > -6:
-            MA5_SUM += kline_data.iloc[i].close
-    glb['ma_line']['5'] = round(MA5_SUM / 5, 3)
-    glb['ma_line']['10'] = round(MA10_SUM / 10, 3)
-    glb['ma_line']['20'] = round(MA20_SUM / 20, 3)
-    glb['ma_line']['60'] = round(MA60_SUM / 60, 3)
+            MA5_SUM += price
+    glb['line']['5'] = round(MA5_SUM / 5, 3)
+    glb['line']['10'] = round(MA10_SUM / 10, 3)
+    glb['line']['20'] = round(MA20_SUM / 20, 3)
+    glb['line']['60'] = round(MA60_SUM / 60, 3)
+    glb['line']['100'] = round(MA100_SUM / 100, 3)
+    # 计算平方差
+    squared_diff = [(x - glb['line']['20']) ** 2 for x in boll_data]
+    # 计算样本标准差
+    std = math.sqrt(sum(squared_diff) / (len(boll_data) - 1))
+    glb['line']['up'] = round(glb['line']['20'] + 2 * std, 3)
+    glb['line']['down'] = round(glb['line']['20'] - 2 * std, 3)
     if need_log:
-        log.info('draw_ma_line: %s' % glb['ma_line'])
+        log.info('draw_ma_line: %s' % glb['line'])
 
 
 def draw_golden_line():
@@ -342,19 +354,23 @@ def draw_golden_line():
     return golden_line
 
 def _check_line(need_log=True):
+    if not conf['if_check_line']:
+        return False
     draw_ma_line(need_log)
     check_result = ''
-    if glb['ma_line']['5'] - glb['ma_line']['10'] > 10 and glb['ma_line']['10'] - glb['ma_line']['20'] > 10 and glb['cur_price'] - glb['ma_line']['5'] < 20:
+    if glb['line']['up'] - glb['line']['down'] < 25:
+        check_result = 'bands_narrow'
+    # elif glb['line']['down'] < glb['line']['100'] < glb['line']['up']:
+    #     check_result = 'ma100_in_bands'
+    elif glb['cur_price'] - glb['line']['down'] < 10:
         check_result = 'bull'
-        log.info('check_line bull, ma_line: %s' % glb['ma_line'])
-    elif glb['ma_line']['5'] - glb['ma_line']['10'] < -10 and glb['ma_line']['10'] - glb['ma_line']['20'] < -10 and glb['ma_line']['5'] - glb['cur_price'] < 20:
+    elif glb['cur_price'] - glb['line']['up'] > -10:
         check_result = 'bear'
-        log.info('check_line bear, ma_line: %s' % glb['ma_line'])
     else:
-        check_result = 'not_ready'
-        if need_log:
-            log.info('check_line not_ready, ma_line: %s' % glb['ma_line'])
-    glb['ma_line']['check_result'] = check_result
+        check_result = 'not_near_bands'
+    if need_log:
+        log.info('check_line result: %s' % check_result)
+    glb['line']['check_result'] = check_result
     return check_result
 
 
@@ -1051,10 +1067,7 @@ def auto_adjust(delta_price, submitted_type):
         modify_order(data, fall_price)
 
 
-def pre_adjust():
-    while datestr_to_timestamp(glb['adjust_ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['adjust_ticker_list'][0].get('time')) > conf['ADJUST_DELTA_SECONDS']:
-        glb['adjust_ticker_list'].pop(0)
-    delta_price = glb['adjust_ticker_list'][-1].get('price') - glb['adjust_ticker_list'][0].get('price')
+def _pre_adjust(delta_price):
     if conf['AUTO_ADJUST_BUY']:
         auto_adjust(delta_price, 'submitted_buy_bear')
         auto_adjust(delta_price, 'submitted_buy_bull')
@@ -1191,53 +1204,21 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
     return data
 
 
-def _auto_buy(stock_type):
-    # log.info('auto_buy stock_type: %s' % stock_type)
-    if stock_type == 'bull' and not glb['submitted_buy_bull_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bull_list']) == 0):
-        if conf['BULL_CODE'] == '':
-            return False
-        if conf['if_check_line']:
-            if check_line() == 'bull':
-                to_buy('bull')
-        # elif conf['ALLOW_ADD'] and conf['BUY_VOLUME'] < 100e3:
-        #     to_buy('bull')
-    elif stock_type == 'bear' and not glb['submitted_buy_bear_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bear_list']) == 0):
-        if conf['BEAR_CODE'] == '':
-            return False
-        if conf['if_check_line']:
-            if check_line() == 'bear':
-                to_buy('bear')
+def _pre_buy():
+    check_result = check_line()
+    if check_result == 'bull' and conf['BULL_CODE'] != '' and not glb['submitted_buy_bull_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bull_list']) == 0):
+        #            code         name             time_key     open    close     high      low  volume  turnover  pe_ratio  turnover_rate  last_close
+        # 0   HK.MHImain  小恒指主连(2406)  2024-06-15 02:42:00  17773.0  17772.0  17773.0  17769.0      18  319883.0       0.0            0.0     17772.0
+        last_kline_data = glb['kline_data'].iloc[-1]
+        delta_price = last_kline_data.close - last_kline_data.last_close
+        if delta_price > -conf['DELTA_PRICE_MAX']:
+            to_buy('bull')
+    elif check_result == 'bear' and conf['BEAR_CODE'] != '' and not glb['submitted_buy_bear_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bear_list']) == 0):
+        last_kline_data = glb['kline_data'].iloc[-1]
+        delta_price = last_kline_data.close - last_kline_data.last_close
+        if delta_price < conf['DELTA_PRICE_MAX']:
+            to_buy('bear')
 
-
-def get_submitted_code(submitted_type):
-    # 必须判断值是否为None，如果用get方法的第二个参数是不会判断的
-    if submitted_type in glb and glb[submitted_type] is not None:
-        return glb[submitted_type].get('code')
-    else:
-        return None
-
-
-def pre_buy():
-    #       code              time                 price        volume  turnover    ticker_direction       sequence   type      push_data_type
-    # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
-    while datestr_to_timestamp(glb['ticker_list'][-1].get('time')) - datestr_to_timestamp(glb['ticker_list'][0].get('time')) > conf['DELTA_SECONDS']:
-        glb['ticker_list'].pop(0)
-    cur_seconds = glb['ticker_list'][-1].get('time').split('.')[0][-2:]
-    if cur_seconds != '59' and cur_seconds != '00' and cur_seconds != '01':
-        return False
-    delta_price = glb['ticker_list'][-1].get('price') - glb['ticker_list'][0].get('price')
-    # log.info('pre_buy cur_seconds: %s, delta_price: %s' % (cur_seconds, delta_price))
-
-    if -conf['DELTA_PRICE_MIN'] >= delta_price >= -conf['DELTA_PRICE_MAX']:
-        auto_buy('bull')
-    elif conf['DELTA_PRICE_MIN'] <= delta_price <= conf['DELTA_PRICE_MAX']:
-        auto_buy('bear')
-    # elif delta_price > conf['DELTA_PRICE_MAX'] and get_submitted_code('submitted_buy_bear_lastdata'):
-    #     cancel_all(get_submitted_code('submitted_buy_bear_lastdata'))
-    #     log.info('cancel_all bear, delta_price: %s' % delta_price)
-    # elif delta_price < -conf['DELTA_PRICE_MAX'] and get_submitted_code('submitted_buy_bull_lastdata'):
-    #     cancel_all(get_submitted_code('submitted_buy_bull_lastdata'))
-    #     log.info('cancel_all bull, delta_price: %s' % delta_price)
 
 def _get_recovery_code():
     glb['recovery_bull'] = _get_stock_code(stock_type='bull', cur_price_min=0.01, cur_price_max=0.1, sort_field=ft.SortField.RECOVERY_PRICE, ascend=False)
@@ -1271,8 +1252,8 @@ class RTData(ft.RTDataHandlerBase):
                 log.info('recovery_bull, price: %s' % rt_data.cur_price)
                 glb['recovery_bull'] = None
                 to_buy('bear')
-            if conf['TRY_RECOVERY']:
-                buy_recovery_code()
+        if conf['TRY_RECOVERY']:
+            buy_recovery_code()
 
         return ret, data
 
@@ -1304,7 +1285,7 @@ class Ticker(ft.TickerHandlerBase):
         m = int(t[14:16])
         s = int(t[17:19])
         if h < 9 or h == 9 and m < 30 or h >= 16:
-            # print(data)
+            # log.info(data)
             if h == 16 and m == 0 and s == 0:
                 end()
             return ret, data
@@ -1348,29 +1329,23 @@ class Ticker(ft.TickerHandlerBase):
             # 每分钟查询持仓列表
             if s == 30:
                 position_list_query(need_log=False, caller='per_min')
-                # 查询指标线，检查撤逆向的单
+                # 查询指标线，不符合条件就撤单
                 if conf['AUTO_BUY']:
-                    check_result = check_line() or glb['ma_line']['check_result']
-                    if glb['submitted_buy_bull_lastdata'] is not None and glb['submitted_buy_bull_lastdata'].price > 0.02 and check_result == 'bear':
+                    check_result = check_line() or glb['line']['check_result']
+                    if glb['submitted_buy_bull_lastdata'] is not None and glb['submitted_buy_bull_lastdata'].price > 0.02 and check_result != 'bull':
                         cancel_all(glb['submitted_buy_bull_lastdata'].code)
                         log.info('cancel_all bull, check_result: %s' % check_result)
-                    elif glb['submitted_buy_bear_lastdata'] is not None and glb['submitted_buy_bear_lastdata'].price > 0.02 and check_result == 'bull':
+                    elif glb['submitted_buy_bear_lastdata'] is not None and glb['submitted_buy_bear_lastdata'].price > 0.02 and check_result != 'bear':
                         cancel_all(glb['submitted_buy_bear_lastdata'].code)
                         log.info('cancel_all bear, check_result: %s' % check_result)
 
-        # 自动买入和自动调价
-        if conf['AUTO_BUY'] or conf['AUTO_ADJUST']:
-            for index, row in data.iterrows():
-                if conf['AUTO_BUY']:
-                    glb['ticker_list'].append(row)
-                if conf['AUTO_ADJUST']:
-                    glb['adjust_ticker_list'].append(row)
-            # 尾盘就不买了
-            if conf['AUTO_BUY']:
-                pre_buy()
-            # 自动调价
-            if conf['AUTO_ADJUST']:
-                pre_adjust()
+        # 自动买入
+        if conf['AUTO_BUY'] and not glb['soon_over'] and (s == 58 or s == 59 or s == 0):
+            pre_buy()
+        # 自动调价
+        if conf['AUTO_ADJUST'] and s % conf['ADJUST_DELTA_SECONDS'] == 0:
+            pre_adjust(glb['cur_price'] - glb['last_seconds_price'])
+            glb['last_seconds_price'] = glb['cur_price']
 
         return ret, data
 
@@ -1404,12 +1379,12 @@ def resetData():
     request_trading_days()
 
 
-# 限制2秒内最多查1次足够
-auto_buy = throttle(_auto_buy, 2)
+# 限制n秒内最多查1次
+pre_buy = throttle(_pre_buy, 5, need_log=False)
+check_line = throttle(_check_line, 3)
+pre_adjust = throttle(_pre_adjust, 2, need_log=False)
 check_loss = throttle(_check_loss, 2, need_log=False)
 loss_order = throttle(_loss_order, 2)
-# 限制3秒内最多查1次足够
-check_line = throttle(_check_line, 3)
 # 每 30 秒内最多请求 10 次查询持仓接口
 position_list_query = throttle(_position_list_query, 3, need_log=False)
 # 每 30 秒内最多请求 15 次下单接口，且连续两次请求的间隔不可小于 0.02 秒
@@ -1455,17 +1430,20 @@ def start(config=None):
         if ret != ft.RET_OK:
             log.info('unlock_trade error')
             return False
-    data = subscribe([CONST['HSI_CODE']], [ft.SubType.RT_DATA], subscribe_push=conf['TRY_FOLLOW_RECOVERY'])
-    if data is False:
-        return False
-    data = subscribe([CONST['MHI_CODE']], [ft.SubType.TICKER])
+    data = subscribe([CONST['MHI_CODE']], [ft.SubType.TICKER], subscribe_push=True)
     if data is False:
         return False
     data = subscribe([CONST['MHI_CODE']], [ft.SubType.K_1M], subscribe_push=False)
     if data is False:
         return False
+    if conf['TRY_RECOVERY'] or conf['TRY_FOLLOW_RECOVERY']:
+        data = subscribe([CONST['HSI_CODE']], [ft.SubType.RT_DATA], subscribe_push=conf['TRY_FOLLOW_RECOVERY'])
+        if data is False:
+            return False
     # 查询最近回收牛熊
-    get_recovery_code()
+    # get_recovery_code()
+    # 查询并检查均线
+    check_line()
     position_list_query(caller='start')
     order_list_query()
 
