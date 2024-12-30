@@ -40,7 +40,7 @@ conf = {
     'DELTA_PRICE_MIN': 0,                           # K线最小波动多少点
     'DELTA_PRICE_MAX': 30,                          # K线最大波动多少点
     'BUY_VOLUME': 200e3,                            # 下单多少股
-    'MAX_VOLUME': 400e3,                            # 最大持仓股数，若超过则不会再买入
+    'MAX_VOLUME': 800e3,                            # 最大持仓股数，若超过则不会再买入
 
     'AUTO_ADJUST': False,                           # 是否自动调整订单价格，若是则下面的AUTO_ADJUST_BUY和AUTO_ADJUST_SELL有效
     'AUTO_ADJUST_BUY': False,                       # 是否自动调整挂的买单的价格，若是则下面的ADJUST_BUY_DICT有效
@@ -49,15 +49,14 @@ conf = {
     'ADJUST_DELTA_PRICE': 5,                        # 波动多少点
     'ADJUST_BUY_RISE_LEVEL': 1,                     # 上升买单为第几档
     'ADJUST_BUY_FALL_LEVEL': 2,                     # 下降买单为第几档
-    'ADJUST_SELL_RISE_LEVEL': 2,                     # 上升卖单为第几档
-    'ADJUST_SELL_FALL_LEVEL': 1,                     # 下降卖单为第几档
+    'ADJUST_SELL_RISE_LEVEL': 2,                    # 上升卖单为第几档
+    'ADJUST_SELL_FALL_LEVEL': 1,                    # 下降卖单为第几档
 
-    'ALLOW_ADD': False,                              # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
+    'ALLOW_ADD': True,                              # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
     'ADD_PRICE_DIFF': 0.004,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
     'only_today_buy': True,                         # 仅处理今天新买的，过夜的不管
-    'AUTO_PLACE_ORDER': True,                      # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
+    'AUTO_PLACE_ORDER': True,                       # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
     'ORDER_LIST': [                                 # 下单多少股以上（大的写前面），每单挂多少股，例如下单800k，分3档200k 200k 400k挂单
-        [900e3, 300e3, 200e3, 200e3, 200e3],
         [800e3, 200e3, 200e3, 200e3, 200e3],
         [700e3, 200e3, 200e3, 200e3, 100e3],
         [600e3, 200e3, 200e3, 100e3, 100e3],
@@ -65,7 +64,11 @@ conf = {
         [400e3, 100e3, 100e3, 100e3, 100e3],
         [300e3, 100e3, 100e3, 50e3, 50e3],
         [200e3, 50e3, 50e3, 50e3, 50e3],
-        [150e3, 50e3, 50e3, 50e3],
+        [100e3, 50e3, 50e3]
+    ],
+    'ADD_ORDER_LIST': [                             # 补仓的订单
+        [400e3, 200e3, 200e3],
+        [200e3, 100e3, 100e3],
         [100e3, 50e3, 50e3]
     ],
     'FIRST_ORDER_DIFF': 0.002,                      # 第一个卖单为第几档
@@ -101,8 +104,8 @@ glb = {
     'recovery_bull': None,
     'recovery_bear': None,
     'rt_data': None,
-    'golden_line': {'0': 0, '100': 0, 'diff': 0, 'reverse': '', 'check_result': ''},
-    'line': {'5': 0, '10': 0, '20': 0, '60': 0, '100': 0, 'check_result': ''},
+    'golden_line': {},
+    'line': {'check_result': ''},
     'loss': {},
     'today_pl_val_bull': 0,
     'today_pl_val_bear': 0,
@@ -111,7 +114,6 @@ glb = {
     'soon_over': False,
     'almost_over': False,
     'to_over': False,
-    'ticker_list': [],
     'cur_price': 0,
     'last_price': 0,
     'last_seconds_price': 0,
@@ -119,7 +121,6 @@ glb = {
     'max_nominal_price': {},
     'filled_all_last_order': {},
     'filled_all_buy_order': {},
-    'adjust_ticker_list': [],
     'submitted_buy_bull_flag': False,
     'submitted_buy_bear_flag': False,
     'submitted_buy_bull_lastdata': None,
@@ -252,59 +253,6 @@ def get_rt_data():
     return rt_data
 
 
-def get_cur_kline(num=100):
-    ret, kline_data = quote_ctx.get_cur_kline(CONST['MHI_CODE'], num, ft.KLType.K_1M)
-    # log.info('get_cur_kline, ret: %s, kline_data:%s' % (ret, kline_data))
-    if ret != ft.RET_OK:
-        log.info('get_cur_kline error, ret: %s, kline_data:\n%s' % (ret, kline_data))
-        return False
-    #            code         name             time_key     open    close     high      low  volume  turnover  pe_ratio  turnover_rate  last_close
-    # 0   HK.MHImain  小恒指主连(2406)  2024-06-15 02:42:00  17773.0  17772.0  17773.0  17769.0      18  319883.0       0.0            0.0     17772.0
-    # 1   HK.MHImain  小恒指主连(2406)  2024-06-15 02:43:00  17775.0  17776.0  17776.0  17775.0       8  142205.0       0.0            0.0     17772.0
-    # 18  HK.MHImain  小恒指主连(2406)  2024-06-15 03:00:00  17796.0  17796.0  17796.0  17793.0      30  533842.0       0.0            0.0     17795.0
-    # 19  HK.MHImain  小恒指主连(2406)  2024-06-17 09:16:00  17796.0  17796.0  17796.0  17796.0       0       0.0       0.0            0.0     17796.0
-    glb['kline_data'] = kline_data
-    return kline_data
-
-
-def draw_ma_line(need_log=True):
-    kline_data = get_cur_kline()
-    if kline_data is False or len(kline_data) < 100:
-        log.info('draw_ma_line error, kline_data:\n%s' % kline_data)
-        return False
-    MA5_SUM = 0
-    MA10_SUM = 0
-    MA20_SUM = 0
-    MA60_SUM = 0
-    MA100_SUM = 0
-    boll_data = []
-    for i in range(-1, -101, -1):
-        price = kline_data.iloc[i].close
-        MA100_SUM += price
-        if i > -61:
-            MA60_SUM += price
-        if i > -21:
-            MA20_SUM += price
-            boll_data.insert(0, price)
-        if i > -11:
-            MA10_SUM += price
-        if i > -6:
-            MA5_SUM += price
-    glb['line']['5'] = round(MA5_SUM / 5, 3)
-    glb['line']['10'] = round(MA10_SUM / 10, 3)
-    glb['line']['20'] = round(MA20_SUM / 20, 3)
-    glb['line']['60'] = round(MA60_SUM / 60, 3)
-    glb['line']['100'] = round(MA100_SUM / 100, 3)
-    # 计算平方差
-    squared_diff = [(x - glb['line']['20']) ** 2 for x in boll_data]
-    # 计算样本标准差
-    std = math.sqrt(sum(squared_diff) / (len(boll_data) - 1))
-    glb['line']['up'] = round(glb['line']['20'] + 2 * std, 3)
-    glb['line']['down'] = round(glb['line']['20'] - 2 * std, 3)
-    if need_log:
-        log.info('draw_ma_line: %s' % glb['line'])
-
-
 def draw_golden_line():
     data = glb['rt_data'].iloc[:-1] # 排除最后一个数据，因为在当前分钟未结束时画分割线是不准确的
     # cur_index = data.shape[0] - 1
@@ -353,24 +301,113 @@ def draw_golden_line():
         return False
     return golden_line
 
+
+def get_cur_kline(num=100):
+    ret, kline_data = quote_ctx.get_cur_kline(CONST['MHI_CODE'], num, ft.KLType.K_1M)
+    # log.info('get_cur_kline, ret: %s, kline_data:%s' % (ret, kline_data))
+    if ret != ft.RET_OK:
+        log.info('get_cur_kline error, ret: %s, kline_data:\n%s' % (ret, kline_data))
+        return False
+    #            code         name             time_key     open    close     high      low  volume  turnover  pe_ratio  turnover_rate  last_close
+    # 0   HK.MHImain  小恒指主连(2406)  2024-06-15 02:42:00  17773.0  17772.0  17773.0  17769.0      18  319883.0       0.0            0.0     17772.0
+    # 1   HK.MHImain  小恒指主连(2406)  2024-06-15 02:43:00  17775.0  17776.0  17776.0  17775.0       8  142205.0       0.0            0.0     17772.0
+    # 18  HK.MHImain  小恒指主连(2406)  2024-06-15 03:00:00  17796.0  17796.0  17796.0  17793.0      30  533842.0       0.0            0.0     17795.0
+    # 19  HK.MHImain  小恒指主连(2406)  2024-06-17 09:16:00  17796.0  17796.0  17796.0  17796.0       0       0.0       0.0            0.0     17796.0
+    glb['kline_data'] = kline_data
+    return kline_data
+
+
+def draw_ma_line():
+    kline_data = get_cur_kline()
+    if kline_data is False or len(kline_data) < 100:
+        log.info('draw_ma_line error, kline_data:\n%s' % kline_data)
+        return False
+    MA5_SUM = 0
+    MA10_SUM = 0
+    MA20_SUM = 0
+    MA60_SUM = 0
+    MA100_SUM = 0
+    boll_data = []
+    for i in range(-1, -101, -1):
+        price = kline_data.iloc[i].close
+        MA100_SUM += price
+        if i > -61:
+            MA60_SUM += price
+        if i > -21:
+            MA20_SUM += price
+            boll_data.insert(0, price)
+        if i > -11:
+            MA10_SUM += price
+        if i > -6:
+            MA5_SUM += price
+    line = {'cur':  kline_data.iloc[-1].close}
+    line['5'] = round(MA5_SUM / 5, 3)
+    line['10'] = round(MA10_SUM / 10, 3)
+    line['mid'] = round(MA20_SUM / 20, 3)
+    line['60'] = round(MA60_SUM / 60, 3)
+    line['100'] = round(MA100_SUM / 100, 3)
+    # 计算平方差
+    squared_diff = [(x - line['mid']) ** 2 for x in boll_data]
+    # 计算样本标准差
+    std = math.sqrt(sum(squared_diff) / (len(boll_data) - 1))
+    line['upper'] = round(line['mid'] + 2 * std, 3)
+    line['lower'] = round(line['mid'] - 2 * std, 3)
+    # log.info('draw_ma_line: %s' % line)
+    glb['line'] = line
+    return line
+
+
 def _check_line(need_log=True):
     if not conf['if_check_line']:
         return False
-    draw_ma_line(need_log)
+    line = draw_ma_line()
+    if line is False:
+        return False
     check_result = ''
-    if glb['line']['up'] - glb['line']['down'] < 25:
+    #            code         name             time_key     open    close     high      low  volume  turnover  pe_ratio  turnover_rate  last_close
+    # 0   HK.MHImain  小恒指主连(2406)  2024-06-15 02:42:00  17773.0  17772.0  17773.0  17769.0      18  319883.0       0.0            0.0     17772.0
+    last_kline = glb['kline_data'].iloc[-1]
+    last2_kline = glb['kline_data'].iloc[-2]
+    last3_kline = glb['kline_data'].iloc[-3]
+    delta_price = last_kline.close - last_kline.last_close
+    if line['upper'] - line['lower'] < 25:
         check_result = 'bands_narrow'
-    # elif glb['line']['down'] < glb['line']['100'] < glb['line']['up']:
-    #     check_result = 'ma100_in_bands'
-    elif glb['cur_price'] - glb['line']['down'] < 10:
-        check_result = 'bull'
-    elif glb['cur_price'] - glb['line']['up'] > -10:
-        check_result = 'bear'
+    elif (last_kline.low - line['lower'] < 10 or last2_kline.low - line['lower'] < 10 or last3_kline.low - line['lower'] < 10) and last_kline.close - line['mid'] < -10:
+        if last_kline.close > line['100'] and delta_price > -conf['DELTA_PRICE_MAX']:
+            check_result = 'bull_wave'
+        elif delta_price > 0:
+            if last_kline.close > last2_kline.high and last_kline.close > last3_kline.high:
+                check_result = 'bull_swallow'
+            elif last2_kline.close > last2_kline.low and abs(last2_kline.close - last2_kline.open) / (last2_kline.close - last2_kline.low) < 1/3 and last2_kline.high - last2_kline.close / (last2_kline.close - last2_kline.low) < 1/3:
+                check_result = 'bull_pinba'
+            else:
+                check_result = 'wait_long_signal'
+        else:
+            check_result = 'wait_long_trend'
+    elif (last_kline.high - line['upper'] > -10 or last2_kline.high - line['upper'] > -10 or last3_kline.high - line['upper'] > -10) and last_kline.close - line['mid'] > 10:
+        if last_kline.close < line['100'] and delta_price < conf['DELTA_PRICE_MAX']:
+            check_result = 'bear_wave'
+        elif delta_price < 0:
+            if last_kline.close < last2_kline.low and last_kline.close < last3_kline.low:
+                check_result = 'bear_swallow'
+            elif last2_kline.high > last2_kline.close and abs(last2_kline.close - last2_kline.open) / (last2_kline.high - last2_kline.close) < 1/3 and last2_kline.close - last2_kline.low / (last2_kline.high - last2_kline.close) < 1/3:
+                check_result = 'bear_pinba'
+            else:
+                check_result = 'wait_short_signal'
+        else:
+            check_result = 'wait_short_trend'
     else:
         check_result = 'not_near_bands'
+    line['check_result'] = check_result
     if need_log:
-        log.info('check_line result: %s' % check_result)
-    glb['line']['check_result'] = check_result
+        log.info('check_line: %s' % line)
+    # 不符合条件就撤单
+    if glb['submitted_buy_bull_lastdata'] is not None and glb['submitted_buy_bull_lastdata'].price > 0.02 and check_result == 'not_near_bands':
+        cancel_all(glb['submitted_buy_bull_lastdata'].code)
+        log.info('cancel_all bull, check_result: %s' % check_result)
+    elif glb['submitted_buy_bear_lastdata'] is not None and glb['submitted_buy_bear_lastdata'].price > 0.02 and check_result == 'not_near_bands':
+        cancel_all(glb['submitted_buy_bear_lastdata'].code)
+        log.info('cancel_all bear, check_result: %s' % check_result)
     return check_result
 
 
@@ -391,13 +428,6 @@ def _smart_buy(code, volume, price=None, type='Bid'):
         if conf['TRADE_ENV'] == ft.TrdEnv.SIMULATE:
             type = 'Ask'
         price = max(0.01, data[type][0][0])
-        if conf['ALLOW_ADD'] and volume < 100e3:
-            ref_price = glb['filled_all_last_order'].get(code, {}).get('price')
-            if ref_price is not None and data['Ask'][0][0] <= round(ref_price - conf['ADD_PRICE_DIFF'], 3):
-                price = data['Ask'][0][0]
-            else:
-                log.info('_smart_buy not allow, bid: %s, ask: %s, ref_price: %s' % (data['Bid'][0][0], data['Ask'][0][0], ref_price))
-                return False
     ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.BUY, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
     # log.info('_smart_buy, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
@@ -512,10 +542,10 @@ def _order_list_query(code='', status_filter_list=[ft.OrderStatus.SUBMITTED, ft.
     return data
 
 
-def _cancel_all(code='', trd_side='', stock_type=''):
+def _cancel_all(code='', trd_side=''):
     if code is None:
         return False
-    if code == '' and stock_type == '' and trd_side == '':
+    if code == '' and trd_side == '':
         ret, data = trade_ctx.cancel_all_order(trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
         log.info('cancel_all_order, ret: %s, data: %s' % (ret, data))
         if ret != ft.RET_OK:
@@ -530,16 +560,10 @@ def _cancel_all(code='', trd_side='', stock_type=''):
     if len(data) > 0:
         for i in range(0, len(data)):
             item = data.iloc[i]
-            if stock_type == '':
-                if trd_side == '':
-                    cancel_order(item.order_id)
-                elif trd_side == item.trd_side:
-                    cancel_order(item.order_id)
-            else:
-                if CONST[stock_type] in item.stock_name and trd_side == '':
-                    cancel_order(item.order_id)
-                elif CONST[stock_type] in item.stock_name and trd_side == item.trd_side:
-                    cancel_order(item.order_id)
+            if trd_side == '':
+                cancel_order(item.order_id)
+            elif trd_side == item.trd_side:
+                cancel_order(item.order_id)
 
 
 # 买一价强制卖掉指定股票
@@ -565,7 +589,7 @@ def sell_all(code='', qty='', stock_type=''):
         cancel_all(code)
         force_sell(code, qty)
         return True
-    cancel_all(stock_type=stock_type) # 尽量调用撤销全部订单接口比较快
+    cancel_all() # 尽量调用撤销全部订单接口比较快
     data = _position_list_query(stock_type=stock_type, caller='sell_all')
     if data is False or data is None:
         return False
@@ -852,9 +876,8 @@ def _loss_order(order_list, price=None):
     order_list2 = order_list[:] # 用新的数组，因为旧的成交了就会变化
     if price is not None:
         order = order_list2[0]
-        price2 = price + conf['EVERY_ORDER_DIFF']
-        if price2 < order.price:
-            _modify_order(order, price2)
+        if price < order.price:
+            _modify_order(order, price)
     elif glb['timer'] is None or glb['timer'].running is False:
         price = order_list2[0].price
         order_list2 = order_list2[1:]
@@ -879,17 +902,24 @@ def _check_loss(code, bid_price, ask_price, caller='', need_log=True):
 
     last_filled_price = glb['filled_all_last_order'].get(code, {}).get('price')
     ref_price = last_filled_price
+    order = glb['submitted_sell_order'][code][0]
+    buy_price = find_buy_price(order)
     if not ref_price or ref_price < glb['max_nominal_price'][code]:
         ref_price = glb['max_nominal_price'][code]
     if need_log and not glb['loss'][code]:
-        log.info('%s check_loss %s, ask_price: %s, ref_price: %s' % (caller, code, ask_price, ref_price))
+        log.info('%s check_loss %s, buy_price: %s, ask_price: %s, ref_price: %s' % (caller, code, buy_price, ask_price, ref_price))
 
     ref_price_diff = round(ref_price - ask_price, 3)
     if ref_price_diff >= loss_price_diff:
         glb['loss'][code] = True
         if need_log:
-            log.info('%s loss %s, ask_price: %s, ref_price: %s' % (caller, code, ask_price, ref_price))
-        loss_order(glb['submitted_sell_order'][code], min(ask_price, last_filled_price))
+            log.info('%s loss %s, buy_price: %s, ask_price: %s, ref_price: %s' % (caller, code, buy_price, ask_price, ref_price))
+        loss_price = min(ask_price, last_filled_price) + conf['FIRST_ORDER_DIFF']
+        if '牛' in order.stock_name and glb['cur_price'] < glb['line']['100'] and ask_price <= buy_price:
+            loss_price = ask_price
+        elif '熊' in order.stock_name and glb['cur_price'] > glb['line']['100'] and ask_price <= buy_price:
+            loss_price = ask_price
+        loss_order(glb['submitted_sell_order'][code], loss_price)
     else:
         glb['loss'][code] = False
         loss_order(glb['submitted_sell_order'][code])
@@ -925,13 +955,13 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
         return False
     glb['auto_place_order_flag'] = True
     first_order_price = price + conf['FIRST_ORDER_DIFF']
+    order_list = conf['ORDER_LIST']
     if code in glb['submitted_sell_order'] and len(glb['submitted_sell_order'][code]) > 0:
+        order_list = conf['ADD_ORDER_LIST']
         _modify_order(glb['submitted_sell_order'][code][0], first_order_price)
         first_order_price += 0.004
     if volume < 100e3:
         batch = False
-        if conf['ALLOW_ADD']:
-            first_order_price = price + conf['ADD_PRICE_DIFF']
     if conf['NEED_LOSS']:
         if loss:
             glb['loss'][code] = True
@@ -952,9 +982,9 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
         return
     item = []
     # [[600e3, 150e3, 150e3, 150e3, 150e3]]
-    for i in range(0, len(conf['ORDER_LIST'])):
-        if volume >= conf['ORDER_LIST'][i][0]:
-            item = conf['ORDER_LIST'][i]
+    for i in range(0, len(order_list)):
+        if volume >= order_list[i][0]:
+            item = order_list[i]
             break
     volume_diff = volume - item[0]
     if glb['move_position']:
@@ -962,7 +992,7 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
     last_order_price = 0
     for i in range(1, len(item)): # 从1开始
         vol = item[i]
-        if volume_diff > 0 and i == len(item) - 1:
+        if volume_diff > 0 and i == 1:
             vol += volume_diff
         if vol == 0:
             continue
@@ -1163,6 +1193,7 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
             if not conf['ALLOW_ADD']:
                 log.info('not allow add')
                 return False
+            volume /= 2
             total_qty = sum(data.qty)
             if total_qty + volume > conf['MAX_VOLUME']:
                 if conf['MAX_VOLUME'] - total_qty >= 100e3:
@@ -1206,18 +1237,10 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
 
 def _pre_buy():
     check_result = check_line()
-    if check_result == 'bull' and conf['BULL_CODE'] != '' and not glb['submitted_buy_bull_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bull_list']) == 0):
-        #            code         name             time_key     open    close     high      low  volume  turnover  pe_ratio  turnover_rate  last_close
-        # 0   HK.MHImain  小恒指主连(2406)  2024-06-15 02:42:00  17773.0  17772.0  17773.0  17769.0      18  319883.0       0.0            0.0     17772.0
-        last_kline_data = glb['kline_data'].iloc[-1]
-        delta_price = last_kline_data.close - last_kline_data.last_close
-        if delta_price > -conf['DELTA_PRICE_MAX']:
-            to_buy('bull')
-    elif check_result == 'bear' and conf['BEAR_CODE'] != '' and not glb['submitted_buy_bear_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bear_list']) == 0):
-        last_kline_data = glb['kline_data'].iloc[-1]
-        delta_price = last_kline_data.close - last_kline_data.last_close
-        if delta_price < conf['DELTA_PRICE_MAX']:
-            to_buy('bear')
+    if 'bull' in check_result and conf['BULL_CODE'] != '' and not glb['submitted_buy_bull_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bull_list']) == 0):
+        to_buy('bull')
+    elif 'bear' in check_result and conf['BEAR_CODE'] != '' and not glb['submitted_buy_bear_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bear_list']) == 0):
+        to_buy('bear')
 
 
 def _get_recovery_code():
@@ -1322,25 +1345,16 @@ class Ticker(ft.TickerHandlerBase):
         glb['cur_price'] = data0.price
 
         if conf['if_check_line']:
-            # 每波动10点查询持仓列表，方便统计盈亏和止损
-            if abs(glb['cur_price'] - glb['last_price']) >= 10:
+            # 每波动20点查询持仓列表，方便统计盈亏和止损
+            if abs(glb['cur_price'] - glb['last_price']) >= 20:
                 glb['last_price'] = glb['cur_price']
                 position_list_query(need_log=False, caller='fluctuate')
             # 每分钟查询持仓列表
-            if s == 30:
+            if s == 29:
                 position_list_query(need_log=False, caller='per_min')
-                # 查询指标线，不符合条件就撤单
-                if conf['AUTO_BUY']:
-                    check_result = check_line() or glb['line']['check_result']
-                    if glb['submitted_buy_bull_lastdata'] is not None and glb['submitted_buy_bull_lastdata'].price > 0.02 and check_result != 'bull':
-                        cancel_all(glb['submitted_buy_bull_lastdata'].code)
-                        log.info('cancel_all bull, check_result: %s' % check_result)
-                    elif glb['submitted_buy_bear_lastdata'] is not None and glb['submitted_buy_bear_lastdata'].price > 0.02 and check_result != 'bear':
-                        cancel_all(glb['submitted_buy_bear_lastdata'].code)
-                        log.info('cancel_all bear, check_result: %s' % check_result)
 
         # 自动买入
-        if conf['AUTO_BUY'] and not glb['soon_over'] and (s == 58 or s == 59 or s == 0):
+        if conf['AUTO_BUY'] and not glb['soon_over'] and (s == 57 or s == 58 or s == 59):
             pre_buy()
         # 自动调价
         if conf['AUTO_ADJUST'] and s % conf['ADJUST_DELTA_SECONDS'] == 0:
