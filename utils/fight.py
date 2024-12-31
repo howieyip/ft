@@ -71,7 +71,6 @@ conf = {
         [200e3, 100e3, 100e3],
         [100e3, 50e3, 50e3]
     ],
-    'FIRST_ORDER_DIFF': 0.002,                      # 第一个卖单为第几档
     'EVERY_ORDER_DIFF': 0.002,                      # 每个卖单间隔多少
 
     'AUTO_MOVE_POSITION': False,                    # 是否自动强制移仓，是则下面的MOVE_POSITION_DICT生效
@@ -425,9 +424,10 @@ def _smart_buy(code, volume, price=None, type='Bid'):
         data = get_order_book(code)
         if not data:
             return False
-        if conf['TRADE_ENV'] == ft.TrdEnv.SIMULATE:
-            type = 'Ask'
-        price = max(0.01, data[type][0][0])
+        if type == 'Ask' or 'wave' in glb['line']['check_result']:
+            price = max(0.01, data[type][0][0])
+        else:
+            price = max(0.01, data[type][1][0])
     ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.BUY, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
     # log.info('_smart_buy, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
@@ -914,11 +914,12 @@ def _check_loss(code, bid_price, ask_price, caller='', need_log=True):
         glb['loss'][code] = True
         if need_log:
             log.info('%s loss %s, buy_price: %s, ask_price: %s, ref_price: %s' % (caller, code, buy_price, ask_price, ref_price))
-        loss_price = min(ask_price, last_filled_price) + conf['FIRST_ORDER_DIFF']
-        if '牛' in order.stock_name and glb['cur_price'] < glb['line']['100'] and ask_price <= buy_price:
-            loss_price = ask_price
-        elif '熊' in order.stock_name and glb['cur_price'] > glb['line']['100'] and ask_price <= buy_price:
-            loss_price = ask_price
+        loss_price = min(ask_price, last_filled_price) + conf['EVERY_ORDER_DIFF']
+        if ('牛' in order.stock_name and glb['cur_price'] < glb['line']['100'] or '熊' in order.stock_name and glb['cur_price'] > glb['line']['100']) and ask_price <= buy_price:
+            if ask_price == last_filled_price:
+                loss_price = min(ask_price, last_filled_price) + 0.001
+            else:
+                loss_price = ask_price
         loss_order(glb['submitted_sell_order'][code], loss_price)
     else:
         glb['loss'][code] = False
@@ -932,9 +933,9 @@ class OrderBook(ft.OrderBookHandlerBase):
         if ret != ft.RET_OK:
             log.info('OrderBook push error, ret: %s, data:%s' % (ret, data))
             return ret, data
+        glb['order_book'][data['code']] = data
         if data['code'] not in glb['has_bull_list'] and data['code'] not in glb['has_bear_list']:
             return ret, data
-        glb['order_book'][data['code']] = data
         t = data['svr_recv_time_ask']
         if len(t) < 19: # 部分数据的接收时间为空字符串，例如服务器重启或第一次推送的缓存数据
             # log.info('OrderBook push warning, t: %s, data:%s' % (t, data))
@@ -954,7 +955,7 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
         log.info('auto_place_order_flag True')
         return False
     glb['auto_place_order_flag'] = True
-    first_order_price = price + conf['FIRST_ORDER_DIFF']
+    first_order_price = price + conf['EVERY_ORDER_DIFF']
     order_list = conf['ORDER_LIST']
     if code in glb['submitted_sell_order'] and len(glb['submitted_sell_order'][code]) > 0:
         order_list = conf['ADD_ORDER_LIST']
@@ -1088,16 +1089,18 @@ def auto_adjust(delta_price, submitted_type):
     if rise_condition and data.price < rise_price:
         # 卖单在尾盘只降不升
         if submitted_type.find('sell') > -1 and glb['almost_over']:
-            log.info('%s almost_over, delta_price: %s, order price: %s, rise_price: %s' % (submitted_type, delta_price, data.price, rise_price))
+            log.info('auto_adjust %s almost_over, delta_price: %s, order price: %s, rise_price: %s' % (submitted_type, delta_price, data.price, rise_price))
         else:
-            log.info('%s delta_price: %s, order price: %s, rise_price: %s' % (submitted_type, delta_price, data.price, rise_price))
+            log.info('auto_adjust %s delta_price: %s, order price: %s, rise_price: %s' % (submitted_type, delta_price, data.price, rise_price))
             modify_order(data, rise_price)
     elif fall_condition and data.price > fall_price:
-        log.info('%s delta_price: %s, order price: %s, fall_price: %s' % (submitted_type, delta_price, data.price, fall_price))
+        log.info('auto_adjust %s delta_price: %s, order price: %s, fall_price: %s' % (submitted_type, delta_price, data.price, fall_price))
         modify_order(data, fall_price)
 
 
 def _pre_adjust(delta_price):
+    if abs(delta_price) > 100:
+        return False
     if conf['AUTO_ADJUST_BUY']:
         auto_adjust(delta_price, 'submitted_buy_bear')
         auto_adjust(delta_price, 'submitted_buy_bull')
@@ -1236,7 +1239,7 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
 
 
 def _pre_buy():
-    check_result = check_line()
+    check_result = check_line() or ''
     if 'bull' in check_result and conf['BULL_CODE'] != '' and not glb['submitted_buy_bull_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bull_list']) == 0):
         to_buy('bull')
     elif 'bear' in check_result and conf['BEAR_CODE'] != '' and not glb['submitted_buy_bear_flag'] and (conf['ALLOW_ADD'] or len(glb['has_bear_list']) == 0):
@@ -1421,10 +1424,6 @@ cancel_all = delay_execution(_cancel_all, 1.5) # 撤销全部订单需要遍历�
 def set_config(config):
     global conf
     conf.update(config)
-
-    if conf['TRADE_ENV'] == ft.TrdEnv.SIMULATE:
-        conf['AUTO_BUY'] = True                         # 模拟盘强制开启自动买入
-        conf['AUTO_ADJUST_BUY'] = False                 # 模拟盘强制关闭自动调价买单
 
 
 def start(config=None):
