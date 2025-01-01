@@ -38,7 +38,7 @@ conf = {
     'CUR_PRICE_MAX': 0.12,                          # 这个值非常重要，当天买入的新股票如果低于这个价，会被当成是日内短炒止损
 
     'DELTA_PRICE_MIN': 0,                           # K线最小波动多少点
-    'DELTA_PRICE_MAX': 30,                          # K线最大波动多少点
+    'DELTA_PRICE_MAX': 20,                          # K线最大波动多少点
     'BUY_VOLUME': 200e3,                            # 下单多少股
     'MAX_VOLUME': 800e3,                            # 最大持仓股数，若超过则不会再买入
 
@@ -301,7 +301,7 @@ def draw_golden_line():
     return golden_line
 
 
-def get_cur_kline(num=100):
+def get_cur_kline(num=80):
     ret, kline_data = quote_ctx.get_cur_kline(CONST['MHI_CODE'], num, ft.KLType.K_1M)
     # log.info('get_cur_kline, ret: %s, kline_data:%s' % (ret, kline_data))
     if ret != ft.RET_OK:
@@ -316,42 +316,19 @@ def get_cur_kline(num=100):
     return kline_data
 
 
-def draw_ma_line():
-    kline_data = get_cur_kline()
-    if kline_data is False or len(kline_data) < 100:
-        log.info('draw_ma_line error, kline_data:\n%s' % kline_data)
+def draw_line():
+    biggest_len = 80
+    kline_data = get_cur_kline(biggest_len)
+    if kline_data is False or len(kline_data) < biggest_len:
+        log.info('draw_line error, kline_data:\n%s' % kline_data)
         return False
-    MA5_SUM = 0
-    MA10_SUM = 0
-    MA20_SUM = 0
-    MA60_SUM = 0
-    MA100_SUM = 0
-    boll_data = []
-    for i in range(-1, -101, -1):
-        price = kline_data.iloc[i].close
-        MA100_SUM += price
-        if i > -61:
-            MA60_SUM += price
-        if i > -21:
-            MA20_SUM += price
-            boll_data.insert(0, price)
-        if i > -11:
-            MA10_SUM += price
-        if i > -6:
-            MA5_SUM += price
     line = {'cur':  kline_data.iloc[-1].close}
-    line['5'] = round(MA5_SUM / 5, 3)
-    line['10'] = round(MA10_SUM / 10, 3)
-    line['mid'] = round(MA20_SUM / 20, 3)
-    line['60'] = round(MA60_SUM / 60, 3)
-    line['100'] = round(MA100_SUM / 100, 3)
-    # 计算平方差
-    squared_diff = [(x - line['mid']) ** 2 for x in boll_data]
-    # 计算样本标准差
-    std = math.sqrt(sum(squared_diff) / (len(boll_data) - 1))
+    line['mid'] = round(kline_data[-20:]['close'].mean(), 3)
+    line['long'] = round(kline_data[-80:]['close'].mean(), 3)
+    std = kline_data[-20:]['close'].std(ddof=0)
     line['upper'] = round(line['mid'] + 2 * std, 3)
     line['lower'] = round(line['mid'] - 2 * std, 3)
-    # log.info('draw_ma_line: %s' % line)
+    # log.info('draw_line: %s' % line)
     glb['line'] = line
     return line
 
@@ -359,7 +336,7 @@ def draw_ma_line():
 def _check_line(need_log=True):
     if not conf['if_check_line']:
         return False
-    line = draw_ma_line()
+    line = draw_line()
     if line is False:
         return False
     check_result = ''
@@ -372,7 +349,7 @@ def _check_line(need_log=True):
     if line['upper'] - line['lower'] < 25:
         check_result = 'bands_narrow'
     elif (last_kline.low - line['lower'] < 10 or last2_kline.low - line['lower'] < 10 or last3_kline.low - line['lower'] < 10) and last_kline.close - line['mid'] < -10:
-        if last_kline.close > line['100'] and delta_price > -conf['DELTA_PRICE_MAX']:
+        if last_kline.close > line['long'] and delta_price > -conf['DELTA_PRICE_MAX']:
             check_result = 'bull_wave'
         elif delta_price > 0:
             if last_kline.close > last2_kline.high and last_kline.close > last3_kline.high:
@@ -384,7 +361,7 @@ def _check_line(need_log=True):
         else:
             check_result = 'wait_long_trend'
     elif (last_kline.high - line['upper'] > -10 or last2_kline.high - line['upper'] > -10 or last3_kline.high - line['upper'] > -10) and last_kline.close - line['mid'] > 10:
-        if last_kline.close < line['100'] and delta_price < conf['DELTA_PRICE_MAX']:
+        if last_kline.close < line['long'] and delta_price < conf['DELTA_PRICE_MAX']:
             check_result = 'bear_wave'
         elif delta_price < 0:
             if last_kline.close < last2_kline.low and last_kline.close < last3_kline.low:
@@ -424,7 +401,7 @@ def _smart_buy(code, volume, price=None, type='Bid'):
         data = get_order_book(code)
         if not data:
             return False
-        if type == 'Ask' or 'wave' in glb['line']['check_result']:
+        if type == 'Ask':
             price = max(0.01, data[type][0][0])
         else:
             price = max(0.01, data[type][1][0])
