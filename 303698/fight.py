@@ -15,6 +15,6 @@ start({
     # 'BEAR_CODE': 'auto',
     # 'BUY_VOLUME' : 400e3,
     # 'CUR_PRICE_MAX': 0.13,
-    'AUTO_ADJUST': True,
     'AUTO_ADJUST_BUY': True,
+    'AUTO_ADJUST_SELL': True,
 })
