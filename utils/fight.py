@@ -667,7 +667,7 @@ def reset_submitted_sell(code, stock_name, order):
     log_submitted_sell_price(code, 'reset')
 
 
-def set_has(code, stock_name, price):
+def set_has(code, stock_name, price=0):
     if code in conf['exclude_code_list'] or price > conf['CUR_PRICE_MAX']:
         return False
     if stock_name.find('牛') > -1:
@@ -880,8 +880,8 @@ def _auto_adjust_buy(code, bid_price):
     last_bid_price = order_book['Bid'][0][0]
     fall_price = round(bid_price - 0.001, 3)
     rise_price = bid_price
-    buy_price = find_buy_price(order)
     if order.code in glb['today_hold_code_list']:
+        buy_price = find_buy_price(order)
         rise_price = round(min(rise_price, buy_price - conf['ADD_PRICE_DIFF']), 3)
     if bid_price > last_bid_price and rise_price > order.price:
         log.info('auto_adjust_buy order price: %s, rise_price: %s' % (order.price, rise_price))
@@ -1305,9 +1305,9 @@ def resetData():
 
 # 限制n秒内最多查1次
 pre_buy = throttle(_pre_buy, 1, need_log=False)
-check_profit_loss = throttle(_check_profit_loss, 2)
+check_profit_loss = throttle(_check_profit_loss, 2, need_log=False)
 profit_order = throttle(_profit_order, 2)
-auto_adjust_buy = throttle(_auto_adjust_buy, 2)
+auto_adjust_buy = throttle(_auto_adjust_buy, 2, need_log=False)
 auto_adjust_sell = throttle(_auto_adjust_sell, 2)
 # 每 30 秒内最多请求 10 次查询持仓接口
 position_list_query = throttle(_position_list_query, 3, need_log=False)
