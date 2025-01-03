@@ -497,13 +497,14 @@ def _order_list_query(code='', status_filter_list=[ft.OrderStatus.SUBMITTED, ft.
             log.info('filled_all_last_order:\n%s' % last_order)
         else:
             log.info('filled_all_data is empty')
+    data = data[~data.code.isin(glb['past_hold_code_list']) & (data.price < conf['CUR_PRICE_MAX'])]
     data = data[(data.order_status == ft.OrderStatus.SUBMITTED) | (data.order_status == ft.OrderStatus.FILLED_PART)]
     for i in range(0, len(data)):
         item = data.iloc[i]
         if item.trd_side == ft.TrdSide.BUY:
             set_submitted_buy(item.code, item.stock_name, item)
         elif item.trd_side == ft.TrdSide.SELL:
-            set_submitted_sell(item.code, item.stock_name, item)
+            set_submitted_sell(item.code, item)
     if ft.OrderStatus.FILLED_ALL in status_filter_list:
         return filled_all_data
     return data
@@ -595,8 +596,6 @@ def unsubscribe(code_list, subtype_list):
 
 
 def set_submitted_buy(code, stock_name, order=None):
-    if code in conf['exclude_code_list'] or order is not None and order.price > conf['CUR_PRICE_MAX']:
-        return False
     if stock_name.find('牛') > -1:
         glb['submitted_buy_bull_flag'] = True
         glb['submitted_buy_bull_lastorder'] = order
@@ -610,8 +609,6 @@ def set_submitted_buy(code, stock_name, order=None):
 
 
 def reset_submitted_buy(code, stock_name=''):
-    if code in conf['exclude_code_list']:
-        return False
     if stock_name == '' or stock_name.find('牛') > -1:
         glb['submitted_buy_bull_flag'] = False
         glb['submitted_buy_bull_lastorder'] = None
@@ -648,27 +645,21 @@ def log_submitted_sell_price(code, caller=''):
     log.info('%s code: %s, price_list: %s' % (caller, code, price_list))
 
 
-def set_submitted_sell(code, stock_name, order):
-    if code in conf['exclude_code_list'] or order.price > conf['CUR_PRICE_MAX']:
-        return False
+def set_submitted_sell(code, order):
     if code not in glb['submitted_sell_orders']:
         glb['submitted_sell_orders'][code] = []
     append_data(glb['submitted_sell_orders'][code], 'order_id', order)
     log_submitted_sell_price(code, 'set')
 
 
-def reset_submitted_sell(code, stock_name, order):
-    if code in conf['exclude_code_list']:
-        return False
+def reset_submitted_sell(code, order):
     if code not in glb['submitted_sell_orders']:
         glb['submitted_sell_orders'][code] = []
     del_data(glb['submitted_sell_orders'][code], 'order_id', order)
     log_submitted_sell_price(code, 'reset')
 
 
-def set_has(code, stock_name, price=0):
-    if code in conf['exclude_code_list'] or price > conf['CUR_PRICE_MAX']:
-        return False
+def set_hold(code, stock_name):
     if stock_name.find('牛') > -1:
         glb['today_hold_bull_list'].append(code)
     elif stock_name.find('熊') > -1:
@@ -677,7 +668,7 @@ def set_has(code, stock_name, price=0):
     subscribe([code], [ft.SubType.ORDER_BOOK], need_log=False)
 
 
-def reset_has():
+def reset_hold():
     glb['today_hold_bull_list'] = []
     glb['today_hold_bear_list'] = []
     glb['today_hold_code_list'] = []
@@ -737,15 +728,15 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
     if ret != ft.RET_OK:
         log.info('position_list_query error, ret: %s, data:\n%s' % (ret, data))
         return False
-    reset_has()
+    reset_hold()
     hsi_data = data[data.stock_name.str.contains('恒指')]
 
     # 自动移仓
     if auto_move_position(hsi_data):
         return False
 
-    # 统计今日盈亏
-    today_buy_data = hsi_data[~hsi_data.code.isin(conf['exclude_code_list']) & (hsi_data.today_buy_qty > 0) & (hsi_data.nominal_price < conf['CUR_PRICE_MAX'])]
+    # today_buy_hold_data要符合5个条件
+    today_buy_data = hsi_data[~hsi_data.code.isin(conf['exclude_code_list']) & (hsi_data.nominal_price < conf['CUR_PRICE_MAX']) & (hsi_data.today_buy_qty > 0)]
     today_buy_data = today_buy_data[today_buy_data.qty == today_buy_data.today_buy_qty - today_buy_data.today_sell_qty]
     sum_today_pl_val(today_buy_data)
 
@@ -754,11 +745,11 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
     if len(today_buy_hold_data) > 0:
         for i in range(0, len(today_buy_hold_data)):
             item = today_buy_hold_data.iloc[i]
-            set_has(item.code, item.stock_name)
+            set_hold(item.code, item.stock_name)
             # 如果一单也没挂，则自动挂单
             if item.can_sell_qty == item.qty and item.code in glb['submitted_sell_orders'] and len(glb['submitted_sell_orders'][item.code]) == 0:
                 log.info('auto_place_order, code: %s, nominal_price: %s, can_sell_qty: %s' % (item.code, item.nominal_price, item.can_sell_qty))
-                auto_place_order(item.code, item.qty, item.nominal_price, batch=not glb['almost_over'])
+                auto_place_order(item.code, item.qty, item.nominal_price)
             # 检查止损
             if caller in ['per_min', 'fluctuate']:
                 check_profit_loss(item.code, item.nominal_price, item.nominal_price, caller='position')
@@ -777,6 +768,7 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
             glb['loss'] = {}
         if glb['almost_over']:
             end()
+    glb['past_hold_code_list'] = conf['exclude_code_list']
     for index, row in hsi_data.iterrows():
         if row.code not in glb['today_hold_code_list'] and row.qty > 0:
             add_unique_element(glb['past_hold_code_list'], row.code)
@@ -915,7 +907,7 @@ class OrderBook(ft.OrderBookHandlerBase):
         return ret, data
 
 
-def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
+def auto_place_order(code, volume, price, cancel=False):
     if not conf['AUTO_PLACE_ORDER'] or glb['to_over'] or code in glb['past_hold_code_list']:
         return False
     if glb['auto_place_order_flag']:
@@ -928,21 +920,9 @@ def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
         order_list = conf['ADD_ORDER_LIST']
         _modify_order(glb['submitted_sell_orders'][code][0], first_order_price)
         first_order_price += 0.004
-    if volume < 100e3:
-        batch = False
-    if conf['NEED_LOSS']:
-        if loss:
-            glb['loss'][code] = True
-            order_book = get_order_book(code)
-            if order_book and order_book['Ask'][0]:
-                first_order_price = order_book['Ask'][0][0]
-            else:
-                first_order_price = price
-        else:
-            glb['loss'][code] = False
     if cancel:
         cancel_all(code, trd_side=ft.TrdSide.SELL)
-    if not batch:
+    if volume < 100e3 or glb['almost_over']:
         data = smart_sell(code, volume, first_order_price)
         if data is False:
             log.info('auto_place_order => smart_sell error')
@@ -987,6 +967,8 @@ class TradeOrder(ft.TradeOrderHandlerBase):
             log.info('TradeOrder not TRADE_ENV')
             return ret, data
         log.info('TradeOrder trd_side: %s, order_status: %s' % (order.trd_side, order.order_status))
+        if order.code in glb['past_hold_code_list'] or order.price > conf['CUR_PRICE_MAX']:
+            return ret, data
         if order.order_status == ft.OrderStatus.FILLED_ALL or order.order_status == ft.OrderStatus.CANCELLED_PART:
             glb['filled_all_last_order'][order.code] = {'updated_time': order.updated_time, 'price': order.price, 'trd_side': order.trd_side}
             glb['filled_all_last_order']['last'] = {'updated_time': order.updated_time, 'price': order.price, 'trd_side': order.trd_side}
@@ -994,27 +976,27 @@ class TradeOrder(ft.TradeOrderHandlerBase):
                 if conf['NEED_LOSS']:
                     glb['max_nominal_price'][order.code] = order.price
                 reset_submitted_buy(order.code, order.stock_name)
-                set_has(order.code, order.stock_name, order.price)
+                set_hold(order.code, order.stock_name)
                 time.sleep(2)
-                auto_place_order(order.code, order.dealt_qty, order.price, cancel=False)
+                auto_place_order(order.code, order.dealt_qty, order.price)
             elif order.trd_side == ft.TrdSide.SELL:
-                reset_submitted_sell(order.code, order.stock_name, order)
+                reset_submitted_sell(order.code, order)
                 position_list_query(caller=order.order_status + '-' + order.trd_side)
         elif order.order_status == ft.OrderStatus.FILLED_PART:
             if order.trd_side == ft.TrdSide.BUY:
-                set_has(order.code, order.stock_name, order.price)
+                set_hold(order.code, order.stock_name)
         elif order.order_status == ft.OrderStatus.SUBMIT_FAILED or order.order_status == ft.OrderStatus.FAILED:
             position_list_query(caller=order.order_status + '-' + order.trd_side)
         elif order.order_status == ft.OrderStatus.CANCELLED_ALL:
             if order.trd_side == ft.TrdSide.BUY:
                 reset_submitted_buy(order.code, order.stock_name)
             elif order.trd_side == ft.TrdSide.SELL:
-                reset_submitted_sell(order.code, order.stock_name, order)
+                reset_submitted_sell(order.code, order)
         elif order.order_status == ft.OrderStatus.SUBMITTED:
             if order.trd_side == ft.TrdSide.BUY:
                 set_submitted_buy(order.code, order.stock_name, order)
             elif order.trd_side == ft.TrdSide.SELL:
-                set_submitted_sell(order.code, order.stock_name, order)
+                set_submitted_sell(order.code, order)
         elif order.order_status == ft.OrderStatus.DISABLED:
             # 需要重新获取订单以重置一些全局变量
             order_list_query()
@@ -1166,8 +1148,6 @@ def _get_recovery_code():
 
 
 def _buy_recovery_code():
-    if not conf['TRY_RECOVERY']:
-        return False
     to_buy('bear', cur_price_min=0.01, cur_price_max=0.02)
     to_buy('bull', cur_price_min=0.01, cur_price_max=0.02)
 
@@ -1194,7 +1174,8 @@ class RTData(ft.RTDataHandlerBase):
                 log.info('recovery_bull, price: %s' % rt_data.cur_price)
                 glb['recovery_bull'] = None
                 to_buy('bear')
-        buy_recovery_code()
+        if conf['TRY_RECOVERY']:
+            buy_recovery_code()
 
         return ret, data
 
