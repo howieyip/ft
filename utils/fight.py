@@ -24,7 +24,6 @@ conf = {
     'NEED_LOSS': True,
     'LOSS_PRICE_DIFF': 0.002,                       # 卖一价距离买入后的最高价达到多少就止损
     'exclude_code_list': [],
-    'include_code_list': [],
     'AUTO_BUY': False,                              # 是否自动买入，若是则下面的配置有效
     'TRY_RECOVERY': False,                          # 是否买快回收的且价格比正常低很多的股票
     'TRY_FOLLOW_RECOVERY': False,                   # 是否顺势买快回收的反方向的股票
@@ -47,7 +46,6 @@ conf = {
 
     'ALLOW_ADD': True,                              # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
     'ADD_PRICE_DIFF': 0.004,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
-    'only_today_buy': True,                         # 仅处理今天新买的，过夜的不管
     'AUTO_PLACE_ORDER': True,                       # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
     'ORDER_LIST': [                                 # 下单多少股以上（大的写前面），每单挂多少股，例如下单800k，分3档200k 200k 400k挂单
         [800e3, 200e3, 200e3, 200e3, 200e3],
@@ -121,6 +119,7 @@ glb = {
     'last_order_diff': 0.008,
     'order_book': {},
     'auto_buy_list': [],
+    'past_hold_code_list': [],
     'today_hold_code_list': [],
     'today_hold_bull_list': [],
     'today_hold_bear_list': [],
@@ -746,15 +745,12 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
         return False
 
     # 统计今日盈亏
-    hsi_data = hsi_data[hsi_data.code.isin(conf['include_code_list']) | (hsi_data.nominal_price < conf['CUR_PRICE_MAX'])]
-    today_buy_data = hsi_data[~hsi_data.code.isin(conf['exclude_code_list']) & (hsi_data.today_buy_qty > 0)]
-    if conf['only_today_buy']:
-        today_buy_data = today_buy_data[today_buy_data.code.isin(conf['include_code_list']) | (today_buy_data.qty == today_buy_data.today_buy_qty - today_buy_data.today_sell_qty)]
+    today_buy_data = hsi_data[~hsi_data.code.isin(conf['exclude_code_list']) & (hsi_data.today_buy_qty > 0) & (hsi_data.nominal_price < conf['CUR_PRICE_MAX'])]
+    today_buy_data = today_buy_data[today_buy_data.qty == today_buy_data.today_buy_qty - today_buy_data.today_sell_qty]
     sum_today_pl_val(today_buy_data)
 
+    position_list = []
     today_buy_hold_data = today_buy_data[today_buy_data.qty > 0]
-    if need_log:
-        log.info('today_buy_hold_data:\n%s' % today_buy_hold_data)
     if len(today_buy_hold_data) > 0:
         for i in range(0, len(today_buy_hold_data)):
             item = today_buy_hold_data.iloc[i]
@@ -768,19 +764,25 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
                 check_profit_loss(item.code, item.nominal_price, item.nominal_price, caller='position')
 
         if stock_type == 'bull':
-            return today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('牛')]
+            position_list = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('牛')]
         elif stock_type == 'bear':
-            return today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('熊')]
+            position_list = today_buy_hold_data[today_buy_hold_data.stock_name.str.contains('熊')]
         elif code != '':
-            return today_buy_hold_data[today_buy_hold_data.code == code]
-        return today_buy_hold_data
+            position_list = today_buy_hold_data[today_buy_hold_data.code == code]
+        else:
+            position_list = today_buy_hold_data
     else:
         if conf['NEED_LOSS']:
             glb['max_nominal_price'] = {}
             glb['loss'] = {}
         if glb['almost_over']:
             end()
-        return []
+    for index, row in hsi_data.iterrows():
+        if row.code not in glb['today_hold_code_list'] and row.qty > 0:
+            add_unique_element(glb['past_hold_code_list'], row.code)
+    if need_log:
+        log.info('today_hold_code_list: %s, past_hold_code_list: %s' % (glb['today_hold_code_list'], glb['past_hold_code_list']))
+    return position_list
 
 
 class SysNotify(ft.SysNotifyHandlerBase):
@@ -859,7 +861,7 @@ def _check_profit_loss(code, bid_price, ask_price, caller='', need_log=True):
 
 
 def _auto_adjust_sell(order, ask_price):
-    if not conf['AUTO_ADJUST_SELL'] or not order:
+    if not conf['AUTO_ADJUST_SELL'] or order is not None:
         return False
     order_book = glb['order_book'][order.code]
     last_ask_price = order_book['Ask'][0][0]
@@ -914,7 +916,7 @@ class OrderBook(ft.OrderBookHandlerBase):
 
 
 def auto_place_order(code, volume, price, batch=True, cancel=True, loss=False):
-    if not conf['AUTO_PLACE_ORDER'] or glb['to_over'] or code not in glb['today_hold_code_list']:
+    if not conf['AUTO_PLACE_ORDER'] or glb['to_over'] or code in glb['past_hold_code_list']:
         return False
     if glb['auto_place_order_flag']:
         log.info('auto_place_order_flag True')
@@ -1053,11 +1055,11 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
         data = data[0]
         # FUTU BUG: 返回的结果还要再过滤一次
         data = data[(data.stock_owner == CONST['HSI_CODE']) & (data.status == ft.WarrantStatus.NORMAL)]
-        data = data[data.bid_price >= 0.01]
+        data = data[~data.stock.isin(glb['past_hold_code_list']) & (data.bid_price >= 0.01)]
         if len(data) > 0:
             if get_list:
                 cache['data'] = data
-            elif conf['TRY_RECOVERY'] and cur_price_min == 0.01 and cur_price_max == 0.02:
+            elif conf['TRY_RECOVERY'] and cur_price_max == 0.02:
                 rt_data = get_rt_data()
                 if rt_data is False:
                     return False
@@ -1117,6 +1119,7 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
                     log.info('current total_qty: %s, MAX_VOLUME: %s, not allow add' % (total_qty, conf['MAX_VOLUME']))
                     return False
             data0 = data.iloc[0]
+            code = data0.code
             ref_price = glb['filled_all_last_order'].get(data0.code, {}).get('price')
             if not ref_price:
                 log.info('to_buy code: %s, no filled_all_last_order, \n%s' % (data0.code, glb['filled_all_last_order']))
@@ -1163,6 +1166,8 @@ def _get_recovery_code():
 
 
 def _buy_recovery_code():
+    if not conf['TRY_RECOVERY']:
+        return False
     to_buy('bear', cur_price_min=0.01, cur_price_max=0.02)
     to_buy('bull', cur_price_min=0.01, cur_price_max=0.02)
 
@@ -1189,8 +1194,7 @@ class RTData(ft.RTDataHandlerBase):
                 log.info('recovery_bull, price: %s' % rt_data.cur_price)
                 glb['recovery_bull'] = None
                 to_buy('bear')
-        if conf['TRY_RECOVERY']:
-            buy_recovery_code()
+        buy_recovery_code()
 
         return ret, data
 
