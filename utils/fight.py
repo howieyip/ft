@@ -306,6 +306,14 @@ def get_cur_kline(num=80):
     return kline_data
 
 
+def boll_bands(kline_data):
+    mid = round(kline_data['close'].mean(), 3)
+    std = kline_data['close'].std(ddof=0)
+    upper = round(mid + 2 * std, 3)
+    lower = round(mid - 2 * std, 3)
+    return {'mid': mid, 'upper': upper, 'lower': lower}
+
+
 def draw_line():
     biggest_len = 80
     kline_data = get_cur_kline(biggest_len)
@@ -313,11 +321,17 @@ def draw_line():
         log.info('draw_line error, kline_data:\n%s' % kline_data)
         return False
     line = {'cur':  kline_data.iloc[-1].close}
-    line['mid'] = round(kline_data[-20:]['close'].mean(), 3)
     line['long'] = round(kline_data[-80:]['close'].mean(), 3)
-    std = kline_data[-20:]['close'].std(ddof=0)
-    line['upper'] = round(line['mid'] + 2 * std, 3)
-    line['lower'] = round(line['mid'] - 2 * std, 3)
+    last_boll_bands = boll_bands(kline_data[-20:])
+    last2_boll_bands = boll_bands(kline_data[-21:-1])
+    last3_boll_bands = boll_bands(kline_data[-22:-2])
+    line['mid'] = last_boll_bands['mid']
+    line['upper'] = last_boll_bands['upper']
+    line['lower'] = last_boll_bands['lower']
+    line['upper2'] = last2_boll_bands['upper']
+    line['lower2'] = last2_boll_bands['lower']
+    line['upper3'] = last3_boll_bands['upper']
+    line['lower3'] = last3_boll_bands['lower']
     # log.info('draw_line: %s' % line)
     glb['line'] = line
     return line
@@ -330,6 +344,7 @@ def check_line(need_log=True):
     if line is False:
         return False
     check_result = ''
+    line['last_signal'] = ''
     #            code         name             time_key     open    close     high      low  volume  turnover  pe_ratio  turnover_rate  last_close
     # 0   HK.MHImain  小恒指主连(2406)  2024-06-15 02:42:00  17773.0  17772.0  17773.0  17769.0      18  319883.0       0.0            0.0     17772.0
     last_kline = glb['kline_data'].iloc[-1]
@@ -338,26 +353,30 @@ def check_line(need_log=True):
     delta_price = last_kline.close - last_kline.last_close
     if line['upper'] - line['lower'] < 25:
         check_result = 'bands_narrow'
-    elif (last_kline.low - line['lower'] < 10 or last2_kline.low - line['lower'] < 10 or last3_kline.low - line['lower'] < 10) and last_kline.close - line['mid'] < -10:
-        if last_kline.close > line['long'] and delta_price > -conf['DELTA_PRICE_MAX']:
-            check_result = 'bull_wave'
+    elif (last_kline.low - line['lower'] < 10 or last2_kline.low - line['lower2'] < 10 or last3_kline.low - line['lower3'] < 10) and last_kline.close - line['mid'] < -10:
+        if last_kline.close > line['long'] and 'short' not in line['last_signal'] and delta_price > -conf['DELTA_PRICE_MAX']:
+            check_result = 'wave_bull'
         elif delta_price > 0:
             if last_kline.close > last2_kline.high and last_kline.close > last3_kline.high:
-                check_result = 'bull_swallow'
+                check_result = 'long_swallow_bull'
+                line['last_signal'] = 'long_swallow_bull'
             elif last2_kline.close > last2_kline.low and abs(last2_kline.close - last2_kline.open) / (last2_kline.close - last2_kline.low) < 1/3 and last2_kline.high - last2_kline.close / (last2_kline.close - last2_kline.low) < 1/3:
-                check_result = 'bull_pinba'
+                check_result = 'long_pinba_bull'
+                line['last_signal'] = 'long_pinba_bull'
             else:
                 check_result = 'wait_long_signal'
         else:
             check_result = 'wait_long_trend'
-    elif (last_kline.high - line['upper'] > -10 or last2_kline.high - line['upper'] > -10 or last3_kline.high - line['upper'] > -10) and last_kline.close - line['mid'] > 10:
-        if last_kline.close < line['long'] and delta_price < conf['DELTA_PRICE_MAX']:
-            check_result = 'bear_wave'
+    elif (last_kline.high - line['upper'] > -10 or last2_kline.high - line['upper2'] > -10 or last3_kline.high - line['upper3'] > -10) and last_kline.close - line['mid'] > 10:
+        if last_kline.close < line['long'] and 'long' not in line['last_signal'] and delta_price < conf['DELTA_PRICE_MAX']:
+            check_result = 'wave_bear'
         elif delta_price < 0:
             if last_kline.close < last2_kline.low and last_kline.close < last3_kline.low:
-                check_result = 'bear_swallow'
+                check_result = 'short_swallow_bear'
+                line['last_signal'] = 'short_swallow_bear'
             elif last2_kline.high > last2_kline.close and abs(last2_kline.close - last2_kline.open) / (last2_kline.high - last2_kline.close) < 1/3 and last2_kline.close - last2_kline.low / (last2_kline.high - last2_kline.close) < 1/3:
-                check_result = 'bear_pinba'
+                check_result = 'short_pinba_bear'
+                line['last_signal'] = 'short_pinba_bear'
             else:
                 check_result = 'wait_short_signal'
         else:
@@ -853,7 +872,7 @@ def _check_profit_loss(code, bid_price, ask_price, caller='', need_log=True):
 
 
 def _auto_adjust_sell(order, ask_price):
-    if not conf['AUTO_ADJUST_SELL'] or order is not None:
+    if not conf['AUTO_ADJUST_SELL'] or order is None:
         return False
     order_book = glb['order_book'][order.code]
     last_ask_price = order_book['Ask'][0][0]
