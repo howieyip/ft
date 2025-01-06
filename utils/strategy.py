@@ -13,68 +13,109 @@ conf = {
 log = Logger(conf['log_file']).get_logger()
 
 
-code = 'HK.51033'
+code = 'HK.MHImain'
 max_count = 331
-start = '2024-11-22'
+start = '2025-01-06'
 end = start
 # end = '2024-10-08'
-need_log = False
-last_filled_price1 = 0
-last_filled_price2 = 0
-last_day_filled_price = 0
-volume1 = 40e3
-volume2 = 40e3
-diff1 = 0.004
-diff2 = 0.002
-sell_times = 0
-buy_times = 0
-sum = 0
-delta_times1 = 0
-delta_times2 = 0
-money1 = 0
-money2 = 0
+glb = {
+    'line': {'last_signal': ''}
+}
+
+def boll_bands(kline_data):
+    mid = round(kline_data['close'].mean(), 3)
+    std = kline_data['close'].std(ddof=0)
+    upper = round(mid + 2 * std, 3)
+    lower = round(mid - 2 * std, 3)
+    return {'mid': mid, 'upper': upper, 'lower': lower}
+
+
+def draw_line():
+    kline_data = glb['kline_data']
+    if kline_data is False or len(kline_data) < 20:
+        return False
+    line = glb['line']
+    line['cur'] = kline_data.iloc[-1].close
+    line['long'] = round(kline_data[-80:]['close'].mean(), 3)
+    last_boll_bands = boll_bands(kline_data[-20:])
+    last2_boll_bands = boll_bands(kline_data[-21:-1])
+    last3_boll_bands = boll_bands(kline_data[-22:-2])
+    line['mid'] = last_boll_bands['mid']
+    line['upper'] = last_boll_bands['upper']
+    line['lower'] = last_boll_bands['lower']
+    line['upper2'] = last2_boll_bands['upper']
+    line['lower2'] = last2_boll_bands['lower']
+    line['upper3'] = last3_boll_bands['upper']
+    line['lower3'] = last3_boll_bands['lower']
+    # log.info('draw_line: %s' % line)
+    return line
+
+
+def check_line():
+    line = draw_line()
+    if line is False:
+        return ''
+    check_result = ''
+    #            code         name             time_key     open    close     high      low  volume  turnover  pe_ratio  turnover_rate  last_close
+    # 0   HK.MHImain  小恒指主连(2406)  2024-06-15 02:42:00  17773.0  17772.0  17773.0  17769.0      18  319883.0       0.0            0.0     17772.0
+    last_kline = glb['kline_data'].iloc[-1]
+    last2_kline = glb['kline_data'].iloc[-2]
+    last3_kline = glb['kline_data'].iloc[-3]
+    delta_price = last_kline.close - last_kline.last_close
+    if line['upper'] - line['lower'] < 25:
+        check_result = 'bands_narrow'
+    elif (last_kline.low - line['lower'] < 10 or last2_kline.low - line['lower2'] < 10 or last3_kline.low - line['lower3'] < 10) and last_kline.close - line['mid'] < -10:
+        if last_kline.close > line['long'] and 'short' not in line['last_signal'] and delta_price > -20:
+            check_result = 'wave_bull'
+        elif delta_price > 0:
+            if last_kline.close > last2_kline.high and last_kline.close > last3_kline.high and last2_kline.close > last3_kline.open > last2_kline.open and last3_kline.close < last3_kline.open and abs(last3_kline.close - last3_kline.open) >=10:
+                check_result = 'long_swallow1_bull'
+                line['last_signal'] = 'long_swallow1_bull'
+            elif last_kline.close > last2_kline.high and last_kline.close > last3_kline.high and last2_kline.close < last2_kline.open and last3_kline.close < last3_kline.open and abs(last2_kline.close - last2_kline.open + last3_kline.close - last3_kline.open) >= 10:
+                check_result = 'long_swallow2_bull'
+                line['last_signal'] = 'long_swallow2_bull'
+            elif last2_kline.close > last2_kline.low and abs(last2_kline.close - last2_kline.open) / (last2_kline.close - last2_kline.low) < 1/3 and last2_kline.high - last2_kline.close / (last2_kline.close - last2_kline.low) < 1/3 and abs(last2_kline.high - last2_kline.low) >=10:
+                check_result = 'long_pinba_bull'
+                line['last_signal'] = 'long_pinba_bull'
+            else:
+                check_result = 'wait_long_signal'
+        else:
+            check_result = 'wait_long_trend'
+    elif (last_kline.high - line['upper'] > -10 or last2_kline.high - line['upper2'] > -10 or last3_kline.high - line['upper3'] > -10) and last_kline.close - line['mid'] > 10:
+        if last_kline.close < line['long'] and 'long' not in line['last_signal'] and delta_price < 20:
+            check_result = 'wave_bear'
+        elif delta_price < 0:
+            if last_kline.close < last2_kline.low and last_kline.close < last3_kline.low and last2_kline.close < last3_kline.open < last2_kline.open and last3_kline.close > last3_kline.open and abs(last3_kline.close - last3_kline.open) >=10:
+                check_result = 'short_swallow1_bear'
+                line['last_signal'] = 'short_swallow1_bear'
+            elif last_kline.close < last2_kline.low and last_kline.close < last3_kline.low and last2_kline.close > last2_kline.open and last3_kline.close > last3_kline.open and abs(last2_kline.close - last2_kline.open + last3_kline.close - last3_kline.open) >= 10:
+                check_result = 'short_swallow2_bear'
+                line['last_signal'] = 'short_swallow2_bear'
+            elif last2_kline.high > last2_kline.close and abs(last2_kline.close - last2_kline.open) / (last2_kline.high - last2_kline.close) < 1/3 and last2_kline.close - last2_kline.low / (last2_kline.high - last2_kline.close) < 1/3 and abs(last2_kline.high - last2_kline.low) >=10:
+                check_result = 'short_pinba_bear'
+                line['last_signal'] = 'short_pinba_bear'
+            else:
+                check_result = 'wait_short_signal'
+        else:
+            check_result = 'wait_short_trend'
+    else:
+        check_result = 'not_near_bands'
+    line['check_result'] = check_result
+    return check_result
 
 
 def cal(data):
-    global last_filled_price1, last_filled_price2, money1, money2, delta_times1, delta_times2
-    data = data.iloc[1:]
     if data.empty:
         log.info('empty')
         return False
-    delta = round(data.iloc[-1]['close'] - data.iloc[0]['close'], 3)*1e3
+    delta = round(data.iloc[-1]['close'] - data.iloc[0]['close'], 3)
     log.info('**************** %s ********************* %s' % (data.iloc[0]['time_key'], delta))
-    last_filled_price1, d1, m1 = _cal(data, diff1, volume1, last_filled_price1)
-    delta_times1 += d1
-    money1 += m1
-    last_filled_price2, d2, m2 = _cal(data, diff2, volume2, last_filled_price2)
-    delta_times2 += d2
-    money2 += m2
-
-
-def _cal(data, diff, buy_volume, last_filled_price):
-    global sell_times, buy_times, sum
-    if last_filled_price == 0:
-      last_filled_price = data.iloc[0]['close']
-    sell_times = 0
-    buy_times = 0
-    sum = 0
     for index, row in data.iterrows():
-        _diff = round(row.close - last_filled_price, 3)
-        if _diff >= diff:
-            sum = round(sum + _diff, 3)
-            last_filled_price = row.close
-            sell_times += 1
-            if need_log:
-                log.info('time: %s, sell: %s, _diff: %s' % (row.time_key, last_filled_price, _diff))
-        elif _diff <= -diff:
-            last_filled_price = row.close
-            buy_times += 1
-            if need_log:
-                log.info('time: %s, buy: %s, _diff: %s' % (row.time_key, last_filled_price, _diff))
-    money = sum*buy_volume - sell_times*20
-    delta_times = sell_times - buy_times
-    log.info('buy_volume: %s, diff: %s, buy_times: %s, sell_times: %s, delta_times: %s, last_filled_price: %s, money: %s' % (buy_volume, diff, buy_times, sell_times, delta_times, last_filled_price, money))
-    return last_filled_price, delta_times, money
+        glb['kline_data'] = data[0:index+1]
+        check_result = check_line()
+        if 'bull' in check_result or 'bear' in check_result:
+            log.info('%s %s' % (row.time_key, glb['line']))
+
 
 
 def request(start, end=None):
@@ -86,7 +127,7 @@ def request(start, end=None):
         cal(data)
     else:
         log.info('error:', data)
-    while page_req_key != None:  # 请求后面的所有结果
+    while page_req_key != None:
         log.info('*************************************')
         ret, data, page_req_key = quote_ctx.request_history_kline(code, start=start, end=end, max_count=max_count, ktype=ft.KLType.K_1M, page_req_key=page_req_key) # 请求翻页后的数据
         if ret == ft.RET_OK:
@@ -98,5 +139,4 @@ def request(start, end=None):
 
 quote_ctx = ft.OpenQuoteContext(host=conf['HOST'], port=conf['PORT'])
 request(start, end)
-log.info('money1: %s, money2: %s, delta_times1: %s, delta_times2: %s' % (money1, money2, delta_times1, delta_times2))
-quote_ctx.close() # 结束后记得关闭当条连接，防止连接条数用尽
+quote_ctx.close()

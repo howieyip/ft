@@ -31,13 +31,10 @@ conf = {
     'FOLLOW_TREND': False,                          # 买入策略是否为顺势买入，逆势则为False
     'BULL_CODE': '',                                # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
     'BEAR_CODE': '',                                # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
-    'if_check_line': True,                          # 是否检查相关的线
     'GOLDEN_LINE_DIFF': 80,                         # 黄金分割线0-100之间要间隔多少点
     'CUR_PRICE_MIN': 0.04,
     'CUR_PRICE_MAX': 0.12,                          # 这个值非常重要，当天买入的新股票如果低于这个价，会被当成是日内短炒止损
 
-    'DELTA_PRICE_MIN': 0,                           # K线最小波动多少点
-    'DELTA_PRICE_MAX': 20,                          # K线最大波动多少点
     'BUY_VOLUME': 200e3,                            # 下单多少股
     'MAX_VOLUME': 800e3,                            # 最大持仓股数，若超过则不会再买入
 
@@ -95,7 +92,7 @@ glb = {
     'recovery_bear': None,
     'rt_data': None,
     'golden_line': {},
-    'line': {'check_result': ''},
+    'line': {'last_signal': ''},
     'loss': {},
     'today_pl_val_bull': 0,
     'today_pl_val_bear': 0,
@@ -315,12 +312,12 @@ def boll_bands(kline_data):
 
 
 def draw_line():
-    biggest_len = 80
-    kline_data = get_cur_kline(biggest_len)
-    if kline_data is False or len(kline_data) < biggest_len:
+    kline_data = get_cur_kline(80)
+    if kline_data is False or len(kline_data) < 20:
         log.info('draw_line error, kline_data:\n%s' % kline_data)
         return False
-    line = {'cur':  kline_data.iloc[-1].close}
+    line = glb['line']
+    line['cur'] = kline_data.iloc[-1].close
     line['long'] = round(kline_data[-80:]['close'].mean(), 3)
     last_boll_bands = boll_bands(kline_data[-20:])
     last2_boll_bands = boll_bands(kline_data[-21:-1])
@@ -333,18 +330,14 @@ def draw_line():
     line['upper3'] = last3_boll_bands['upper']
     line['lower3'] = last3_boll_bands['lower']
     # log.info('draw_line: %s' % line)
-    glb['line'] = line
     return line
 
 
 def check_line(need_log=True):
-    if not conf['if_check_line']:
-        return False
     line = draw_line()
     if line is False:
-        return False
+        return ''
     check_result = ''
-    line['last_signal'] = ''
     #            code         name             time_key     open    close     high      low  volume  turnover  pe_ratio  turnover_rate  last_close
     # 0   HK.MHImain  小恒指主连(2406)  2024-06-15 02:42:00  17773.0  17772.0  17773.0  17769.0      18  319883.0       0.0            0.0     17772.0
     last_kline = glb['kline_data'].iloc[-1]
@@ -354,13 +347,16 @@ def check_line(need_log=True):
     if line['upper'] - line['lower'] < 25:
         check_result = 'bands_narrow'
     elif (last_kline.low - line['lower'] < 10 or last2_kline.low - line['lower2'] < 10 or last3_kline.low - line['lower3'] < 10) and last_kline.close - line['mid'] < -10:
-        if last_kline.close > line['long'] and 'short' not in line['last_signal'] and delta_price > -conf['DELTA_PRICE_MAX']:
+        if last_kline.close > line['long'] and 'short' not in line['last_signal'] and delta_price > -20:
             check_result = 'wave_bull'
         elif delta_price > 0:
-            if last_kline.close > last2_kline.high and last_kline.close > last3_kline.high:
-                check_result = 'long_swallow_bull'
-                line['last_signal'] = 'long_swallow_bull'
-            elif last2_kline.close > last2_kline.low and abs(last2_kline.close - last2_kline.open) / (last2_kline.close - last2_kline.low) < 1/3 and last2_kline.high - last2_kline.close / (last2_kline.close - last2_kline.low) < 1/3:
+            if last_kline.close > last2_kline.high and last_kline.close > last3_kline.high and last2_kline.close > last3_kline.open > last2_kline.open and last3_kline.close < last3_kline.open and abs(last3_kline.close - last3_kline.open) >=10:
+                check_result = 'long_swallow1_bull'
+                line['last_signal'] = 'long_swallow1_bull'
+            elif last_kline.close > last2_kline.high and last_kline.close > last3_kline.high and last2_kline.close < last2_kline.open and last3_kline.close < last3_kline.open and abs(last2_kline.close - last2_kline.open + last3_kline.close - last3_kline.open) >= 10:
+                check_result = 'long_swallow2_bull'
+                line['last_signal'] = 'long_swallow2_bull'
+            elif last2_kline.close > last2_kline.low and abs(last2_kline.close - last2_kline.open) / (last2_kline.close - last2_kline.low) < 1/3 and last2_kline.high - last2_kline.close / (last2_kline.close - last2_kline.low) < 1/3 and abs(last2_kline.high - last2_kline.low) >=10:
                 check_result = 'long_pinba_bull'
                 line['last_signal'] = 'long_pinba_bull'
             else:
@@ -368,13 +364,16 @@ def check_line(need_log=True):
         else:
             check_result = 'wait_long_trend'
     elif (last_kline.high - line['upper'] > -10 or last2_kline.high - line['upper2'] > -10 or last3_kline.high - line['upper3'] > -10) and last_kline.close - line['mid'] > 10:
-        if last_kline.close < line['long'] and 'long' not in line['last_signal'] and delta_price < conf['DELTA_PRICE_MAX']:
+        if last_kline.close < line['long'] and 'long' not in line['last_signal'] and delta_price < 20:
             check_result = 'wave_bear'
         elif delta_price < 0:
-            if last_kline.close < last2_kline.low and last_kline.close < last3_kline.low:
-                check_result = 'short_swallow_bear'
-                line['last_signal'] = 'short_swallow_bear'
-            elif last2_kline.high > last2_kline.close and abs(last2_kline.close - last2_kline.open) / (last2_kline.high - last2_kline.close) < 1/3 and last2_kline.close - last2_kline.low / (last2_kline.high - last2_kline.close) < 1/3:
+            if last_kline.close < last2_kline.low and last_kline.close < last3_kline.low and last2_kline.close < last3_kline.open < last2_kline.open and last3_kline.close > last3_kline.open and abs(last3_kline.close - last3_kline.open) >=10:
+                check_result = 'short_swallow1_bear'
+                line['last_signal'] = 'short_swallow1_bear'
+            elif last_kline.close < last2_kline.low and last_kline.close < last3_kline.low and last2_kline.close > last2_kline.open and last3_kline.close > last3_kline.open and abs(last2_kline.close - last2_kline.open + last3_kline.close - last3_kline.open) >= 10:
+                check_result = 'short_swallow2_bear'
+                line['last_signal'] = 'short_swallow2_bear'
+            elif last2_kline.high > last2_kline.close and abs(last2_kline.close - last2_kline.open) / (last2_kline.high - last2_kline.close) < 1/3 and last2_kline.close - last2_kline.low / (last2_kline.high - last2_kline.close) < 1/3 and abs(last2_kline.high - last2_kline.low) >=10:
                 check_result = 'short_pinba_bear'
                 line['last_signal'] = 'short_pinba_bear'
             else:
@@ -1154,7 +1153,7 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
 
 
 def _pre_buy():
-    check_result = check_line() or ''
+    check_result = check_line()
     if 'bull' in check_result and conf['BULL_CODE'] != '' and not glb['submitted_buy_bull_flag'] and (conf['ALLOW_ADD'] or len(glb['today_hold_bull_list']) == 0):
         to_buy('bull')
     elif 'bear' in check_result and conf['BEAR_CODE'] != '' and not glb['submitted_buy_bear_flag'] and (conf['ALLOW_ADD'] or len(glb['today_hold_bear_list']) == 0):
@@ -1262,14 +1261,13 @@ class Ticker(ft.TickerHandlerBase):
 
         glb['cur_price'] = data0.price
 
-        if conf['if_check_line']:
-            # 每波动20点查询持仓列表，方便统计盈亏和止损
-            if abs(glb['cur_price'] - glb['last_price']) >= 20:
-                glb['last_price'] = glb['cur_price']
-                position_list_query(need_log=False, caller='fluctuate')
-            # 每分钟查询持仓列表
-            if s == 29:
-                position_list_query(need_log=False, caller='per_min')
+        # 每波动20点查询持仓列表，方便统计盈亏和止损
+        if abs(glb['cur_price'] - glb['last_price']) >= 20:
+            glb['last_price'] = glb['cur_price']
+            position_list_query(need_log=False, caller='fluctuate')
+        # 每分钟查询持仓列表
+        if s == 29:
+            position_list_query(need_log=False, caller='per_min')
 
         # 自动买入
         if conf['AUTO_BUY'] and not glb['soon_over'] and (s == 56 or s == 57 or s == 58 or s == 59):
