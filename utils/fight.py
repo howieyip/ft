@@ -101,6 +101,7 @@ glb = {
     'soon_over': False,
     'almost_over': False,
     'to_over': False,
+    'over': False,
     'cur_price': 0,
     'last_price': 0,
     'kline_data': None,
@@ -1247,7 +1248,7 @@ class Ticker(ft.TickerHandlerBase):
                     if not glb['to_over']:
                         glb['to_over'] = True
                         log.info('[%s]--------------------to_over--------------------' % t)
-                        if conf['sell_all_to_over']:
+                        if not glb['over'] and conf['sell_all_to_over']:
                             if conf['BULL_CODE'] != '' and conf['BEAR_CODE'] != '':
                                 sell_all()
                             elif conf['BULL_CODE'] != '':
@@ -1302,6 +1303,7 @@ def resetData():
     glb['soon_over'] = False
     glb['almost_over'] = False
     glb['to_over'] = False
+    glb['over'] = False
     request_trading_days()
 
 
@@ -1385,6 +1387,7 @@ def start(config=None):
 
 
 def end():
+    glb['over'] = True
     log.info('--------------------over--------------------')
-    quote_ctx.close()
-    trade_ctx.close()
+    # quote_ctx.close()
+    # trade_ctx.close()
