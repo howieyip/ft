@@ -388,10 +388,10 @@ def check_line(need_log=True):
         log.info('check_line: %s' % line)
     # 不符合条件就撤单
     if glb['submitted_buy_bull_lastorder'] is not None and check_result == 'not_near_bands':
-        cancel_all(glb['submitted_buy_bull_lastorder'].code)
+        cancel_all(glb['submitted_buy_bull_lastorder'].code, trd_side=ft.TrdSide.BUY)
         log.info('cancel_all bull, check_result: %s' % check_result)
     elif glb['submitted_buy_bear_lastorder'] is not None and check_result == 'not_near_bands':
-        cancel_all(glb['submitted_buy_bear_lastorder'].code)
+        cancel_all(glb['submitted_buy_bear_lastorder'].code, trd_side=ft.TrdSide.BUY)
         log.info('cancel_all bear, check_result: %s' % check_result)
     return check_result
 
@@ -845,13 +845,13 @@ def _check_profit_loss(code, bid_price, ask_price, caller='', need_log=True):
         glb['loss'][code] = False
 
     ref_price = glb['max_nominal_price'][code]
-    buy_price = find_buy_price(order)
     if need_log and not glb['loss'][code]:
-        log.info('%s check_profit_loss %s, buy_price: %s, ask_price: %s, ref_price: %s' % (caller, code, buy_price, ask_price, ref_price))
+        log.info('%s check_profit_loss %s, ask_price: %s, ref_price: %s' % (caller, code, ask_price, ref_price))
 
     ref_price_diff = round(ref_price - ask_price, 3)
     if ref_price_diff >= conf['LOSS_PRICE_DIFF'] or glb['almost_over']:
         glb['loss'][code] = True
+        buy_price = find_buy_price(order)
         if need_log:
             log.info('%s loss %s, buy_price: %s, ask_price: %s, ref_price: %s' % (caller, code, buy_price, ask_price, ref_price))
         loss_price = min(ask_price, last_filled_price) + conf['EVERY_ORDER_DIFF']

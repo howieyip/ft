@@ -112,6 +112,8 @@ def cal(data):
     log.info('**************** %s ********************* %s' % (data.iloc[0]['time_key'], delta))
     for index, row in data.iterrows():
         glb['kline_data'] = data[0:index+1]
+        # if row.time_key == '2025-01-06 20:23:00':
+        #     log.info('debugger')
         check_result = check_line()
         if 'bull' in check_result or 'bear' in check_result:
             log.info('%s %s' % (row.time_key, glb['line']))
