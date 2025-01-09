@@ -114,7 +114,7 @@ glb = {
     'submitted_buy_bear_lastorder': None,
     'submitted_buy_lastorder': {},
     'submitted_sell_orders': {},
-    'last_order_diff': 0.008,
+    'last_order_diff': 0.004,
     'order_book': {},
     'auto_buy_list': [],
     'past_hold_code_list': [],
@@ -876,7 +876,7 @@ def _auto_adjust_sell(order, ask_price):
         return False
     order_book = glb['order_book'][order.code]
     last_ask_price = order_book['Ask'][0][0]
-    fall_price = ask_price
+    fall_price = max(find_buy_price(order) + glb['last_order_diff'], ask_price)
     rise_price = round(ask_price + 0.001, 3)
     if ask_price > last_ask_price and rise_price > order.price:
         log.info('auto_adjust_sell order price: %s, rise_price: %s' % (order.price, rise_price))
@@ -894,8 +894,7 @@ def _auto_adjust_buy(code, bid_price):
     fall_price = round(bid_price - 0.001, 3)
     rise_price = bid_price
     if order.code in glb['today_hold_code_list']:
-        buy_price = find_buy_price(order)
-        rise_price = round(min(rise_price, buy_price - conf['ADD_PRICE_DIFF']), 3)
+        rise_price = round(min(rise_price, find_buy_price(order) - conf['ADD_PRICE_DIFF']), 3)
     if bid_price > last_bid_price and rise_price > order.price:
         log.info('auto_adjust_buy order price: %s, rise_price: %s' % (order.price, rise_price))
         modify_order(order, rise_price)
