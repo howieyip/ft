@@ -15,7 +15,7 @@ log = Logger(conf['log_file']).get_logger()
 
 code = 'HK.MHImain'
 max_count = 16*60 + 1
-start = '2025-01-08'
+start = '2025-01-09'
 end = start
 # end = '2024-10-08'
 glb = {
@@ -44,8 +44,10 @@ def draw_line():
     line['mid'] = last_boll_bands['mid']
     line['upper'] = last_boll_bands['upper']
     line['lower'] = last_boll_bands['lower']
+    line['mid2'] = last2_boll_bands['mid']
     line['upper2'] = last2_boll_bands['upper']
     line['lower2'] = last2_boll_bands['lower']
+    line['mid3'] = last3_boll_bands['mid']
     line['upper3'] = last3_boll_bands['upper']
     line['lower3'] = last3_boll_bands['lower']
     # log.info('draw_line: %s' % line)
@@ -63,18 +65,15 @@ def check_line():
     last2_kline = glb['kline_data'].iloc[-2]
     last3_kline = glb['kline_data'].iloc[-3]
     delta_price = last_kline.close - last_kline.last_close
-    near_long = line['10'] > line['mid']
-    near_short = line['10'] < line['mid']
+    near_long = line['10'] > line['mid'] > line['mid2'] > line['mid3']
+    near_short = line['10'] < line['mid'] < line['mid2'] < line['mid3']
     far_long = line['lower'] > line['long']
     far_short = line['upper'] < line['long']
+    is_wave = not near_long and not near_short and not far_long and not far_short
     if line['upper'] - line['lower'] < 25:
         check_result = 'bands_narrow'
-    elif abs(last_kline.close - line['long']) < 20:
-        check_result = 'close_long'
     elif (last_kline.low - line['lower'] < 10 or last2_kline.low - line['lower2'] < 10 or last3_kline.low - line['lower3'] < 10) and last_kline.close - line['mid'] < -10:
-        if (far_long and near_long or not far_short and not far_long) and delta_price > -20:
-            check_result = 'wave_bull'
-        elif far_short and delta_price > 0:
+        if delta_price > 0:
             if last_kline.close > last3_kline.high and last2_kline.close > last3_kline.open > last2_kline.open and last3_kline.close < last3_kline.open and abs(last3_kline.close - last3_kline.open) >=10:
                 check_result = 'long_swallow1_bull'
             elif last_kline.close > last3_kline.high and last2_kline.close < last2_kline.open and last3_kline.close < last3_kline.open and abs(last2_kline.close - last2_kline.open + last3_kline.close - last3_kline.open) >= 10:
@@ -83,12 +82,12 @@ def check_line():
                 check_result = 'long_pinba_bull'
             else:
                 check_result = 'wait_long_signal'
+        elif is_wave and delta_price > -20:
+            check_result = 'wave_bull'
         else:
             check_result = 'wait_long_trend'
     elif (last_kline.high - line['upper'] > -10 or last2_kline.high - line['upper2'] > -10 or last3_kline.high - line['upper3'] > -10) and last_kline.close - line['mid'] > 10:
-        if (far_short and near_short or not far_short and not far_long) and delta_price < 20:
-            check_result = 'wave_bear'
-        elif far_long and delta_price < 0:
+        if delta_price < 0:
             if last_kline.close < last3_kline.low and last2_kline.close < last3_kline.open < last2_kline.open and last3_kline.close > last3_kline.open and abs(last3_kline.close - last3_kline.open) >=10:
                 check_result = 'short_swallow1_bear'
             elif last_kline.close < last3_kline.low and last2_kline.close > last2_kline.open and last3_kline.close > last3_kline.open and abs(last2_kline.close - last2_kline.open + last3_kline.close - last3_kline.open) >= 10:
@@ -97,6 +96,8 @@ def check_line():
                 check_result = 'short_pinba_bear'
             else:
                 check_result = 'wait_short_signal'
+        elif is_wave and delta_price < 20:
+            check_result = 'wave_bear'
         else:
             check_result = 'wait_short_trend'
     else:
@@ -113,7 +114,7 @@ def cal(data):
     log.info('**************** %s ********************* %s' % (data.iloc[0]['time_key'], delta))
     for index, row in data.iterrows():
         glb['kline_data'] = data[0:index+1]
-        # if row.time_key == '2025-01-08 11:53:00':
+        # if row.time_key == '2025-01-08 13:01:00':
         #     log.info('debugger')
         check_result = check_line()
         if 'bull' in check_result or 'bear' in check_result:
