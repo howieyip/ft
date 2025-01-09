@@ -388,10 +388,10 @@ def check_line(need_log=True):
     if need_log:
         log.info('check_line: %s' % line)
     # 不符合条件就撤单
-    if glb['submitted_buy_bull_lastorder'] is not None and check_result == 'not_near_bands':
+    if glb['submitted_buy_bull_lastorder'] is not None and (check_result == 'not_near_bands' or 'bear' in check_result):
         cancel_all(glb['submitted_buy_bull_lastorder'].code, trd_side=ft.TrdSide.BUY)
         log.info('cancel_all bull, check_result: %s' % check_result)
-    elif glb['submitted_buy_bear_lastorder'] is not None and check_result == 'not_near_bands':
+    elif glb['submitted_buy_bear_lastorder'] is not None and (check_result == 'not_near_bands' or 'bull' in check_result):
         cancel_all(glb['submitted_buy_bear_lastorder'].code, trd_side=ft.TrdSide.BUY)
         log.info('cancel_all bear, check_result: %s' % check_result)
     return check_result
@@ -858,7 +858,7 @@ def _check_profit_loss(code, bid_price, ask_price, caller='', need_log=True):
         loss_price = min(ask_price, last_filled_price) + conf['EVERY_ORDER_DIFF']
         if ask_price <= buy_price or glb['almost_over']:
             if ask_price == last_filled_price:
-                loss_price = ask_price + 0.001
+                loss_price = ask_price + 0.002
             else:
                 loss_price = ask_price
         if loss_price < order.price:
