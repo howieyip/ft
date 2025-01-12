@@ -31,7 +31,6 @@ conf = {
     'FOLLOW_TREND': False,                          # 买入策略是否为顺势买入，逆势则为False
     'BULL_CODE': '',                                # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
     'BEAR_CODE': '',                                # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
-    'GOLDEN_LINE_DIFF': 80,                         # 黄金分割线0-100之间要间隔多少点
     'CUR_PRICE_MIN': 0.04,
     'CUR_PRICE_MAX': 0.12,                          # 这个值非常重要，当天买入的新股票如果低于这个价，会被当成是日内短炒止损
 
@@ -91,7 +90,6 @@ glb = {
     'recovery_bull': None,
     'recovery_bear': None,
     'rt_data': None,
-    'golden_line': {},
     'line': {},
     'loss': {},
     'today_pl_val_bull': 0,
@@ -205,22 +203,6 @@ def datestr_to_timestamp(time_str, format_str="%Y-%m-%d %H:%M:%S", pattern=r'\d{
     #     return time.time()
 
 
-def get_golden_line(line=None):
-    if line is None:
-        line = glb['golden_line']
-    line['diff'] = round(line['100'] - line['0'], 2)
-    line['reverse'] = glb['golden_line']['reverse']
-    if line['diff'] > 0 and glb['golden_line']['diff'] < 0:
-        line['reverse'] = 'bull'
-    elif line['diff'] < 0 and glb['golden_line']['diff'] > 0:
-        line['reverse'] = 'bear'
-    # line['123.6'] = line['0'] + line['diff'] * 1.236
-    line['261.8'] = line['0'] + line['diff'] * 2.618
-    line['300'] = line['0'] + line['diff'] * 3
-    glb['golden_line'] = line
-    return line
-
-
 def get_rt_data():
     ret, rt_data = quote_ctx.get_rt_data(CONST['HSI_CODE'])
     # log.info('get_rt_data, ret: %s, rt_data:%s' % (ret, rt_data))
@@ -237,55 +219,6 @@ def get_rt_data():
     # data = pd.DataFrame(data)
     glb['rt_data'] = rt_data
     return rt_data
-
-
-def draw_golden_line():
-    data = glb['rt_data'].iloc[:-1] # 排除最后一个数据，因为在当前分钟未结束时画分割线是不准确的
-    # cur_index = data.shape[0] - 1
-    nlargest_data = data.nlargest(2, 'cur_price')
-    nsmallest_data = data.nsmallest(2, 'cur_price')
-    min1_data = nsmallest_data.iloc[0]
-    min2_data = nsmallest_data.iloc[1]
-    max1_data = nlargest_data.iloc[0]
-    max2_data = nlargest_data.iloc[1]
-    min_data = min1_data
-    max_data = max1_data
-    # min2 max2 max1 min1 排列形态，反画向下
-    if min2_data.opened_mins < max2_data.opened_mins < min1_data.opened_mins and min2_data.opened_mins < max1_data.opened_mins < min1_data.opened_mins and abs(min1_data.cur_price - min2_data.cur_price) < 10:
-        min_data = min2_data
-    # max2 min2 min1 max1 排列形态，反画向上
-    elif max2_data.opened_mins < min2_data.opened_mins < max1_data.opened_mins and max2_data.opened_mins < min1_data.opened_mins < max1_data.opened_mins and abs(max1_data.cur_price - max2_data.cur_price) < 10:
-        max_data = max2_data
-    min_index = min_data.name
-    max_index = max_data.name
-    golden_line = {'0': 0, '100': 0}
-    if max_data.opened_mins > min_data.opened_mins:
-        golden_line['0'] = min_data.cur_price
-        for i in range(min_index, max_index): # 寻找100%的位置，需是最小值和最大值之间的拐点
-            if i >= 4:
-                cur_price = data.iloc[i - 2].cur_price
-                if ((data.iloc[i - 3].cur_price < cur_price > data.iloc[i - 1].cur_price) and
-                    # (cur_price > data.iloc[i].cur_price or cur_price - data.iloc[i - 1].cur_price >= 5) and
-                    (cur_price - golden_line['0'] > conf['GOLDEN_LINE_DIFF'])):
-                        golden_line['100'] = cur_price
-                        golden_line = get_golden_line(golden_line)
-                        if (max_data.cur_price <= golden_line['300']):
-                            break
-    else:
-        golden_line['0'] = max_data.cur_price
-        for i in range(max_index, min_index):
-            if i >= 4:
-                cur_price = data.iloc[i - 2].cur_price
-                if ((data.iloc[i - 3].cur_price > cur_price < data.iloc[i - 1].cur_price) and
-                    # (cur_price < data.iloc[i].cur_price or cur_price - data.iloc[i - 1].cur_price <= -5) and
-                    (golden_line['0'] - cur_price > conf['GOLDEN_LINE_DIFF'])):
-                        golden_line['100'] = cur_price
-                        golden_line = get_golden_line(golden_line)
-                        if (min_data.cur_price >= golden_line['300']):
-                            break
-    if golden_line['100'] == 0:
-        return False
-    return golden_line
 
 
 def get_cur_kline(num=80):
@@ -347,11 +280,11 @@ def check_line(need_log=True):
     last2_kline = glb['kline_data'].iloc[-2]
     last3_kline = glb['kline_data'].iloc[-3]
     delta_price = last_kline.close - last_kline.last_close
-    near_long = line['10'] > line['mid'] > line['mid2'] > line['mid3']
-    near_short = line['10'] < line['mid'] < line['mid2'] < line['mid3']
-    far_long = line['lower'] > line['long']
-    far_short = line['upper'] < line['long']
-    is_wave = not near_long and not near_short and not far_long and not far_short
+    near_long = line['10'] > line['mid'] > line['mid2']
+    near_short = line['10'] < line['mid'] < line['mid2']
+    far_long = last_kline.close > line['long']
+    far_short = last_kline.close < line['long']
+    is_wave = not near_long and not near_short
     if line['upper'] - line['lower'] < 25:
         check_result = 'bands_narrow'
     elif (last_kline.low - line['lower'] < 10 or last2_kline.low - line['lower2'] < 10 or last3_kline.low - line['lower3'] < 10) and last_kline.close - line['mid'] < -10:
@@ -364,7 +297,7 @@ def check_line(need_log=True):
                 check_result = 'long_pinba_bull'
             else:
                 check_result = 'wait_long_signal'
-        elif is_wave and delta_price > -20:
+        elif is_wave and far_long and delta_price > -20:
             check_result = 'wave_bull'
         else:
             check_result = 'wait_long_trend'
@@ -378,7 +311,7 @@ def check_line(need_log=True):
                 check_result = 'short_pinba_bear'
             else:
                 check_result = 'wait_short_signal'
-        elif is_wave and delta_price < 20:
+        elif is_wave and far_short and delta_price < 20:
             check_result = 'wave_bear'
         else:
             check_result = 'wait_short_trend'

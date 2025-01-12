@@ -15,7 +15,7 @@ log = Logger(conf['log_file']).get_logger()
 
 code = 'HK.MHImain'
 max_count = 16*60 + 1
-start = '2025-01-09'
+start = '2025-01-10'
 end = start
 # end = '2024-10-08'
 glb = {
@@ -65,11 +65,11 @@ def check_line():
     last2_kline = glb['kline_data'].iloc[-2]
     last3_kline = glb['kline_data'].iloc[-3]
     delta_price = last_kline.close - last_kline.last_close
-    near_long = line['10'] > line['mid'] > line['mid2'] > line['mid3']
-    near_short = line['10'] < line['mid'] < line['mid2'] < line['mid3']
-    far_long = line['lower'] > line['long']
-    far_short = line['upper'] < line['long']
-    is_wave = not near_long and not near_short and not far_long and not far_short
+    near_long = line['10'] > line['mid'] > line['mid2']
+    near_short = line['10'] < line['mid'] < line['mid2']
+    far_long = last_kline.close > line['long']
+    far_short = last_kline.close < line['long']
+    is_wave = not near_long and not near_short
     if line['upper'] - line['lower'] < 25:
         check_result = 'bands_narrow'
     elif (last_kline.low - line['lower'] < 10 or last2_kline.low - line['lower2'] < 10 or last3_kline.low - line['lower3'] < 10) and last_kline.close - line['mid'] < -10:
@@ -82,7 +82,7 @@ def check_line():
                 check_result = 'long_pinba_bull'
             else:
                 check_result = 'wait_long_signal'
-        elif is_wave and delta_price > -20:
+        elif is_wave and far_long and delta_price > -20:
             check_result = 'wave_bull'
         else:
             check_result = 'wait_long_trend'
@@ -96,7 +96,7 @@ def check_line():
                 check_result = 'short_pinba_bear'
             else:
                 check_result = 'wait_short_signal'
-        elif is_wave and delta_price < 20:
+        elif is_wave and far_short and delta_price < 20:
             check_result = 'wave_bear'
         else:
             check_result = 'wait_short_trend'
