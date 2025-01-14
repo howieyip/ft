@@ -90,7 +90,10 @@ glb = {
     'recovery_bull': None,
     'recovery_bear': None,
     'rt_data': None,
-    'line': {},
+    'line': {
+        'pre_min_price': 99999,
+        'pre_max_price': 0,
+    },
     'loss': {},
     'today_pl_val_bull': 0,
     'today_pl_val_bear': 0,
@@ -251,26 +254,49 @@ def draw_line():
         return False
     line = glb['line']
     line['cur'] = kline_data.iloc[-1].close
-    line['10'] = round(kline_data[-10:]['close'].mean(), 3)
+    # line['10'] = round(kline_data[-10:]['close'].mean(), 3)
     line['long'] = round(kline_data[-80:]['close'].mean(), 3)
-    line['long2'] = round(kline_data[-81:-1]['close'].mean(), 3)
+    # line['long2'] = round(kline_data[-81:-1]['close'].mean(), 3)
     last_boll_bands = boll_bands(kline_data[-20:])
     last2_boll_bands = boll_bands(kline_data[-21:-1])
     last3_boll_bands = boll_bands(kline_data[-22:-2])
     line['mid'] = last_boll_bands['mid']
     line['upper'] = last_boll_bands['upper']
     line['lower'] = last_boll_bands['lower']
-    line['mid2'] = last2_boll_bands['mid']
+    # line['mid2'] = last2_boll_bands['mid']
     line['upper2'] = last2_boll_bands['upper']
     line['lower2'] = last2_boll_bands['lower']
     # line['mid3'] = last3_boll_bands['mid']
     line['upper3'] = last3_boll_bands['upper']
     line['lower3'] = last3_boll_bands['lower']
-    # log.info('draw_line: %s' % line)
+
+    max_data = kline_data.nlargest(1, 'close').iloc[0]
+    min_data = kline_data.nsmallest(1, 'close').iloc[0]
+    if max_data.time_key > min_data.time_key:
+        data = kline_data[min_data.name:max_data.name]
+        for i in range(-1, -len(data) - 1, -1):
+            if -len(data) + 2 <= i <= -3:
+                pre_min_price = data.iloc[i].close
+                # if abs(pre_min_price - line['mid']) < 5 or abs(pre_min_price - line['low']) < 5:
+                if data.iloc[i - 2].close > pre_min_price and data.iloc[i - 1].close >= pre_min_price <= data.iloc[i + 1].close and pre_min_price < data.iloc[i + 2].close:
+                    line['pre_min_price'] = pre_min_price
+                    line['pre_min_time'] = data.iloc[i].time_key
+                    break
+    else:
+        data = kline_data[max_data.name:min_data.name]
+        for i in range(-1, -len(data) - 1, -1):
+            if -len(data) + 2 <= i <= -3:
+                pre_max_price = data.iloc[i].close
+                # if abs(pre_max_price - line['mid']) < 5 or abs(pre_max_price - line['upper']) < 5:
+                if data.iloc[i - 2].close < pre_max_price and data.iloc[i - 1].close <= pre_max_price >= data.iloc[i + 1].close and pre_max_price > data.iloc[i + 2].close:
+                    line['pre_max_price'] = pre_max_price
+                    line['pre_max_time'] = data.iloc[i].time_key
+                    break
+    log.info('draw_line: %s' % line)
     return line
 
 
-def check_line(need_log=True):
+def check_line():
     line = draw_line()
     if line is False:
         return ''
@@ -281,11 +307,6 @@ def check_line(need_log=True):
     last2_kline = glb['kline_data'].iloc[-2]
     last3_kline = glb['kline_data'].iloc[-3]
     delta_price = last_kline.close - last_kline.last_close
-    near_long = line['10'] > line['mid'] > line['mid2']
-    near_short = line['10'] < line['mid'] < line['mid2']
-    far_long = last_kline.close > line['long'] > line['long2']
-    far_short = last_kline.close < line['long'] < line['long2']
-    is_wave = not near_long and not near_short
     distance = 5
     profit = 10
     kline_len = 10
@@ -301,7 +322,7 @@ def check_line(need_log=True):
                 check_result = 'long_pinba_bull'
             else:
                 check_result = 'wait_long_signal'
-        elif is_wave and far_long and delta_price > -20:
+        elif last_kline.close > line['pre_min_price'] and last_kline.close > line['long'] and delta_price > -20:
             check_result = 'wave_bull'
         else:
             check_result = 'wait_long_trend'
@@ -315,15 +336,14 @@ def check_line(need_log=True):
                 check_result = 'short_pinba_bear'
             else:
                 check_result = 'wait_short_signal'
-        elif is_wave and far_short and delta_price < 20:
+        elif last_kline.close < line['pre_max_price'] and last_kline.close < line['long'] and delta_price < 20:
             check_result = 'wave_bear'
         else:
             check_result = 'wait_short_trend'
     else:
         check_result = 'not_near_bands'
-    line['check_result'] = check_result
-    if need_log:
-        log.info('check_line: %s' % line['check_result'])
+    # line['check_result'] = check_result
+    log.info('check_line: %s' % check_result)
     # 不符合条件就撤单
     if glb['submitted_buy_bull_lastorder'] is not None and (check_result == 'not_near_bands' or 'bear' in check_result):
         cancel_all(glb['submitted_buy_bull_lastorder'].code, trd_side=ft.TrdSide.BUY)
