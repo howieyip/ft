@@ -323,7 +323,7 @@ def check_line(need_log=True):
         check_result = 'not_near_bands'
     line['check_result'] = check_result
     if need_log:
-        log.info('check_line: %s' % line)
+        log.info('check_line: %s' % line['check_result'])
     # 不符合条件就撤单
     if glb['submitted_buy_bull_lastorder'] is not None and (check_result == 'not_near_bands' or 'bear' in check_result):
         cancel_all(glb['submitted_buy_bull_lastorder'].code, trd_side=ft.TrdSide.BUY)

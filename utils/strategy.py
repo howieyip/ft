@@ -122,7 +122,7 @@ def cal(data):
         #     log.info('debugger')
         check_result = check_line()
         if 'bull' in check_result or 'bear' in check_result:
-            log.info('%s %s' % (row.time_key, glb['line']))
+            log.info('%s %s' % (row.time_key, glb['line']['check_result']))
 
 
 
