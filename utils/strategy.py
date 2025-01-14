@@ -15,7 +15,7 @@ log = Logger(conf['log_file']).get_logger()
 
 code = 'HK.MHImain'
 max_count = 16*60 + 1
-start = '2025-01-10'
+start = '2025-01-14'
 end = start
 # end = '2024-10-08'
 glb = {
@@ -38,6 +38,7 @@ def draw_line():
     line['cur'] = kline_data.iloc[-1].close
     line['10'] = round(kline_data[-10:]['close'].mean(), 3)
     line['long'] = round(kline_data[-80:]['close'].mean(), 3)
+    line['long2'] = round(kline_data[-81:-1]['close'].mean(), 3)
     last_boll_bands = boll_bands(kline_data[-20:])
     last2_boll_bands = boll_bands(kline_data[-21:-1])
     last3_boll_bands = boll_bands(kline_data[-22:-2])
@@ -47,7 +48,7 @@ def draw_line():
     line['mid2'] = last2_boll_bands['mid']
     line['upper2'] = last2_boll_bands['upper']
     line['lower2'] = last2_boll_bands['lower']
-    line['mid3'] = last3_boll_bands['mid']
+    # line['mid3'] = last3_boll_bands['mid']
     line['upper3'] = last3_boll_bands['upper']
     line['lower3'] = last3_boll_bands['lower']
     # log.info('draw_line: %s' % line)
@@ -67,18 +68,21 @@ def check_line():
     delta_price = last_kline.close - last_kline.last_close
     near_long = line['10'] > line['mid'] > line['mid2']
     near_short = line['10'] < line['mid'] < line['mid2']
-    far_long = last_kline.close > line['long']
-    far_short = last_kline.close < line['long']
+    far_long = last_kline.close > line['long'] > line['long2']
+    far_short = last_kline.close < line['long'] < line['long2']
     is_wave = not near_long and not near_short
+    distance = 5
+    profit = 10
+    kline_len = 10
     if line['upper'] - line['lower'] < 25:
         check_result = 'bands_narrow'
-    elif (last_kline.low - line['lower'] < 10 or last2_kline.low - line['lower2'] < 10 or last3_kline.low - line['lower3'] < 10) and last_kline.close - line['mid'] < -10:
+    elif (last_kline.low - line['lower'] < distance or last2_kline.low - line['lower2'] < distance or last3_kline.low - line['lower3'] < distance) and last_kline.close - line['mid'] < -profit:
         if delta_price > 0:
-            if last_kline.close > last3_kline.high and last2_kline.close > last3_kline.open > last2_kline.open and last3_kline.close < last3_kline.open and abs(last3_kline.close - last3_kline.open) >=10:
+            if last_kline.close > last3_kline.high and last2_kline.close > last3_kline.open > last2_kline.open and last3_kline.close < last3_kline.open and abs(last3_kline.high - last3_kline.low) >= kline_len:
                 check_result = 'long_swallow1_bull'
-            elif last_kline.close > last3_kline.high and last2_kline.close < last2_kline.open and last3_kline.close < last3_kline.open and abs(last2_kline.close - last2_kline.open + last3_kline.close - last3_kline.open) >= 10:
+            elif last_kline.close > last3_kline.high and last2_kline.close < last2_kline.open and last3_kline.close < last3_kline.open and abs(last2_kline.high - last2_kline.low + last3_kline.high - last3_kline.low) >= kline_len:
                 check_result = 'long_swallow2_bull'
-            elif last2_kline.close > last2_kline.low and abs(last2_kline.close - last2_kline.open) / (last2_kline.close - last2_kline.low) < 1/3 and last2_kline.high - last2_kline.close / (last2_kline.close - last2_kline.low) < 1/3 and abs(last2_kline.high - last2_kline.low) >=10:
+            elif last2_kline.close > last2_kline.low and abs(last2_kline.close - last2_kline.open) / (last2_kline.close - last2_kline.low) < 1/3 and last2_kline.high - last2_kline.close / (last2_kline.close - last2_kline.low) < 1/3 and abs(last2_kline.high - last2_kline.low) >= kline_len:
                 check_result = 'long_pinba_bull'
             else:
                 check_result = 'wait_long_signal'
@@ -86,13 +90,13 @@ def check_line():
             check_result = 'wave_bull'
         else:
             check_result = 'wait_long_trend'
-    elif (last_kline.high - line['upper'] > -10 or last2_kline.high - line['upper2'] > -10 or last3_kline.high - line['upper3'] > -10) and last_kline.close - line['mid'] > 10:
+    elif (last_kline.high - line['upper'] > -distance or last2_kline.high - line['upper2'] > -distance or last3_kline.high - line['upper3'] > -distance) and last_kline.close - line['mid'] > profit:
         if delta_price < 0:
-            if last_kline.close < last3_kline.low and last2_kline.close < last3_kline.open < last2_kline.open and last3_kline.close > last3_kline.open and abs(last3_kline.close - last3_kline.open) >=10:
+            if last_kline.close < last3_kline.low and last2_kline.close < last3_kline.open < last2_kline.open and last3_kline.close > last3_kline.open and abs(last3_kline.high - last3_kline.low) >= kline_len:
                 check_result = 'short_swallow1_bear'
-            elif last_kline.close < last3_kline.low and last2_kline.close > last2_kline.open and last3_kline.close > last3_kline.open and abs(last2_kline.close - last2_kline.open + last3_kline.close - last3_kline.open) >= 10:
+            elif last_kline.close < last3_kline.low and last2_kline.close > last2_kline.open and last3_kline.close > last3_kline.open and abs(last2_kline.high - last2_kline.low + last3_kline.high - last3_kline.low) >= kline_len:
                 check_result = 'short_swallow2_bear'
-            elif last2_kline.high > last2_kline.close and abs(last2_kline.close - last2_kline.open) / (last2_kline.high - last2_kline.close) < 1/3 and last2_kline.close - last2_kline.low / (last2_kline.high - last2_kline.close) < 1/3 and abs(last2_kline.high - last2_kline.low) >=10:
+            elif last2_kline.high > last2_kline.close and abs(last2_kline.close - last2_kline.open) / (last2_kline.high - last2_kline.close) < 1/3 and last2_kline.close - last2_kline.low / (last2_kline.high - last2_kline.close) < 1/3 and abs(last2_kline.high - last2_kline.low) >= kline_len:
                 check_result = 'short_pinba_bear'
             else:
                 check_result = 'wait_short_signal'
