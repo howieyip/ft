@@ -793,7 +793,8 @@ def _check_profit_loss(code, bid_price, ask_price, caller='', need_log=True):
         if need_log:
             log.info('%s loss %s, buy_price: %s, ask_price: %s, ref_price: %s' % (caller, code, buy_price, ask_price, ref_price))
         loss_price = min(ask_price, last_filled_price) + conf['EVERY_ORDER_DIFF']
-        if ask_price <= buy_price or glb['almost_over']:
+        force_loss = ask_price <= buy_price and ('牛' in order.stock_name and glb['cur_price'] < glb['line']['long'] or '熊' in order.stock_name and glb['cur_price'] > glb['line']['long'])
+        if force_loss or glb['almost_over']:
             if ask_price >= last_filled_price:
                 loss_price = last_filled_price + 0.002
             else:
