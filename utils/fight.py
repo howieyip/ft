@@ -825,7 +825,7 @@ def _check_profit_loss(code, bid_price, ask_price, caller='', need_log=True):
             if ask_price >= last_filled_price:
                 loss_price = last_filled_price + 0.002
             else:
-                loss_price = ask_price
+                loss_price = ask_price + 0.001
         if loss_price < order.price:
             modify_order(order, loss_price)
     else:
