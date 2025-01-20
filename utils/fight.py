@@ -105,14 +105,15 @@ glb = {
     'over': False,
     'cur_price': 0,
     'last_price': 0,
+    'last_3s_price': 0,
     'kline_data': None,
     'max_nominal_price': {},
     'filled_all_last_order': {},
     'filled_all_buy_order': {},
     'submitted_buy_bull_flag': False,
     'submitted_buy_bear_flag': False,
-    'submitted_buy_bull_lastorder': None,
-    'submitted_buy_bear_lastorder': None,
+    'submitted_buy_last_bull': None,
+    'submitted_buy_last_bear': None,
     'submitted_buy_lastorder': {},
     'submitted_sell_orders': {},
     'order_book': {},
@@ -325,9 +326,9 @@ def check_line():
                 check_result = 'long_pinba_bull'
             else:
                 check_result = 'wait_long_signal'
-        else:
+        elif last_kline.low - line['lower'] < distance:
             line = get_pre_inflection(glb['kline_data'], line)
-            if last_kline.close > line['pre_min_price'] and last_kline.close > line['long'] and delta_price > -20:
+            if last_kline.close > line['pre_min_price'] and last_kline.close > line['long'] and delta_price > -kline_len*3:
                 check_result = 'wave_bull'
             else:
                 check_result = 'wait_long_trend'
@@ -341,22 +342,23 @@ def check_line():
                 check_result = 'short_pinba_bear'
             else:
                 check_result = 'wait_short_signal'
-        else:
+        elif last_kline.high - line['upper'] > -distance:
             line = get_pre_inflection(glb['kline_data'], line)
-            if last_kline.close < line['pre_max_price'] and last_kline.close < line['long'] and delta_price < 20:
+            if last_kline.close < line['pre_max_price'] and last_kline.close < line['long'] and delta_price < kline_len*3:
                 check_result = 'wave_bear'
             else:
                 check_result = 'wait_short_trend'
     else:
         check_result = 'not_near_bands'
-    # line['check_result'] = check_result
+    # if 'bull' in check_result or 'bear' in check_result:
+    #     line['last_signal'] = check_result
     log.info('check_line: %s' % check_result)
     # 不符合条件就撤单
-    if glb['submitted_buy_bull_lastorder'] is not None and (check_result == 'not_near_bands' or 'bear' in check_result):
-        cancel_all(glb['submitted_buy_bull_lastorder'].code, trd_side=ft.TrdSide.BUY)
+    if glb['submitted_buy_last_bull'] is not None and (check_result == 'not_near_bands' or 'bear' in check_result):
+        cancel_all(glb['submitted_buy_last_bull'].code, trd_side=ft.TrdSide.BUY)
         log.info('cancel_all bull, check_result: %s' % check_result)
-    elif glb['submitted_buy_bear_lastorder'] is not None and (check_result == 'not_near_bands' or 'bull' in check_result):
-        cancel_all(glb['submitted_buy_bear_lastorder'].code, trd_side=ft.TrdSide.BUY)
+    elif glb['submitted_buy_last_bear'] is not None and (check_result == 'not_near_bands' or 'bull' in check_result):
+        cancel_all(glb['submitted_buy_last_bear'].code, trd_side=ft.TrdSide.BUY)
         log.info('cancel_all bear, check_result: %s' % check_result)
     return check_result
 
@@ -582,24 +584,24 @@ def unsubscribe(code_list, subtype_list):
 def set_submitted_buy(code, stock_name, order=None):
     if stock_name.find('牛') > -1:
         glb['submitted_buy_bull_flag'] = True
-        glb['submitted_buy_bull_lastorder'] = order
+        glb['submitted_buy_last_bull'] = order
         log.info('set_submitted_buy bull:%s' % code)
     elif stock_name.find('熊') > -1:
         glb['submitted_buy_bear_flag'] = True
-        glb['submitted_buy_bear_lastorder'] = order
+        glb['submitted_buy_last_bear'] = order
         log.info('set_submitted_buy bear: %s' % code)
     glb['submitted_buy_lastorder'][code] = order
     subscribe([code], [ft.SubType.ORDER_BOOK])
 
 
-def reset_submitted_buy(code, stock_name=''):
-    if stock_name == '' or stock_name.find('牛') > -1:
+def reset_submitted_buy(code, stock_name):
+    if stock_name.find('牛') > -1:
         glb['submitted_buy_bull_flag'] = False
-        glb['submitted_buy_bull_lastorder'] = None
+        glb['submitted_buy_last_bull'] = None
         log.info('reset_submitted_buy bull: %s' % code)
-    if stock_name == '' or stock_name.find('熊') > -1:
+    elif stock_name.find('熊') > -1:
         glb['submitted_buy_bear_flag'] = False
-        glb['submitted_buy_bear_lastorder'] = None
+        glb['submitted_buy_last_bear'] = None
         log.info('reset_submitted_buy bear: %s' % code)
     glb['submitted_buy_lastorder'][code] = None
 
@@ -735,7 +737,7 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
                 log.info('auto_place_order, code: %s, nominal_price: %s, can_sell_qty: %s' % (item.code, item.nominal_price, item.can_sell_qty))
                 auto_place_order(item.code, item.qty, item.nominal_price)
             # 检查止损
-            # if caller in ['per_min', 'fluctuate']:
+            # if conf['NEED_LOSS'] and caller in ['per_min', 'fluctuate']:
             #     check_profit_loss(item.code, item.nominal_price, round(item.nominal_price + 0.001, 3), caller='position')
 
         if stock_type == 'bull':
@@ -796,7 +798,7 @@ def _profit_order(order_list):
 
 
 def _check_profit_loss(code, bid_price, ask_price, caller='', need_log=True):
-    if not conf['NEED_LOSS'] or code not in glb['today_hold_code_list'] or code not in glb['submitted_sell_orders'] or len(glb['submitted_sell_orders'][code]) == 0:
+    if code not in glb['today_hold_code_list'] or code not in glb['submitted_sell_orders'] or len(glb['submitted_sell_orders'][code]) == 0:
         return False
     order_list = glb['submitted_sell_orders'][code]
     order = order_list[0]
@@ -832,13 +834,11 @@ def _check_profit_loss(code, bid_price, ask_price, caller='', need_log=True):
         glb['loss'][code] = False
         if len(order_list) > 1:
             profit_order(order_list)
-        elif order.price > ref_price:
+        elif conf['AUTO_ADJUST_SELL'] and order.price > ref_price:
             auto_adjust_sell(order, ask_price, last_filled_price)
 
 
 def _auto_adjust_sell(order, ask_price, last_filled_price):
-    if not conf['AUTO_ADJUST_SELL'] or order is None:
-        return False
     order_book = glb['order_book'][order.code]
     last_ask_price = order_book['Ask'][0][0]
     fall_price = max(last_filled_price + conf['EVERY_ORDER_DIFF'], ask_price)
@@ -850,22 +850,27 @@ def _auto_adjust_sell(order, ask_price, last_filled_price):
         log.info('auto_adjust_sell order price: %s, fall_price: %s' % (order.price, fall_price))
         modify_order(order, fall_price)
 
-def _auto_adjust_buy(code, bid_price):
-    if not conf['AUTO_ADJUST_BUY'] or code not in glb['auto_buy_list'] or code not in glb['submitted_buy_lastorder'] or glb['submitted_buy_lastorder'][code] is None:
+def _auto_adjust_buy(delta_price):
+    order = glb['submitted_buy_last_bull'] or glb['submitted_buy_last_bear']
+    if order is None or order.code not in glb['order_book'] or order.code not in glb['auto_buy_list']:
         return False
-    order = glb['submitted_buy_lastorder'][code]
     order_book = glb['order_book'][order.code]
-    last_bid_price = order_book['Bid'][0][0]
-    fall_price = round(bid_price - 0.001, 3)
-    rise_price = bid_price
+    rise_price = order_book['Bid'][0][0]
+    fall_price = round(rise_price - 0.001, 3)
     if order.code in glb['today_hold_code_list']:
         rise_price = round(min(rise_price, find_buy_price(order) - conf['ADD_PRICE_DIFF']), 3)
-    if bid_price > last_bid_price and rise_price > order.price:
+    fall_condition = False
+    if '牛' in order.stock_name:
+        fall_condition = delta_price <= -5
+    else:
+        fall_condition = delta_price >= 5
+    if fall_condition:
+        if fall_price < order.price:
+            log.info('auto_adjust_buy order price: %s, fall_price: %s' % (order.price, fall_price))
+            modify_order(order, fall_price)
+    elif rise_price > order.price:
         log.info('auto_adjust_buy order price: %s, rise_price: %s' % (order.price, rise_price))
         modify_order(order, rise_price)
-    elif bid_price < last_bid_price and fall_price < order.price:
-        log.info('auto_adjust_buy order price: %s, fall_price: %s' % (order.price, fall_price))
-        modify_order(order, fall_price)
 
 
 class OrderBook(ft.OrderBookHandlerBase):
@@ -883,8 +888,8 @@ class OrderBook(ft.OrderBookHandlerBase):
         if s % 3 == 0 and data['Bid'][0] and data['Ask'][0]:
             if data['code'] not in glb['order_book']:
                 glb['order_book'][data['code']] = data
-            check_profit_loss(data['code'], data['Bid'][0][0], data['Ask'][0][0], caller='order_book', need_log=s%9==0)
-            auto_adjust_buy(data['code'], data['Bid'][0][0])
+            if conf['NEED_LOSS']:
+                check_profit_loss(data['code'], data['Bid'][0][0], data['Ask'][0][0], caller='order_book', need_log=s%9==0)
             glb['order_book'][data['code']] = data
 
         return ret, data
@@ -1236,6 +1241,10 @@ class Ticker(ft.TickerHandlerBase):
         # 自动买入
         if conf['AUTO_BUY'] and not glb['soon_over'] and (s == 56 or s == 57 or s == 58 or s == 59):
             pre_buy()
+        # 自动调价
+        if conf['AUTO_ADJUST_BUY'] and s % 3 == 0:
+            auto_adjust_buy(glb['cur_price'] - glb['last_3s_price'])
+            glb['last_3s_price'] = glb['cur_price']
 
         return ret, data
 
