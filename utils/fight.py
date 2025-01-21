@@ -851,7 +851,9 @@ def _auto_adjust_sell(order, ask_price, last_filled_price):
         modify_order(order, fall_price)
 
 def _auto_adjust_buy(delta_price):
-    order = glb['submitted_buy_last_bull'] or glb['submitted_buy_last_bear']
+    order = glb['submitted_buy_last_bull']
+    if order is None:
+        order = glb['submitted_buy_last_bear']
     if order is None or order.code not in glb['order_book'] or order.code not in glb['auto_buy_list']:
         return False
     order_book = glb['order_book'][order.code]
