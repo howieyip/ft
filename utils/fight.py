@@ -94,6 +94,7 @@ glb = {
         'pre_min_price': 99999,
         'pre_max_price': 0,
     },
+    'golden_line': {},
     'loss': {},
     'today_pl_val_bull': 0,
     'today_pl_val_bear': 0,
@@ -225,7 +226,7 @@ def get_rt_data():
     return rt_data
 
 
-def get_cur_kline(num=80):
+def get_cur_kline(num=80, begin=None):
     ret, kline_data = quote_ctx.get_cur_kline(CONST['MHI_CODE'], num, ft.KLType.K_1M)
     # log.info('get_cur_kline, ret: %s, kline_data:%s' % (ret, kline_data))
     if ret != ft.RET_OK:
@@ -237,56 +238,95 @@ def get_cur_kline(num=80):
     # 18  HK.MHImain  小恒指主连(2406)  2024-06-15 03:00:00  17796.0  17796.0  17796.0  17793.0      30  533842.0       0.0            0.0     17795.0
     # 19  HK.MHImain  小恒指主连(2406)  2024-06-17 09:16:00  17796.0  17796.0  17796.0  17796.0       0       0.0       0.0            0.0     17796.0
     glb['kline_data'] = kline_data
+    if begin is not None:
+        kline = kline[kline.time_key.str[11:19] > begin]
+        kline = kline[-num:].reset_index(drop=True)
     return kline_data
 
 
-def boll_bands(kline_data):
-    mid = round(kline_data['close'].mean(), 3)
-    std = kline_data['close'].std(ddof=0)
+def get_golden_line(line):
+    diff = round(line['100'] - line['0'], 2)
+    for i in range(0, 2):
+        line[str(i*100 + 23.6)] = round(line['0'] + diff * (0.236 + i), 2)
+        line[str(i*100 + 38.2)] = round(line['0'] + diff * (0.382 + i), 2)
+        line[str(i*100 + 50)] = round(line['0'] + diff * (0.50 + i), 2)
+        line[str(i*100 + 61.8)] = round(line['0'] + diff * (0.618 + i), 2)
+        line[str(i*100 + 76.4)] = round(line['0'] + diff * (0.764 + i), 2)
+        line[str(i*100 + 100)] = round(line['0'] + diff * (1 + i), 2)
+    return line
+
+
+def draw_golden_line():
+    kline = get_cur_kline(331, '09:15:00')
+    if kline is False or len(kline) < 20:
+        return False
+    max_data = kline.nlargest(1, 'close').iloc[0]
+    min_data = kline.nsmallest(1, 'close').iloc[0]
+    golden_line_diff = 80
+    golden_line = glb['golden_line']
+    golden_line['0'] = 0
+    golden_line['100'] = 0
+    if max_data.time_key > min_data.time_key:
+        golden_line['0'] = min_data.close
+        for i in range(min_data.name + 1, len(kline) - 1):
+            max_price = kline.iloc[i].close
+            if kline.iloc[i - 1].close < max_price > kline.iloc[i + 1].close and max_price - golden_line['0'] > golden_line_diff:
+                golden_line['100'] = max_price
+                golden_line = get_golden_line(golden_line)
+                if max_data.close <= golden_line['200']:
+                    break
+    else:
+        golden_line['0'] = max_data.close
+        for i in range(max_data.name + 1, len(kline) - 1):
+            min_price = kline.iloc[i].close
+            if kline.iloc[i - 1].close > min_price < kline.iloc[i + 1].close and golden_line['0'] - min_price > golden_line_diff:
+                golden_line['100'] = min_price
+                golden_line = get_golden_line(golden_line)
+                if min_data.close >= golden_line['200']:
+                    break
+    if golden_line['100'] == 0:
+        return False
+    return golden_line
+
+
+def boll_bands(kline):
+    mid = round(kline['close'].mean(), 3)
+    std = kline['close'].std(ddof=0)
     upper = round(mid + 2 * std, 3)
     lower = round(mid - 2 * std, 3)
     return {'mid': mid, 'upper': upper, 'lower': lower}
 
 
-def get_pre_inflection(kline_data, line):
-    max_data = kline_data.nlargest(1, 'close').iloc[0]
-    min_data = kline_data.nsmallest(1, 'close').iloc[0]
-    if max_data.time_key > min_data.time_key:
-        data = kline_data[min_data.name:max_data.name + 1]
-        for i in range(-1, -len(data) - 1, -1):
-            if -len(data) + 2 <= i <= -3:
-                pre_min_price = data.iloc[i].close
-                # if abs(pre_min_price - line['mid']) < 5 or abs(pre_min_price - line['low']) < 5:
-                if data.iloc[i - 2].close > pre_min_price and data.iloc[i - 1].close >= pre_min_price <= data.iloc[i + 1].close and pre_min_price < data.iloc[i + 2].close:
-                    line['pre_min_price'] = pre_min_price
-                    line['pre_min_time'] = data.iloc[i].time_key
-                    break
-    else:
-        data = kline_data[max_data.name:min_data.name + 1]
-        for i in range(-1, -len(data) - 1, -1):
-            if -len(data) + 2 <= i <= -3:
-                pre_max_price = data.iloc[i].close
-                # if abs(pre_max_price - line['mid']) < 5 or abs(pre_max_price - line['upper']) < 5:
-                if data.iloc[i - 2].close < pre_max_price and data.iloc[i - 1].close <= pre_max_price >= data.iloc[i + 1].close and pre_max_price > data.iloc[i + 2].close:
-                    line['pre_max_price'] = pre_max_price
-                    line['pre_max_time'] = data.iloc[i].time_key
-                    break
+def get_pre_inflection(kline, line):
+    line['pre_min_price'] = 0
+    line['pre_max_price'] = 0
+    for i in range(-3, -len(kline) + 1, -1):
+        pre_min_price = kline.iloc[i].close
+        if kline.iloc[i - 2].close >= pre_min_price and kline.iloc[i - 1].close >= pre_min_price <= kline.iloc[i + 1].close and pre_min_price <= kline.iloc[i + 2].close:
+            line['pre_min_price'] = pre_min_price
+            line['pre_min_time'] = kline.iloc[i].time_key
+        pre_max_price = kline.iloc[i].close
+        if kline.iloc[i - 2].close <= pre_max_price and kline.iloc[i - 1].close <= pre_max_price >= kline.iloc[i + 1].close and pre_max_price >= kline.iloc[i + 2].close:
+            line['pre_max_price'] = pre_max_price
+            line['pre_max_time'] = kline.iloc[i].time_key
+        if line['pre_min_price'] > 0 and line['pre_max_price'] > 0:
+            break
     return line
 
 
 def draw_line():
-    kline_data = get_cur_kline(80)
-    if kline_data is False or len(kline_data) < 20:
-        log.info('draw_line error, kline_data:\n%s' % kline_data)
-        return False
+    kline = get_cur_kline(80)
+    if kline is False or len(kline) < 20:
+        log.info('draw_line error, kline:\n%s' % kline)
+        return False, False
     line = glb['line']
-    line['cur'] = kline_data.iloc[-1].close
-    # line['10'] = round(kline_data[-10:]['close'].mean(), 3)
-    line['long'] = round(kline_data[-80:]['close'].mean(), 3)
-    # line['long2'] = round(kline_data[-81:-1]['close'].mean(), 3)
-    last_boll_bands = boll_bands(kline_data[-20:])
-    last2_boll_bands = boll_bands(kline_data[-21:-1])
-    last3_boll_bands = boll_bands(kline_data[-22:-2])
+    line['cur'] = kline.iloc[-1].close
+    # line['10'] = round(kline[-10:]['close'].mean(), 3)
+    line['long'] = round(kline[-80:]['close'].mean(), 3)
+    # line['long2'] = round(kline[-81:-1]['close'].mean(), 3)
+    last_boll_bands = boll_bands(kline[-20:])
+    last2_boll_bands = boll_bands(kline[-21:-1])
+    last3_boll_bands = boll_bands(kline[-22:-2])
     line['mid'] = last_boll_bands['mid']
     line['upper'] = last_boll_bands['upper']
     line['lower'] = last_boll_bands['lower']
@@ -297,42 +337,56 @@ def draw_line():
     line['upper3'] = last3_boll_bands['upper']
     line['lower3'] = last3_boll_bands['lower']
     log.info('draw_line: %s' % line)
-    return line
+    return kline, line
+
+
+def check_position(extremum, band, direction=0):
+    distance = 10
+    golden_line = draw_golden_line()
+    if golden_line is False:
+        return False
+    for k in golden_line:
+        if abs(extremum - golden_line[k]) < distance:
+            if direction == 0:
+                if extremum - band < distance*1.5:
+                    return True
+            elif extremum - band > -distance*1.5:
+                return True
+    return False
 
 
 def check_line():
-    line = draw_line()
+    kline, line = draw_line()
     if line is False:
         return ''
     check_result = ''
     #            code         name             time_key     open    close     high      low  volume  turnover  pe_ratio  turnover_rate  last_close
     # 0   HK.MHImain  小恒指主连(2406)  2024-06-15 02:42:00  17773.0  17772.0  17773.0  17769.0      18  319883.0       0.0            0.0     17772.0
-    last_kline = glb['kline_data'].iloc[-1]
-    last2_kline = glb['kline_data'].iloc[-2]
-    last3_kline = glb['kline_data'].iloc[-3]
+    last_kline = kline.iloc[-1]
+    last2_kline = kline.iloc[-2]
+    last3_kline = kline.iloc[-3]
     delta_price = last_kline.close - last_kline.last_close
-    distance = 5
     profit = 10
     kline_len = 10
     if line['upper'] - line['lower'] < 25:
         check_result = 'bands_narrow'
-    elif (last_kline.low - line['lower'] < distance or last2_kline.low - line['lower2'] < distance or last3_kline.low - line['lower3'] < distance) and last_kline.close - line['mid'] < -profit:
+    elif (check_position(last_kline.low, line['lower']) or check_position(last2_kline.low, line['lower2']) or check_position(last3_kline.low, line['lower3'])) and last_kline.close - line['mid'] < -profit:
         if delta_price > 0:
             if last_kline.close > last3_kline.high and last3_kline.close < last3_kline.open and (last3_kline.open - last2_kline.close) / (last3_kline.open - last3_kline.close) < 1/3 and abs(last3_kline.high - last3_kline.low) >= kline_len:
                 check_result = 'long_swallow1_bull'
-            elif last_kline.close > last3_kline.high and last2_kline.close < last2_kline.open and last3_kline.close < last3_kline.open and abs(last2_kline.high - last2_kline.low + last3_kline.high - last3_kline.low) >= kline_len*2:
+            elif last_kline.close > last3_kline.open and last_kline.high > last3_kline.high and last2_kline.close < last2_kline.open and last3_kline.close < last3_kline.open and abs(last2_kline.high - last2_kline.low + last3_kline.high - last3_kline.low) >= kline_len*2:
                 check_result = 'long_swallow2_bull'
             elif last2_kline.close > last2_kline.low and abs(last2_kline.close - last2_kline.open) / (last2_kline.close - last2_kline.low) < 1/3 and (last2_kline.high - last2_kline.close) / (last2_kline.close - last2_kline.low) < 1/3 and abs(last2_kline.high - last2_kline.low) >= kline_len*2:
                 check_result = 'long_pinba_bull'
             else:
                 check_result = 'wait_long_signal'
-        elif last_kline.low - line['lower'] < distance:
-            line = get_pre_inflection(glb['kline_data'], line)
+        elif last_kline.low - line['lower'] < 5:
+            line = get_pre_inflection(kline, line)
             if last_kline.close > line['pre_min_price'] and last_kline.close > line['long'] and delta_price > -kline_len*3:
                 check_result = 'wave_bull'
             else:
                 check_result = 'wait_long_trend'
-    elif (last_kline.high - line['upper'] > -distance or last2_kline.high - line['upper2'] > -distance or last3_kline.high - line['upper3'] > -distance) and last_kline.close - line['mid'] > profit:
+    elif (check_position(last_kline.high, line['upper'], 1) or check_position(last2_kline.high, line['upper2'], 1) or check_position(last3_kline.high, line['upper3'], 1)) and last_kline.close - line['mid'] > profit:
         if delta_price < 0:
             if last_kline.close < last3_kline.low and last3_kline.close > last3_kline.open and (last2_kline.close - last3_kline.open) / (last3_kline.close - last3_kline.open) < 1/3 and abs(last3_kline.high - last3_kline.low) >= kline_len:
                 check_result = 'short_swallow1_bear'
@@ -342,8 +396,8 @@ def check_line():
                 check_result = 'short_pinba_bear'
             else:
                 check_result = 'wait_short_signal'
-        elif last_kline.high - line['upper'] > -distance:
-            line = get_pre_inflection(glb['kline_data'], line)
+        elif last_kline.high - line['upper'] > -5:
+            line = get_pre_inflection(kline, line)
             if last_kline.close < line['pre_max_price'] and last_kline.close < line['long'] and delta_price < kline_len*3:
                 check_result = 'wave_bear'
             else:
@@ -1350,7 +1404,7 @@ def start(config=None):
     if conf['TRY_FOLLOW_RECOVERY']:
         quote_ctx.set_handler(RTData())
     trade_ctx.set_handler(TradeOrder())
-    if conf['NEED_LOSS']:
+    if conf['NEED_LOSS'] or conf['AUTO_ADJUST_BUY']:
         quote_ctx.set_handler(OrderBook())
 
     ret, data = quote_ctx.query_subscription()
