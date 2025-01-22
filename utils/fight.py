@@ -107,7 +107,7 @@ glb = {
     'cur_price': 0,
     'last_price': 0,
     'last_3s_price': 0,
-    'kline_data': None,
+    'klines': None,
     'max_nominal_price': {},
     'filled_all_last_order': {},
     'filled_all_buy_order': {},
@@ -227,21 +227,21 @@ def get_rt_data():
 
 
 def get_cur_kline(num=80, begin=None):
-    ret, kline_data = quote_ctx.get_cur_kline(CONST['MHI_CODE'], num, ft.KLType.K_1M)
-    # log.info('get_cur_kline, ret: %s, kline_data:%s' % (ret, kline_data))
+    ret, klines = quote_ctx.get_cur_kline(CONST['MHI_CODE'], num, ft.KLType.K_1M)
+    # log.info('get_cur_kline, ret: %s, klines:%s' % (ret, klines))
     if ret != ft.RET_OK:
-        log.info('get_cur_kline error, ret: %s, kline_data:\n%s' % (ret, kline_data))
+        log.info('get_cur_kline error, ret: %s, klines:\n%s' % (ret, klines))
         return False
     #            code         name             time_key     open    close     high      low  volume  turnover  pe_ratio  turnover_rate  last_close
     # 0   HK.MHImain  小恒指主连(2406)  2024-06-15 02:42:00  17773.0  17772.0  17773.0  17769.0      18  319883.0       0.0            0.0     17772.0
     # 1   HK.MHImain  小恒指主连(2406)  2024-06-15 02:43:00  17775.0  17776.0  17776.0  17775.0       8  142205.0       0.0            0.0     17772.0
     # 18  HK.MHImain  小恒指主连(2406)  2024-06-15 03:00:00  17796.0  17796.0  17796.0  17793.0      30  533842.0       0.0            0.0     17795.0
     # 19  HK.MHImain  小恒指主连(2406)  2024-06-17 09:16:00  17796.0  17796.0  17796.0  17796.0       0       0.0       0.0            0.0     17796.0
-    glb['kline_data'] = kline_data
+    glb['klines'] = klines
     if begin is not None:
-        kline = kline[kline.time_key.str[11:19] > begin]
-        kline = kline[-num:].reset_index(drop=True)
-    return kline_data
+        klines = klines[klines.time_key.str[11:19] > begin]
+        klines = klines[-num:].reset_index(drop=True)
+    return klines
 
 
 def get_golden_line(line):
@@ -257,29 +257,29 @@ def get_golden_line(line):
 
 
 def draw_golden_line():
-    kline = get_cur_kline(331, '09:15:00')
-    if kline is False or len(kline) < 20:
+    klines = get_cur_kline(331, '09:15:00')
+    if klines is False or len(klines) < 20:
         return False
-    max_data = kline.nlargest(1, 'close').iloc[0]
-    min_data = kline.nsmallest(1, 'close').iloc[0]
+    max_data = klines.nlargest(1, 'close').iloc[0]
+    min_data = klines.nsmallest(1, 'close').iloc[0]
     golden_line_diff = 80
     golden_line = glb['golden_line']
     golden_line['0'] = 0
     golden_line['100'] = 0
     if max_data.time_key > min_data.time_key:
         golden_line['0'] = min_data.close
-        for i in range(min_data.name + 1, len(kline) - 1):
-            max_price = kline.iloc[i].close
-            if kline.iloc[i - 1].close < max_price > kline.iloc[i + 1].close and max_price - golden_line['0'] > golden_line_diff:
+        for i in range(min_data.name + 1, len(klines) - 1):
+            max_price = klines.iloc[i].close
+            if klines.iloc[i - 1].close < max_price > klines.iloc[i + 1].close and max_price - golden_line['0'] > golden_line_diff:
                 golden_line['100'] = max_price
                 golden_line = get_golden_line(golden_line)
                 if max_data.close <= golden_line['200']:
                     break
     else:
         golden_line['0'] = max_data.close
-        for i in range(max_data.name + 1, len(kline) - 1):
-            min_price = kline.iloc[i].close
-            if kline.iloc[i - 1].close > min_price < kline.iloc[i + 1].close and golden_line['0'] - min_price > golden_line_diff:
+        for i in range(max_data.name + 1, len(klines) - 1):
+            min_price = klines.iloc[i].close
+            if klines.iloc[i - 1].close > min_price < klines.iloc[i + 1].close and golden_line['0'] - min_price > golden_line_diff:
                 golden_line['100'] = min_price
                 golden_line = get_golden_line(golden_line)
                 if min_data.close >= golden_line['200']:
@@ -289,44 +289,44 @@ def draw_golden_line():
     return golden_line
 
 
-def boll_bands(kline):
-    mid = round(kline['close'].mean(), 3)
-    std = kline['close'].std(ddof=0)
+def boll_bands(klines):
+    mid = round(klines['close'].mean(), 3)
+    std = klines['close'].std(ddof=0)
     upper = round(mid + 2 * std, 3)
     lower = round(mid - 2 * std, 3)
     return {'mid': mid, 'upper': upper, 'lower': lower}
 
 
-def get_pre_inflection(kline, line):
+def get_pre_inflection(klines, line):
     line['pre_min_price'] = 0
     line['pre_max_price'] = 0
-    for i in range(-3, -len(kline) + 1, -1):
-        pre_min_price = kline.iloc[i].close
-        if kline.iloc[i - 2].close >= pre_min_price and kline.iloc[i - 1].close >= pre_min_price <= kline.iloc[i + 1].close and pre_min_price <= kline.iloc[i + 2].close:
+    for i in range(-3, -len(klines) + 1, -1):
+        pre_min_price = klines.iloc[i].close
+        if klines.iloc[i - 2].close >= pre_min_price and klines.iloc[i - 1].close >= pre_min_price <= klines.iloc[i + 1].close and pre_min_price <= klines.iloc[i + 2].close:
             line['pre_min_price'] = pre_min_price
-            line['pre_min_time'] = kline.iloc[i].time_key
-        pre_max_price = kline.iloc[i].close
-        if kline.iloc[i - 2].close <= pre_max_price and kline.iloc[i - 1].close <= pre_max_price >= kline.iloc[i + 1].close and pre_max_price >= kline.iloc[i + 2].close:
+            line['pre_min_time'] = klines.iloc[i].time_key
+        pre_max_price = klines.iloc[i].close
+        if klines.iloc[i - 2].close <= pre_max_price and klines.iloc[i - 1].close <= pre_max_price >= klines.iloc[i + 1].close and pre_max_price >= klines.iloc[i + 2].close:
             line['pre_max_price'] = pre_max_price
-            line['pre_max_time'] = kline.iloc[i].time_key
+            line['pre_max_time'] = klines.iloc[i].time_key
         if line['pre_min_price'] > 0 and line['pre_max_price'] > 0:
             break
     return line
 
 
 def draw_line():
-    kline = get_cur_kline(80)
-    if kline is False or len(kline) < 20:
-        log.info('draw_line error, kline:\n%s' % kline)
+    klines = get_cur_kline(80)
+    if klines is False or len(klines) < 20:
+        log.info('draw_line error, klines:\n%s' % klines)
         return False, False
     line = glb['line']
-    line['cur'] = kline.iloc[-1].close
-    # line['10'] = round(kline[-10:]['close'].mean(), 3)
-    line['long'] = round(kline[-80:]['close'].mean(), 3)
-    # line['long2'] = round(kline[-81:-1]['close'].mean(), 3)
-    last_boll_bands = boll_bands(kline[-20:])
-    last2_boll_bands = boll_bands(kline[-21:-1])
-    last3_boll_bands = boll_bands(kline[-22:-2])
+    line['cur'] = klines.iloc[-1].close
+    # line['10'] = round(klines[-10:]['close'].mean(), 3)
+    line['long'] = round(klines[-80:]['close'].mean(), 3)
+    # line['long2'] = round(klines[-81:-1]['close'].mean(), 3)
+    last_boll_bands = boll_bands(klines[-20:])
+    last2_boll_bands = boll_bands(klines[-21:-1])
+    last3_boll_bands = boll_bands(klines[-22:-2])
     line['mid'] = last_boll_bands['mid']
     line['upper'] = last_boll_bands['upper']
     line['lower'] = last_boll_bands['lower']
@@ -337,7 +337,7 @@ def draw_line():
     line['upper3'] = last3_boll_bands['upper']
     line['lower3'] = last3_boll_bands['lower']
     log.info('draw_line: %s' % line)
-    return kline, line
+    return klines, line
 
 
 def check_position(extremum, band, direction=0):
@@ -356,15 +356,15 @@ def check_position(extremum, band, direction=0):
 
 
 def check_line():
-    kline, line = draw_line()
+    klines, line = draw_line()
     if line is False:
         return ''
     check_result = ''
     #            code         name             time_key     open    close     high      low  volume  turnover  pe_ratio  turnover_rate  last_close
     # 0   HK.MHImain  小恒指主连(2406)  2024-06-15 02:42:00  17773.0  17772.0  17773.0  17769.0      18  319883.0       0.0            0.0     17772.0
-    last_kline = kline.iloc[-1]
-    last2_kline = kline.iloc[-2]
-    last3_kline = kline.iloc[-3]
+    last_kline = klines.iloc[-1]
+    last2_kline = klines.iloc[-2]
+    last3_kline = klines.iloc[-3]
     delta_price = last_kline.close - last_kline.last_close
     profit = 10
     kline_len = 10
@@ -381,7 +381,7 @@ def check_line():
             else:
                 check_result = 'wait_long_signal'
         elif last_kline.low - line['lower'] < 5:
-            line = get_pre_inflection(kline, line)
+            line = get_pre_inflection(klines, line)
             if last_kline.close > line['pre_min_price'] and last_kline.close > line['long'] and delta_price > -kline_len*3:
                 check_result = 'wave_bull'
             else:
@@ -397,7 +397,7 @@ def check_line():
             else:
                 check_result = 'wait_short_signal'
         elif last_kline.high - line['upper'] > -5:
-            line = get_pre_inflection(kline, line)
+            line = get_pre_inflection(klines, line)
             if last_kline.close < line['pre_max_price'] and last_kline.close < line['long'] and delta_price < kline_len*3:
                 check_result = 'wave_bear'
             else:
