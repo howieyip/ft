@@ -31,7 +31,7 @@ conf = {
     'FOLLOW_TREND': False,                          # 买入策略是否为顺势买入，逆势则为False
     'BULL_CODE': '',                                # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
     'BEAR_CODE': '',                                # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
-    'CUR_PRICE_MIN': 0.04,
+    'CUR_PRICE_MIN': 0.05,
     'CUR_PRICE_MAX': 0.12,                          # 这个值非常重要，当天买入的新股票如果低于这个价，会被当成是日内短炒止损
 
     'BUY_VOLUME': 200e3,                            # 下单多少股
@@ -379,13 +379,9 @@ def check_line():
             elif last2_kline.close > last2_kline.low and abs(last2_kline.close - last2_kline.open) / (last2_kline.close - last2_kline.low) < 1/3 and (last2_kline.high - last2_kline.close) / (last2_kline.close - last2_kline.low) < 1/3 and abs(last2_kline.high - last2_kline.low) >= kline_len*2:
                 check_result = 'long_pinba_bull'
             else:
-                check_result = 'wait_long_signal'
-        elif last_kline.low - line['lower'] < 5:
-            line = get_pre_inflection(klines, line)
-            if last_kline.close > line['pre_min_price'] and last_kline.close > line['long'] and delta_price > -kline_len*3:
-                check_result = 'wave_bull'
-            else:
-                check_result = 'wait_long_trend'
+                check_result = 'wait_long_wave'
+        else:
+            check_result = 'wait_long_trend'
     elif (check_position(last_kline.high, line['upper'], 1) or check_position(last2_kline.high, line['upper2'], 1) or check_position(last3_kline.high, line['upper3'], 1)) and last_kline.close - line['mid'] > profit:
         if delta_price < 0:
             if last_kline.close < last3_kline.low and last3_kline.close > last3_kline.open and (last2_kline.close - last3_kline.open) / (last3_kline.close - last3_kline.open) < 1/3 and abs(last3_kline.high - last3_kline.low) >= kline_len:
@@ -401,7 +397,9 @@ def check_line():
             if last_kline.close < line['pre_max_price'] and last_kline.close < line['long'] and delta_price < kline_len*3:
                 check_result = 'wave_bear'
             else:
-                check_result = 'wait_short_trend'
+                check_result = 'wait_short_wave'
+        else:
+            check_result = 'wait_short_trend'
     else:
         check_result = 'not_near_bands'
     # if 'bull' in check_result or 'bear' in check_result:

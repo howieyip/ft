@@ -15,7 +15,7 @@ log = Logger(conf['log_file']).get_logger()
 
 code = 'HK.MHImain'
 max_count = 16*60 + 1
-start = '2025-01-22'
+start = '2025-01-23'
 end = start
 # end = '2024-10-08'
 glb = {
@@ -177,7 +177,9 @@ def check_line():
             if last_kline.close > line['pre_min_price'] and last_kline.close > line['long'] and delta_price > -kline_len*3:
                 check_result = 'wave_bull'
             else:
-                check_result = 'wait_long_trend'
+                check_result = 'wait_long_wave'
+        else:
+            check_result = 'wait_long_trend'
     elif (check_position(last_kline.high, line['upper'], 1) or check_position(last2_kline.high, line['upper2'], 1) or check_position(last3_kline.high, line['upper3'], 1)) and last_kline.close - line['mid'] > profit:
         if delta_price < 0:
             if last_kline.close < last3_kline.low and last3_kline.close > last3_kline.open and (last2_kline.close - last3_kline.open) / (last3_kline.close - last3_kline.open) < 1/3 and abs(last3_kline.high - last3_kline.low) >= kline_len:
@@ -193,7 +195,9 @@ def check_line():
             if last_kline.close < line['pre_max_price'] and last_kline.close < line['long'] and delta_price < kline_len*3:
                 check_result = 'wave_bear'
             else:
-                check_result = 'wait_short_trend'
+                check_result = 'wait_short_wave'
+        else:
+            check_result = 'wait_short_trend'
     else:
         check_result = 'not_near_bands'
     return check_result
