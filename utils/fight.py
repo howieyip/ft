@@ -22,7 +22,7 @@ conf = {
     'acc_id': 0,
 
     'NEED_LOSS': True,
-    'LOSS_PRICE_DIFF': 0.002,                       # 卖一价距离买入后的最高价达到多少就止损
+    'LOSS_PRICE_DIFF': 0.003,                       # 卖一价距离买入后的最高价达到多少就止损
     'exclude_code_list': [],
     'AUTO_BUY': False,                              # 是否自动买入，若是则下面的配置有效
     'TRY_RECOVERY': False,                          # 是否买快回收的且价格比正常低很多的股票
@@ -41,7 +41,7 @@ conf = {
     'AUTO_ADJUST_SELL': False,                      # 是否自动调整挂的卖单的价格
 
     'ALLOW_ADD': True,                              # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
-    'ADD_PRICE_DIFF': 0.004,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
+    'ADD_PRICE_DIFF': 0.012,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
     'AUTO_PLACE_ORDER': True,                       # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
     'ORDER_LIST': [                                 # 下单多少股以上（大的写前面），每单挂多少股，例如下单800k，分3档200k 200k 400k挂单
         [800e3, 200e3, 200e3, 200e3, 200e3],
@@ -58,7 +58,8 @@ conf = {
         [200e3, 100e3, 100e3],
         [100e3, 50e3, 50e3]
     ],
-    'EVERY_ORDER_DIFF': 0.002,                      # 每个卖单间隔多少
+    'FIRST_ORDER_DIFF': 0.002,                      # 第一个卖单间隔多少
+    'EVERY_ORDER_DIFF': 0.003,                      # 每个卖单间隔多少
 
     'AUTO_MOVE_POSITION': False,                    # 是否自动强制移仓，是则下面的MOVE_POSITION_DICT生效
     'MOVE_POSITION_DICT': {
@@ -346,6 +347,10 @@ def check_position(kline, band, direction=0):
     if golden_line is False:
         return False
     for k in golden_line:
+        if direction == 0 and golden_line['100'] > golden_line['0'] and float(k) > 100:
+            return False
+        if direction == 1 and golden_line['100'] < golden_line['0'] and float(k) > 100:
+            return False
         if kline.low - distance < golden_line[k] < kline.high + distance:
             if direction == 0:
                 if kline.low - band < distance*1.5:
@@ -366,7 +371,7 @@ def check_line():
     last2_kline = klines.iloc[-2]
     last3_kline = klines.iloc[-3]
     delta_price = last_kline.close - last_kline.last_close
-    profit = 10
+    profit = 20
     kline_len = 10
     if line['upper'] - line['lower'] < 25:
         check_result = 'bands_narrow'
@@ -881,11 +886,8 @@ def _check_profit_loss(code, bid_price, ask_price, caller='', need_log=True):
             log.info('%s loss %s, buy_price: %s, ask_price: %s, ref_price: %s' % (caller, code, buy_price, ask_price, ref_price))
         loss_price = min(ask_price, last_filled_price) + conf['EVERY_ORDER_DIFF']
         force_loss = ask_price <= buy_price and ('牛' in order.stock_name and glb['cur_price'] < glb['line']['long'] or '熊' in order.stock_name and glb['cur_price'] > glb['line']['long'])
-        if force_loss or glb['almost_over']:
-            if ask_price >= last_filled_price:
-                loss_price = last_filled_price + 0.002
-            else:
-                loss_price = ask_price + 0.001
+        if (force_loss or glb['almost_over']) and ask_price < last_filled_price:
+            loss_price = ask_price + 0.001
         if loss_price < order.price:
             modify_order(order, loss_price)
     else:
@@ -962,7 +964,7 @@ def auto_place_order(code, volume, price, cancel=False):
         log.info('auto_place_order_flag True')
         return False
     glb['auto_place_order_flag'] = True
-    first_order_price = price + conf['EVERY_ORDER_DIFF']
+    first_order_price = price + conf['FIRST_ORDER_DIFF']
     order_list = conf['ORDER_LIST']
     if code in glb['submitted_sell_orders'] and len(glb['submitted_sell_orders'][code]) > 0:
         order_list = conf['ADD_ORDER_LIST']
@@ -1138,7 +1140,6 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
             if not conf['ALLOW_ADD']:
                 log.info('not allow add')
                 return False
-            volume /= 2
             total_qty = sum(data.qty)
             if total_qty + volume > conf['MAX_VOLUME']:
                 if conf['MAX_VOLUME'] - total_qty >= 100e3:

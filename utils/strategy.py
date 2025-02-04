@@ -91,23 +91,6 @@ def boll_bands(klines):
     return {'mid': mid, 'upper': upper, 'lower': lower}
 
 
-def get_pre_inflection(klines, line):
-    line['pre_min_price'] = 0
-    line['pre_max_price'] = 0
-    for i in range(-3, -len(klines) + 1, -1):
-        pre_min_price = klines.iloc[i].close
-        if klines.iloc[i - 2].close >= pre_min_price and klines.iloc[i - 1].close >= pre_min_price <= klines.iloc[i + 1].close and pre_min_price <= klines.iloc[i + 2].close:
-            line['pre_min_price'] = pre_min_price
-            line['pre_min_time'] = klines.iloc[i].time_key
-        pre_max_price = klines.iloc[i].close
-        if klines.iloc[i - 2].close <= pre_max_price and klines.iloc[i - 1].close <= pre_max_price >= klines.iloc[i + 1].close and pre_max_price >= klines.iloc[i + 2].close:
-            line['pre_max_price'] = pre_max_price
-            line['pre_max_time'] = klines.iloc[i].time_key
-        if line['pre_min_price'] > 0 and line['pre_max_price'] > 0:
-            break
-    return line
-
-
 def draw_line():
     klines = get_cur_kline(80)
     if klines is False or len(klines) < 20:
@@ -140,6 +123,10 @@ def check_position(kline, band, direction=0):
     if golden_line is False:
         return False
     for k in golden_line:
+        if direction == 0 and golden_line['100'] > golden_line['0'] and float(k) > 100:
+            return False
+        if direction == 1 and golden_line['100'] < golden_line['0'] and float(k) > 100:
+            return False
         if kline.low - distance < golden_line[k] < kline.high + distance:
             if direction == 0:
                 if kline.low - band < distance*1.5:
@@ -160,7 +147,7 @@ def check_line():
     last2_kline = klines.iloc[-2]
     last3_kline = klines.iloc[-3]
     delta_price = last_kline.close - last_kline.last_close
-    profit = 10
+    profit = 20
     kline_len = 10
     if line['upper'] - line['lower'] < 25:
         check_result = 'bands_narrow'
@@ -174,12 +161,6 @@ def check_line():
                 check_result = 'long_pinba_bull'
             else:
                 check_result = 'wait_long_signal'
-        elif last_kline.low - line['lower'] < 5:
-            line = get_pre_inflection(klines, line)
-            if last_kline.close > line['pre_min_price'] and last_kline.close > line['long'] and delta_price > -kline_len*3:
-                check_result = 'wave_bull'
-            else:
-                check_result = 'wait_long_wave'
         else:
             check_result = 'wait_long_trend'
     elif (check_position(last_kline, line['upper'], 1) or check_position(last2_kline, line['upper2'], 1) or check_position(last3_kline, line['upper3'], 1)) and last_kline.close - line['mid'] > profit:
@@ -192,12 +173,6 @@ def check_line():
                 check_result = 'short_pinba_bear'
             else:
                 check_result = 'wait_short_signal'
-        elif last_kline.high - line['upper'] > -5:
-            line = get_pre_inflection(klines, line)
-            if last_kline.close < line['pre_max_price'] and last_kline.close < line['long'] and delta_price < kline_len*3:
-                check_result = 'wave_bear'
-            else:
-                check_result = 'wait_short_wave'
         else:
             check_result = 'wait_short_trend'
     else:
