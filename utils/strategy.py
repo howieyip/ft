@@ -38,51 +38,6 @@ def get_cur_kline(num=80, begin=None):
     return klines
 
 
-def get_golden_line(line):
-    diff = round(line['100'] - line['0'], 2)
-    for i in range(0, 2):
-        line[str(i*100 + 23.6)] = round(line['0'] + diff * (0.236 + i), 2)
-        line[str(i*100 + 38.2)] = round(line['0'] + diff * (0.382 + i), 2)
-        line[str(i*100 + 50)] = round(line['0'] + diff * (0.50 + i), 2)
-        line[str(i*100 + 61.8)] = round(line['0'] + diff * (0.618 + i), 2)
-        line[str(i*100 + 76.4)] = round(line['0'] + diff * (0.764 + i), 2)
-        line[str(i*100 + 100)] = round(line['0'] + diff * (1 + i), 2)
-    return line
-
-
-def draw_golden_line():
-    klines = get_cur_kline(331, '09:15:00')
-    if klines is False or len(klines) < 20:
-        return False
-    max_data = klines.nlargest(1, 'close').iloc[0]
-    min_data = klines.nsmallest(1, 'close').iloc[0]
-    golden_line_diff = 80
-    golden_line = glb['golden_line']
-    golden_line['0'] = 0
-    golden_line['100'] = 0
-    if max_data.time_key > min_data.time_key:
-        golden_line['0'] = min_data.close
-        for i in range(min_data.name + 1, len(klines) - 1):
-            max_price = klines.iloc[i].close
-            if klines.iloc[i - 1].close < max_price > klines.iloc[i + 1].close and max_price - golden_line['0'] > golden_line_diff:
-                golden_line['100'] = max_price
-                golden_line = get_golden_line(golden_line)
-                if max_data.close <= golden_line['200']:
-                    break
-    else:
-        golden_line['0'] = max_data.close
-        for i in range(max_data.name + 1, len(klines) - 1):
-            min_price = klines.iloc[i].close
-            if klines.iloc[i - 1].close > min_price < klines.iloc[i + 1].close and golden_line['0'] - min_price > golden_line_diff:
-                golden_line['100'] = min_price
-                golden_line = get_golden_line(golden_line)
-                if min_data.close >= golden_line['200']:
-                    break
-    if golden_line['100'] == 0:
-        return False
-    return golden_line
-
-
 def boll_bands(klines):
     mid = round(klines['close'].mean(), 3)
     std = klines['close'].std(ddof=0)
@@ -117,6 +72,52 @@ def draw_line():
     return klines, line
 
 
+def get_golden_line(line):
+    diff = round(line['100'] - line['0'], 2)
+    for i in range(0, 2):
+        line[str(i*100 + 23.6)] = round(line['0'] + diff * (0.236 + i), 2)
+        line[str(i*100 + 38.2)] = round(line['0'] + diff * (0.382 + i), 2)
+        line[str(i*100 + 50)] = round(line['0'] + diff * (0.50 + i), 2)
+        line[str(i*100 + 61.8)] = round(line['0'] + diff * (0.618 + i), 2)
+        line[str(i*100 + 76.4)] = round(line['0'] + diff * (0.764 + i), 2)
+        line[str(i*100 + 100)] = round(line['0'] + diff * (1 + i), 2)
+    return line
+
+
+def draw_golden_line():
+    klines = get_cur_kline(331, '09:15:00')
+    if klines is False or len(klines) < 20:
+        return False
+    max_data = klines.nlargest(1, 'high').iloc[0]
+    min_data = klines.nsmallest(1, 'low').iloc[0]
+    golden_line_diff = 80
+    golden_line = glb['golden_line']
+    golden_line['0'] = 0
+    golden_line['100'] = 0
+    if max_data.time_key > min_data.time_key:
+        golden_line['0'] = min_data.low
+        for i in range(min_data.name + 1, len(klines) - 1):
+            max_price = klines.iloc[i].high
+            if klines.iloc[i - 1].high < max_price > klines.iloc[i + 1].high and max_price - golden_line['0'] > golden_line_diff:
+                golden_line['100'] = max_price
+                golden_line = get_golden_line(golden_line)
+                if max_data.close <= golden_line['200']:
+                    break
+    else:
+        golden_line['0'] = max_data.high
+        for i in range(max_data.name + 1, len(klines) - 1):
+            min_price = klines.iloc[i].low
+            if klines.iloc[i - 1].low > min_price < klines.iloc[i + 1].low and golden_line['0'] - min_price > golden_line_diff:
+                golden_line['100'] = min_price
+                golden_line = get_golden_line(golden_line)
+                if min_data.close >= golden_line['200']:
+                    break
+    if golden_line['100'] == 0:
+        return False
+    glb['line']['golden'] = [golden_line['0'], golden_line['100']]
+    return golden_line
+
+
 def check_position(kline, band, direction=0):
     distance = 10
     golden_line = draw_golden_line()
@@ -136,6 +137,23 @@ def check_position(kline, band, direction=0):
     return False
 
 
+def get_pre_inflection(klines, line):
+    line['pre_min_price'] = 0
+    line['pre_max_price'] = 0
+    for i in range(-3, -len(klines) + 1, -1):
+        pre_min_price = klines.iloc[i].close
+        if klines.iloc[i - 2].close >= pre_min_price and klines.iloc[i - 1].close >= pre_min_price <= klines.iloc[i + 1].close and pre_min_price <= klines.iloc[i + 2].close:
+            line['pre_min_price'] = pre_min_price
+            line['pre_min_time'] = klines.iloc[i].time_key
+        pre_max_price = klines.iloc[i].close
+        if klines.iloc[i - 2].close <= pre_max_price and klines.iloc[i - 1].close <= pre_max_price >= klines.iloc[i + 1].close and pre_max_price >= klines.iloc[i + 2].close:
+            line['pre_max_price'] = pre_max_price
+            line['pre_max_time'] = klines.iloc[i].time_key
+        if line['pre_min_price'] > 0 and line['pre_max_price'] > 0:
+            break
+    return line
+
+
 def check_line():
     klines, line = draw_line()
     if line is False:
@@ -152,7 +170,7 @@ def check_line():
     if line['upper'] - line['lower'] < 25:
         check_result = 'bands_narrow'
     elif (check_position(last_kline, line['lower']) or check_position(last2_kline, line['lower2']) or check_position(last3_kline, line['lower3'])) and line['mid'] - last_kline.close > profit:
-        if delta_price > 0:
+        if delta_price > 0 or delta_price == 0 and last2_kline.close - last2_kline.last_close >= kline_len*2:
             if last_kline.close >= last3_kline.high and last3_kline.close < last3_kline.open and (last3_kline.open - last2_kline.close) / (last3_kline.high - last3_kline.low) < 1/3 and last3_kline.high - last3_kline.low >= kline_len:
                 check_result = 'long_swallow1_bull'
             elif last_kline.close >= last3_kline.open and last_kline.high >= last3_kline.high and last2_kline.close < last2_kline.open and last3_kline.close < last3_kline.open and last2_kline.high - last2_kline.low + last3_kline.high - last3_kline.low >= kline_len*2:
@@ -161,10 +179,16 @@ def check_line():
                 check_result = 'long_pinba_bull'
             else:
                 check_result = 'wait_long_signal'
+        elif last_kline.low - line['lower'] < 5:
+            line = get_pre_inflection(klines, line)
+            if last_kline.close > line['pre_min_price'] and last_kline.close > line['long'] and delta_price > -kline_len*3:
+                check_result = 'wave_bull'
+            else:
+                check_result = 'wait_long_wave'
         else:
             check_result = 'wait_long_trend'
     elif (check_position(last_kline, line['upper'], 1) or check_position(last2_kline, line['upper2'], 1) or check_position(last3_kline, line['upper3'], 1)) and last_kline.close - line['mid'] > profit:
-        if delta_price < 0:
+        if delta_price < 0 or delta_price == 0 and last2_kline.close - last2_kline.last_close <= -kline_len*2:
             if last_kline.close <= last3_kline.low and last3_kline.close > last3_kline.open and (last2_kline.close - last3_kline.open) / (last3_kline.high - last3_kline.low) < 1/3 and last3_kline.high - last3_kline.low >= kline_len:
                 check_result = 'short_swallow1_bear'
             elif last_kline.close <= last3_kline.open and last_kline.low <= last3_kline.low and last2_kline.close > last2_kline.open and last3_kline.close > last3_kline.open and last2_kline.high - last2_kline.low + last3_kline.high - last3_kline.low >= kline_len*2:
@@ -173,6 +197,12 @@ def check_line():
                 check_result = 'short_pinba_bear'
             else:
                 check_result = 'wait_short_signal'
+        elif last_kline.high - line['upper'] > -5:
+            line = get_pre_inflection(klines, line)
+            if last_kline.close < line['pre_max_price'] and last_kline.close < line['long'] and delta_price < kline_len*3:
+                check_result = 'wave_bear'
+            else:
+                check_result = 'wait_short_wave'
         else:
             check_result = 'wait_short_trend'
     else:
@@ -193,7 +223,7 @@ def cal(klines):
         check_result = check_line()
         if 'bull' in check_result or 'bear' in check_result:
             log.info('draw_line: %s' % glb['line'])
-            log.info('golden_line: %s' % glb['golden_line'])
+            # log.info('golden_line: %s' % glb['golden_line'])
             log.info('*************** %s %s ***************' % (row.time_key, check_result))
 
 
