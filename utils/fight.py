@@ -344,23 +344,6 @@ def check_position(kline, band, direction=0):
     return False
 
 
-def get_pre_inflection(klines, line):
-    line['pre_min_price'] = 0
-    line['pre_max_price'] = 0
-    for i in range(-3, -len(klines) + 1, -1):
-        pre_min_price = klines.iloc[i].close
-        if klines.iloc[i - 2].close >= pre_min_price and klines.iloc[i - 1].close >= pre_min_price <= klines.iloc[i + 1].close and pre_min_price <= klines.iloc[i + 2].close:
-            line['pre_min_price'] = pre_min_price
-            line['pre_min_time'] = klines.iloc[i].time_key
-        pre_max_price = klines.iloc[i].close
-        if klines.iloc[i - 2].close <= pre_max_price and klines.iloc[i - 1].close <= pre_max_price >= klines.iloc[i + 1].close and pre_max_price >= klines.iloc[i + 2].close:
-            line['pre_max_price'] = pre_max_price
-            line['pre_max_time'] = klines.iloc[i].time_key
-        if line['pre_min_price'] > 0 and line['pre_max_price'] > 0:
-            break
-    return line
-
-
 def check_line():
     klines, line = draw_line()
     if line is False:
@@ -386,12 +369,6 @@ def check_line():
                 check_result = 'long_pinba_bull'
             else:
                 check_result = 'wait_long_signal'
-        elif last_kline.low - line['lower'] < 5:
-            line = get_pre_inflection(klines, line)
-            if last_kline.close > line['pre_min_price'] and last_kline.close > line['long'] and delta_price > -kline_len*3:
-                check_result = 'wave_bull'
-            else:
-                check_result = 'wait_long_wave'
         else:
             check_result = 'wait_long_trend'
     elif (check_position(last_kline, line['upper'], 1) or check_position(last2_kline, line['upper2'], 1) or check_position(last3_kline, line['upper3'], 1)) and last_kline.close - line['mid'] > profit:
@@ -404,12 +381,6 @@ def check_line():
                 check_result = 'short_pinba_bear'
             else:
                 check_result = 'wait_short_signal'
-        elif last_kline.high - line['upper'] > -5:
-            line = get_pre_inflection(klines, line)
-            if last_kline.close < line['pre_max_price'] and last_kline.close < line['long'] and delta_price < kline_len*3:
-                check_result = 'wave_bear'
-            else:
-                check_result = 'wait_short_wave'
         else:
             check_result = 'wait_short_trend'
     else:
