@@ -124,9 +124,9 @@ def check_position(kline, band, direction=0):
     if golden_line is False:
         return False
     for k in golden_line:
-        if direction == 0 and golden_line['100'] > golden_line['0'] and float(k) > 100:
+        if direction == 0 and golden_line['100'] > golden_line['0'] and float(k) >= 100:
             return False
-        if direction == 1 and golden_line['100'] < golden_line['0'] and float(k) > 100:
+        if direction == 1 and golden_line['100'] < golden_line['0'] and float(k) >= 100:
             return False
         if kline.low - distance < golden_line[k] < kline.high + distance:
             if direction == 0:
