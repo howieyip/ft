@@ -41,7 +41,7 @@ conf = {
     'AUTO_ADJUST_SELL': False,                      # 是否自动调整挂的卖单的价格
 
     'ALLOW_ADD': True,                              # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
-    # 'ADD_PRICE_DIFF': 0.012,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
+    'ADD_PRICE_DIFF': 0.012,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
     'AUTO_PLACE_ORDER': True,                       # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
     'ORDER_LIST': [                                 # 下单多少股以上（大的写前面），每单挂多少股，例如下单800k，分3档200k 200k 400k挂单
         [800e3, 200e3, 200e3, 200e3, 200e3],
@@ -1102,11 +1102,11 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
             if not ref_price:
                 log.info('to_buy code: %s, no filled_all_last_order, \n%s' % (data0.code, glb['filled_all_last_order']))
                 ref_price = data0.cost_price
-            # add_price_diff = round(ref_price - data0.nominal_price, 3)
-            # if add_price_diff < conf['ADD_PRICE_DIFF']:
-            #     log.info('code: %s, nominal_price: %s, ref_price: %s, diff: %s < %s, not allow add' % (data0.code, data0.nominal_price, ref_price, add_price_diff, conf['ADD_PRICE_DIFF']))
-            #     return False
-            # log.info('code: %s, nominal_price: %s, ref_price: %s, diff: %s >= %s, allow add' % (data0.code, data0.nominal_price, ref_price, add_price_diff, conf['ADD_PRICE_DIFF']))
+            add_price_diff = round(ref_price - data0.nominal_price, 3)
+            if total_qty >= conf['BUY_VOLUME'] and add_price_diff < conf['ADD_PRICE_DIFF']:
+                log.info('code: %s, nominal_price: %s, ref_price: %s, diff: %s < %s, not allow add' % (data0.code, data0.nominal_price, ref_price, add_price_diff, conf['ADD_PRICE_DIFF']))
+                return False
+            log.info('code: %s, nominal_price: %s, ref_price: %s, diff: %s >= %s, allow add' % (data0.code, data0.nominal_price, ref_price, add_price_diff, conf['ADD_PRICE_DIFF']))
 
     if code == 'auto':
         data = _get_stock_code(stock_type=stock_type, cur_price_min=cur_price_min, cur_price_max=cur_price_max)
@@ -1344,7 +1344,7 @@ pre_buy = throttle(_pre_buy, 1, need_log=False)
 check_profit_loss = throttle(_check_profit_loss, 2, need_log=False)
 profit_order = throttle(_profit_order, 2)
 auto_adjust_buy = throttle(_auto_adjust_buy, 2, need_log=False)
-auto_adjust_sell = throttle(_auto_adjust_sell, 2)
+auto_adjust_sell = throttle(_auto_adjust_sell, 2, need_log=False)
 # 每 30 秒内最多请求 10 次查询持仓接口
 position_list_query = throttle(_position_list_query, 3, need_log=False)
 # 每 30 秒内最多请求 15 次下单接口，且连续两次请求的间隔不可小于 0.02 秒
