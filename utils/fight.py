@@ -21,24 +21,21 @@ conf = {
     'PORT': 11111,
     'acc_id': 0,
 
-    'NEED_LOSS': True,
-    'LOSS_PRICE_DIFF': 0.003,                       # 卖一价距离买入后的最高价达到多少就止损
     'exclude_code_list': [],
     'AUTO_BUY': False,                              # 是否自动买入，若是则下面的配置有效
     'TRY_RECOVERY': False,                          # 是否买快回收的且价格比正常低很多的股票
     'TRY_FOLLOW_RECOVERY': False,                   # 是否顺势买快回收的反方向的股票
-    'BIG-ONE-WAY': False,                           # 是否采用大单边策略
-    'FOLLOW_TREND': False,                          # 买入策略是否为顺势买入，逆势则为False
     'BULL_CODE': '',                                # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
+    'LONG_BULL_CODE': '',
     'BEAR_CODE': '',                                # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
-    'CUR_PRICE_MIN': 0.05,
-    'CUR_PRICE_MAX': 0.12,                          # 这个值非常重要，当天买入的新股票如果低于这个价，会被当成是日内短炒止损
+    'CUR_PRICE_MIN': 0.1,
+    'CUR_PRICE_MAX': 0.2,                          # 这个值非常重要，当天买入的新股票如果低于这个价，会被当成是日内短炒
 
-    'BUY_VOLUME': 200e3,                            # 下单多少股
-    'MAX_VOLUME': 400e3,                            # 最大持仓股数，若超过则不会再买入
+    'BUY_VOLUME': 100e3,                            # 下单多少股
+    'MAX_VOLUME': 1000e3,                            # 最大持仓股数，若超过则不会再买入
 
-    'AUTO_ADJUST_BUY': False,                       # 是否自动调整挂的买单的价格
-    'AUTO_ADJUST_SELL': False,                      # 是否自动调整挂的卖单的价格
+    'AUTO_ADJUST_BUY': True,                        # 是否自动调整挂的买单的价格
+    'AUTO_ADJUST_SELL': True,                       # 是否自动调整挂的卖单的价格
 
     'ALLOW_ADD': True,                              # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
     'ADD_PRICE_DIFF': 0.012,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
@@ -58,18 +55,20 @@ conf = {
         [200e3, 100e3, 100e3],
         [100e3, 50e3, 50e3]
     ],
-    'FIRST_ORDER_DIFF': 0.002,                      # 第一个卖单间隔多少
-    'EVERY_ORDER_DIFF': 0.003,                      # 每个卖单间隔多少
+    'FIRST_ORDER_DIFF': 0.006,                      # 第一个卖单间隔多少
+    'EVERY_ORDER_DIFF': 0.006,                      # 每个卖单间隔多少
+    'NEED_LOSS': True,
+    'LOSS_PRICE_DIFF': 0.006,                       # 卖一价距离买入后的最高价达到多少就止损
+    'sell_all_to_over': False,                      # 尾盘清仓，只对日内短炒的生效，False时只有盈利时才清仓
 
     'AUTO_MOVE_POSITION': False,                    # 是否自动强制移仓，是则下面的MOVE_POSITION_DICT生效
     'MOVE_POSITION_DICT': {
         'from_code': 'HK.',                         # 指定code移仓目前是一次性应急用
         'to_code': 'auto',
         'volume': 400e3,
-        'cur_price_min': 0.15,
-        'cur_price_max': 0.2
+        'cur_price_min': 0.23,
+        'cur_price_max': 0.25
     },
-    'sell_all_to_over': True                       # 尾盘清仓，只对自动购买的生效
 }
 
 
@@ -332,9 +331,9 @@ def check_position(kline, band, direction=0):
     if golden_line is False:
         return False
     for k in golden_line:
-        if direction == 0 and golden_line['100'] > golden_line['0'] and float(k) >= 100:
+        if direction == 0 and golden_line['100'] > golden_line['0'] and float(k) >= 150:
             return False
-        if direction == 1 and golden_line['100'] < golden_line['0'] and float(k) >= 100:
+        if direction == 1 and golden_line['100'] < golden_line['0'] and float(k) >= 150:
             return False
         if kline.low - distance < golden_line[k] < kline.high + distance:
             if direction == 0:
@@ -345,7 +344,7 @@ def check_position(kline, band, direction=0):
     return False
 
 
-def check_line():
+def check_line(buy_all=False):
     klines, line = draw_line()
     if line is False:
         return ''
@@ -370,9 +369,14 @@ def check_line():
                 check_result = 'long_pinba_bull'
             else:
                 check_result = 'wait_long_signal'
+        elif last_kline.low - line['lower'] < 5:
+            if last_kline.close > line['long'] and delta_price > -kline_len*3:
+                check_result = 'wave_bull'
+            else:
+                check_result = 'wait_long_wave'
         else:
             check_result = 'wait_long_trend'
-    elif (check_position(last_kline, line['upper'], 1) or check_position(last2_kline, line['upper2'], 1) or check_position(last3_kline, line['upper3'], 1)) and last_kline.close - line['mid'] > profit:
+    elif buy_all and ((check_position(last_kline, line['upper'], 1) or check_position(last2_kline, line['upper2'], 1) or check_position(last3_kline, line['upper3'], 1)) and last_kline.close - line['mid'] > profit):
         if delta_price < 0 or delta_price == 0 and last2_kline.close - last2_kline.last_close <= -kline_len*2:
             if last_kline.close <= last3_kline.low and last3_kline.close > last3_kline.open and (last2_kline.close - last3_kline.open) / (last3_kline.high - last3_kline.low) < 1/3 and last3_kline.high - last3_kline.low >= kline_len:
                 check_result = 'short_swallow1_bear'
@@ -382,6 +386,11 @@ def check_line():
                 check_result = 'short_pinba_bear'
             else:
                 check_result = 'wait_short_signal'
+        elif last_kline.high - line['upper'] > -5:
+            if last_kline.close < line['long'] and delta_price < kline_len*3:
+                check_result = 'wave_bear'
+            else:
+                check_result = 'wait_short_wave'
         else:
             check_result = 'wait_short_trend'
     else:
@@ -519,7 +528,7 @@ def _order_list_query(code='', status_filter_list=[ft.OrderStatus.SUBMITTED, ft.
             log.info('filled_all_last_order:\n%s' % last_order)
         else:
             log.info('filled_all_data is empty')
-    data = data[~data.code.isin(glb['past_hold_code_list']) & (data.price < conf['CUR_PRICE_MAX'])]
+    data = data[~data.code.isin(glb['past_hold_code_list']) & ~data.stock_name.str.contains('瑞银')]
     data = data[(data.order_status == ft.OrderStatus.SUBMITTED) | (data.order_status == ft.OrderStatus.FILLED_PART)]
     for i in range(0, len(data)):
         item = data.iloc[i]
@@ -765,15 +774,14 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
         log.info('position_list_query error, ret: %s, data:\n%s' % (ret, data))
         return False
     reset_hold()
-    hsi_data = data[data.stock_name.str.contains('恒指')]
+    hsi_data = data[data.stock_name.str.contains('恒指') & ~data.stock_name.str.contains('瑞银')]
 
     # 自动移仓
     if auto_move_position(hsi_data):
         return False
 
     # today_buy_hold_data要符合5个条件
-    today_buy_data = hsi_data[~hsi_data.code.isin(conf['exclude_code_list']) & (hsi_data.nominal_price < conf['CUR_PRICE_MAX']) & (hsi_data.today_buy_qty > 0)]
-    today_buy_data = today_buy_data[today_buy_data.qty == today_buy_data.today_buy_qty - today_buy_data.today_sell_qty]
+    today_buy_data = hsi_data[(hsi_data.code == conf['LONG_BULL_CODE']) | ~hsi_data.code.isin(conf['exclude_code_list']) & (hsi_data.today_buy_qty > 0) & (hsi_data.qty == hsi_data.today_buy_qty - hsi_data.today_sell_qty)]
     sum_today_pl_val(today_buy_data)
 
     position_list = []
@@ -861,21 +869,18 @@ def _check_profit_loss(code, bid_price, ask_price, caller='', need_log=True):
     if code not in glb['loss']:
         glb['loss'][code] = False
 
-    ref_price = glb['max_nominal_price'][code]
+    max_price = glb['max_nominal_price'][code]
     if need_log and not glb['loss'][code]:
-        log.info('%s check_profit_loss %s, ask_price: %s, ref_price: %s' % (caller, code, ask_price, ref_price))
+        log.info('%s check_profit_loss %s, ask_price: %s, max_price: %s' % (caller, code, ask_price, max_price))
 
-    ref_price_diff = round(ref_price - ask_price, 3)
-    if ref_price_diff >= conf['LOSS_PRICE_DIFF'] or glb['almost_over']:
+    max_price_diff = round(max_price - ask_price, 3)
+    if max_price_diff >= conf['LOSS_PRICE_DIFF'] or glb['almost_over']:
         glb['loss'][code] = True
         buy_price = find_buy_price(order)
         if need_log:
-            log.info('%s loss %s, buy_price: %s, ask_price: %s, ref_price: %s' % (caller, code, buy_price, ask_price, ref_price))
+            log.info('%s loss %s, buy_price: %s, ask_price: %s, max_price: %s' % (caller, code, buy_price, ask_price, max_price))
         loss_price = min(ask_price, last_filled_price) + conf['EVERY_ORDER_DIFF']
-        force_loss = ask_price <= buy_price and ('牛' in order.stock_name and glb['cur_price'] < glb['line']['long'] or '熊' in order.stock_name and glb['cur_price'] > glb['line']['long'])
-        if (force_loss or glb['almost_over']) and ask_price < last_filled_price:
-            loss_price = ask_price + 0.001
-        if loss_price < order.price:
+        if buy_price <= loss_price < order.price:
             modify_order(order, loss_price)
     else:
         glb['loss'][code] = False
@@ -906,7 +911,7 @@ class OrderBook(ft.OrderBookHandlerBase):
 
 
 def auto_place_order(code, volume, price, cancel=False):
-    if not conf['AUTO_PLACE_ORDER'] or glb['to_over'] or code in glb['past_hold_code_list']:
+    if not conf['AUTO_PLACE_ORDER'] or glb['to_over']:
         return False
     if glb['auto_place_order_flag']:
         log.info('auto_place_order_flag True')
@@ -964,7 +969,7 @@ class TradeOrder(ft.TradeOrderHandlerBase):
             log.info('TradeOrder not TRADE_ENV')
             return ret, data
         log.info('TradeOrder trd_side: %s, order_status: %s' % (order.trd_side, order.order_status))
-        if order.code in glb['past_hold_code_list'] or order.price > conf['CUR_PRICE_MAX']:
+        if order.code in glb['past_hold_code_list'] or '瑞银' in order.stock_name:
             return ret, data
         if order.order_status == ft.OrderStatus.FILLED_ALL or order.order_status == ft.OrderStatus.CANCELLED_PART:
             glb['filled_all_last_order'][order.code] = {'updated_time': order.updated_time, 'price': order.price, 'trd_side': order.trd_side}
@@ -1014,7 +1019,7 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
         req.type_list = [ft.WrtType.BULL]  # Qot_Common.WarrantType, 窝轮类型过滤列表 WrtType
     elif stock_type == 'bear':
         req.type_list = [ft.WrtType.BEAR]  # Qot_Common.WarrantType, 窝轮类型过滤列表 WrtType
-    # req.issuer_list = [ft.Issuer.JP]  # Qot_Common.Issuer, 发行人过滤列表
+    req.issuer_list = [ft.Issuer.JP, ft.Issuer.UB, ft.Issuer.BP, ft.Issuer.CT, ft.Issuer.HS, ft.Issuer.MS, ft.Issuer.GJ],  # Qot_Common.Issuer, 发行人过滤列表
     req.status = ft.WarrantStatus.NORMAL  # Qot_Common.WarrantStatus, 窝轮状态
     req.cur_price_min = cur_price_min or conf['CUR_PRICE_MIN']  # 最新价过滤起点
     req.cur_price_max = cur_price_max or conf['CUR_PRICE_MAX']  # 最新价过滤终点
@@ -1064,7 +1069,7 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
     return cache['data']
 
 
-def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cur_price_max=None):
+def to_buy(stock_type, code='', volume=None, type='Bid', force=False, cur_price_min=None, cur_price_max=None):
     log.info('to buy %s' % stock_type)
     if volume is None:
         volume = conf['BUY_VOLUME']
@@ -1098,15 +1103,15 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
                     return False
             data0 = data.iloc[0]
             code = data0.code
-            ref_price = glb['filled_all_last_order'].get(data0.code, {}).get('price')
-            if not ref_price:
-                log.info('to_buy code: %s, no filled_all_last_order, \n%s' % (data0.code, glb['filled_all_last_order']))
-                ref_price = data0.cost_price
-            add_price_diff = round(ref_price - data0.nominal_price, 3)
+            last_price = glb['filled_all_last_order'].get(code, {}).get('price')
+            if not last_price:
+                log.info('to_buy code: %s, no filled_all_last_order, \n%s' % (code, glb['filled_all_last_order']))
+                last_price = data0.cost_price
+            add_price_diff = round(last_price - data0.nominal_price, 3)
             if total_qty >= conf['BUY_VOLUME'] and add_price_diff < conf['ADD_PRICE_DIFF']:
-                log.info('code: %s, nominal_price: %s, ref_price: %s, diff: %s < %s, not allow add' % (data0.code, data0.nominal_price, ref_price, add_price_diff, conf['ADD_PRICE_DIFF']))
+                log.info('code: %s, nominal_price: %s, last_price: %s, diff: %s < %s, not allow add' % (code, data0.nominal_price, last_price, add_price_diff, conf['ADD_PRICE_DIFF']))
                 return False
-            log.info('code: %s, nominal_price: %s, ref_price: %s, diff: %s >= %s, allow add' % (data0.code, data0.nominal_price, ref_price, add_price_diff, conf['ADD_PRICE_DIFF']))
+            log.info('code: %s, nominal_price: %s, last_price: %s, diff: %s >= %s, allow add' % (code, data0.nominal_price, last_price, add_price_diff, conf['ADD_PRICE_DIFF']))
 
     if code == 'auto':
         data = _get_stock_code(stock_type=stock_type, cur_price_min=cur_price_min, cur_price_max=cur_price_max)
@@ -1119,10 +1124,7 @@ def to_buy(stock_type, code='', volume=None, force=False, cur_price_min=None, cu
             stock_type = 'bear'
 
     set_submitted_buy(code, CONST[stock_type])
-    if force:
-        data = smart_buy(code, volume, type='Ask')
-    else:
-        data = smart_buy(code, volume)
+    data = smart_buy(code, volume, type='Ask' if force else type)
     if data is False or data is None:
         reset_submitted_buy(code, CONST[stock_type])
     else:
@@ -1209,8 +1211,8 @@ def _auto_adjust_buy(delta_price):
     order_book = glb['order_book'][order.code]
     rise_price = order_book['Bid'][0][0]
     fall_price = order_book['Bid'][1][0]
-    # if order.code in glb['today_hold_code_list']:
-    #     rise_price = round(min(rise_price, find_buy_price(order) - conf['ADD_PRICE_DIFF']), 3)
+    if order.code in glb['today_hold_code_list']:
+        rise_price = round(min(rise_price, find_buy_price(order) - conf['ADD_PRICE_DIFF']), 3)
     fall_condition = False
     if '牛' in order.stock_name:
         fall_condition = delta_price <= -5
@@ -1274,7 +1276,7 @@ class Ticker(ft.TickerHandlerBase):
                     if not glb['to_over']:
                         glb['to_over'] = True
                         log.info('[%s]--------------------to_over--------------------' % t)
-                        if not glb['over'] and conf['sell_all_to_over']:
+                        if not glb['over'] and (conf['sell_all_to_over'] or (glb['today_pl_val_bull'] + glb['today_pl_val_bear']) > 0):
                             if conf['BULL_CODE'] != '' and conf['BEAR_CODE'] != '':
                                 sell_all()
                             elif conf['BULL_CODE'] != '':

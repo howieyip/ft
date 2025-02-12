@@ -17,7 +17,7 @@ log = Logger(conf['log_file']).get_logger()
 code = 'HK.MHImain'
 max_count = 16*60 + 1
 start = datetime.date.today().strftime('%Y-%m-%d')
-# start = '2025-02-03'
+# start = '2025-02-10'
 end = start
 # end = '2024-10-08'
 glb = {
@@ -124,9 +124,9 @@ def check_position(kline, band, direction=0):
     if golden_line is False:
         return False
     for k in golden_line:
-        if direction == 0 and golden_line['100'] > golden_line['0'] and float(k) >= 100:
+        if direction == 0 and golden_line['100'] > golden_line['0'] and float(k) >= 150:
             return False
-        if direction == 1 and golden_line['100'] < golden_line['0'] and float(k) >= 100:
+        if direction == 1 and golden_line['100'] < golden_line['0'] and float(k) >= 150:
             return False
         if kline.low - distance < golden_line[k] < kline.high + distance:
             if direction == 0:
@@ -154,7 +154,7 @@ def get_pre_inflection(klines, line):
     return line
 
 
-def check_line():
+def check_line(buy_all=False):
     klines, line = draw_line()
     if line is False:
         return ''
@@ -180,14 +180,13 @@ def check_line():
             else:
                 check_result = 'wait_long_signal'
         elif last_kline.low - line['lower'] < 5:
-            line = get_pre_inflection(klines, line)
-            if last_kline.close > line['pre_min_price'] and last_kline.close > line['long'] and delta_price > -kline_len*3:
+            if last_kline.close > line['long'] and delta_price > -kline_len*3:
                 check_result = 'wave_bull'
             else:
                 check_result = 'wait_long_wave'
         else:
             check_result = 'wait_long_trend'
-    elif (check_position(last_kline, line['upper'], 1) or check_position(last2_kline, line['upper2'], 1) or check_position(last3_kline, line['upper3'], 1)) and last_kline.close - line['mid'] > profit:
+    elif buy_all and ((check_position(last_kline, line['upper'], 1) or check_position(last2_kline, line['upper2'], 1) or check_position(last3_kline, line['upper3'], 1)) and last_kline.close - line['mid'] > profit):
         if delta_price < 0 or delta_price == 0 and last2_kline.close - last2_kline.last_close <= -kline_len*2:
             if last_kline.close <= last3_kline.low and last3_kline.close > last3_kline.open and (last2_kline.close - last3_kline.open) / (last3_kline.high - last3_kline.low) < 1/3 and last3_kline.high - last3_kline.low >= kline_len:
                 check_result = 'short_swallow1_bear'
@@ -198,8 +197,7 @@ def check_line():
             else:
                 check_result = 'wait_short_signal'
         elif last_kline.high - line['upper'] > -5:
-            line = get_pre_inflection(klines, line)
-            if last_kline.close < line['pre_max_price'] and last_kline.close < line['long'] and delta_price < kline_len*3:
+            if last_kline.close < line['long'] and delta_price < kline_len*3:
                 check_result = 'wave_bear'
             else:
                 check_result = 'wait_short_wave'
@@ -215,7 +213,7 @@ def cal(klines):
         log.info('empty')
         return False
     delta = round(klines.iloc[-1]['close'] - klines.iloc[0]['close'], 3)
-    log.info('*************** %s *************** %s' % (klines.iloc[0]['time_key'], delta))
+    log.info('-------------------- %s -------------------- %s' % (klines.iloc[0]['time_key'], delta))
     for index, row in klines.iterrows():
         glb['klines'] = klines[0:index+1]
         # if row.time_key == '2025-02-03 10:57:00':
