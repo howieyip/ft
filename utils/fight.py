@@ -38,7 +38,7 @@ conf = {
     'AUTO_ADJUST_SELL': True,                       # 是否自动调整挂的卖单的价格
 
     'ALLOW_ADD': True,                              # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
-    'ADD_PRICE_DIFF': 0.012,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
+    'ADD_PRICE_DIFF': 0.004,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
     'AUTO_PLACE_ORDER': True,                       # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
     'ORDER_LIST': [                                 # 下单多少股以上（大的写前面），每单挂多少股，例如下单800k，分3档200k 200k 400k挂单
         [800e3, 200e3, 200e3, 200e3, 200e3],
@@ -90,10 +90,7 @@ glb = {
     'recovery_bull': None,
     'recovery_bear': None,
     'rt_data': None,
-    'line': {
-        'pre_min_price': 99999,
-        'pre_max_price': 0,
-    },
+    'line': {},
     'golden_line': {},
     'loss': {},
     'today_pl_val_bull': 0,
@@ -369,11 +366,6 @@ def check_line(buy_all=False):
                 check_result = 'long_pinba_bull'
             else:
                 check_result = 'wait_long_signal'
-        elif last_kline.low - line['lower'] < 5:
-            if last_kline.close > line['long'] and delta_price > -kline_len*3:
-                check_result = 'wave_bull'
-            else:
-                check_result = 'wait_long_wave'
         else:
             check_result = 'wait_long_trend'
     elif buy_all and ((check_position(last_kline, line['upper'], 1) or check_position(last2_kline, line['upper2'], 1) or check_position(last3_kline, line['upper3'], 1)) and last_kline.close - line['mid'] > profit):
@@ -386,11 +378,6 @@ def check_line(buy_all=False):
                 check_result = 'short_pinba_bear'
             else:
                 check_result = 'wait_short_signal'
-        elif last_kline.high - line['upper'] > -5:
-            if last_kline.close < line['long'] and delta_price < kline_len*3:
-                check_result = 'wave_bear'
-            else:
-                check_result = 'wait_short_wave'
         else:
             check_result = 'wait_short_trend'
     else:
@@ -880,7 +867,10 @@ def _check_profit_loss(code, bid_price, ask_price, caller='', need_log=True):
         if need_log:
             log.info('%s loss %s, buy_price: %s, ask_price: %s, max_price: %s' % (caller, code, buy_price, ask_price, max_price))
         loss_price = min(ask_price, last_filled_price) + conf['EVERY_ORDER_DIFF']
-        if buy_price <= loss_price < order.price:
+        force_loss = ask_price <= buy_price and ('牛' in order.stock_name and glb['cur_price'] < glb['line']['long'] or '熊' in order.stock_name and glb['cur_price'] > glb['line']['long'])
+        if (force_loss or glb['almost_over']) and ask_price < last_filled_price:
+            loss_price = ask_price + 0.001
+        if loss_price < order.price:
             modify_order(order, loss_price)
     else:
         glb['loss'][code] = False
@@ -1014,12 +1004,11 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
     cache['data'] = None
 
     req = ft.WarrantRequest()
-    req.stock_owner = CONST['HSI_CODE']  # 所属正股
     if stock_type == 'bull':
         req.type_list = [ft.WrtType.BULL]  # Qot_Common.WarrantType, 窝轮类型过滤列表 WrtType
     elif stock_type == 'bear':
         req.type_list = [ft.WrtType.BEAR]  # Qot_Common.WarrantType, 窝轮类型过滤列表 WrtType
-    req.issuer_list = [ft.Issuer.JP, ft.Issuer.UB, ft.Issuer.BP, ft.Issuer.CT, ft.Issuer.HS, ft.Issuer.MS, ft.Issuer.GJ],  # Qot_Common.Issuer, 发行人过滤列表
+    req.issuer_list = [ft.Issuer.JP, ft.Issuer.UB, ft.Issuer.BP, ft.Issuer.CT, ft.Issuer.HS, ft.Issuer.MS, ft.Issuer.GJ]  # Qot_Common.Issuer, 发行人过滤列表
     req.status = ft.WarrantStatus.NORMAL  # Qot_Common.WarrantStatus, 窝轮状态
     req.cur_price_min = cur_price_min or conf['CUR_PRICE_MIN']  # 最新价过滤起点
     req.cur_price_max = cur_price_max or conf['CUR_PRICE_MAX']  # 最新价过滤终点
@@ -1027,11 +1016,11 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
     req.conversion_max = 10000  # 换股比率过滤终点
     req.vol_min = 1000  # 成交量的过滤下限，单位K
     req.sort_field = sort_field  # 根据哪个字段排序
-    req.ascend = ascend  # 升序Ture, 降序False
+    req.ascend = ascend  # 升序True, 降序False
     req.begin = 0  # 数据起始点
     req.num = 40 if cur_price_min == 0.01 else 3  # 返回数据个数，最大200
 
-    ret, data = quote_ctx.get_warrant(req=req)
+    ret, data = quote_ctx.get_warrant(CONST['HSI_CODE'], req=req)
     # log.info('get_warrant, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
         log.info('get_warrant error')
@@ -1211,8 +1200,8 @@ def _auto_adjust_buy(delta_price):
     order_book = glb['order_book'][order.code]
     rise_price = order_book['Bid'][0][0]
     fall_price = order_book['Bid'][1][0]
-    if order.code in glb['today_hold_code_list']:
-        rise_price = round(min(rise_price, find_buy_price(order) - conf['ADD_PRICE_DIFF']), 3)
+    # if order.code in glb['today_hold_code_list']:
+    #     rise_price = round(min(rise_price, find_buy_price(order) - conf['ADD_PRICE_DIFF']), 3)
     fall_condition = False
     if '牛' in order.stock_name:
         fall_condition = delta_price <= -5
