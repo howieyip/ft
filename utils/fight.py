@@ -1172,7 +1172,7 @@ def _auto_adjust_sell(delta_price):
     order = glb['submitted_sell_last_bull']
     if order is None:
         order = glb['submitted_sell_last_bear']
-    if order is None or order.code not in glb['order_book'] or order.code not in glb['auto_buy_list']:
+    if order is None or order.code not in glb['order_book'] or order.code not in glb['auto_buy_list'] or len(glb['submitted_sell_orders'][order.code]) > 1:
         return False
     order_book = glb['order_book'][order.code]
     rise_price = order_book['Ask'][1][0]
