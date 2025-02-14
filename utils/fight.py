@@ -27,6 +27,7 @@ conf = {
     'TRY_FOLLOW_RECOVERY': False,                   # 是否顺势买快回收的反方向的股票
     'BULL_CODE': '',                                # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
     'LONG_BULL_CODE': '',
+    'LONG_BULL_ISSUER': '法兴',
     'BEAR_CODE': '',                                # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
     'CUR_PRICE_MIN': 0.1,
     'CUR_PRICE_MAX': 0.2,                          # 这个值非常重要，当天买入的新股票如果低于这个价，会被当成是日内短炒
@@ -515,7 +516,7 @@ def _order_list_query(code='', status_filter_list=[ft.OrderStatus.SUBMITTED, ft.
             log.info('filled_all_last_order:\n%s' % last_order)
         else:
             log.info('filled_all_data is empty')
-    data = data[~data.code.isin(glb['past_hold_code_list']) & ~data.stock_name.str.contains('瑞银')]
+    data = data[~data.code.isin(glb['past_hold_code_list']) & ~data.stock_name.str.contains(conf['LONG_BULL_ISSUER'])]
     data = data[(data.order_status == ft.OrderStatus.SUBMITTED) | (data.order_status == ft.OrderStatus.FILLED_PART)]
     for i in range(0, len(data)):
         item = data.iloc[i]
@@ -761,7 +762,7 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
         log.info('position_list_query error, ret: %s, data:\n%s' % (ret, data))
         return False
     reset_hold()
-    hsi_data = data[data.stock_name.str.contains('恒指') & ~data.stock_name.str.contains('瑞银')]
+    hsi_data = data[data.stock_name.str.contains('恒指') & ~data.stock_name.str.contains(conf['LONG_BULL_ISSUER'])]
 
     # 自动移仓
     if auto_move_position(hsi_data):
@@ -959,7 +960,7 @@ class TradeOrder(ft.TradeOrderHandlerBase):
             log.info('TradeOrder not TRADE_ENV')
             return ret, data
         log.info('TradeOrder trd_side: %s, order_status: %s' % (order.trd_side, order.order_status))
-        if order.code in glb['past_hold_code_list'] or '瑞银' in order.stock_name:
+        if order.code in glb['past_hold_code_list'] or conf['LONG_BULL_ISSUER'] in order.stock_name:
             return ret, data
         if order.order_status == ft.OrderStatus.FILLED_ALL or order.order_status == ft.OrderStatus.CANCELLED_PART:
             glb['filled_all_last_order'][order.code] = {'updated_time': order.updated_time, 'price': order.price, 'trd_side': order.trd_side}
