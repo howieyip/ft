@@ -17,6 +17,5 @@ start({
     'CUR_PRICE_MIN': 0.06,
     'CUR_PRICE_MAX': 0.16,
     'FIRST_ORDER_DIFF': 0.002,
-    'EVERY_ORDER_DIFF': 0.003,
-    'LOSS_PRICE_DIFF': 0.003,
+    'LOSS_ORDER_DIFF': 0.003,
 })

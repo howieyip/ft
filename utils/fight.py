@@ -38,8 +38,8 @@ conf = {
     'AUTO_ADJUST_BUY': True,                        # 是否自动调整挂的买单的价格
     'AUTO_ADJUST_SELL': True,                       # 是否自动调整挂的卖单的价格
 
-    'ALLOW_ADD': True,                              # 是否允许补仓，若是则下面的ADD_PRICE_DIFF有效
-    'ADD_PRICE_DIFF': 0.004,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
+    'ALLOW_ADD': True,                              # 是否允许补仓，若是则下面的ADD_ORDER_DIFF有效
+    'ADD_ORDER_DIFF': 0.004,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
     'AUTO_PLACE_ORDER': True,                       # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
     'ORDER_LIST': [                                 # 下单多少股以上（大的写前面），每单挂多少股，例如下单800k，分3档200k 200k 400k挂单
         [800e3, 200e3, 200e3, 200e3, 200e3],
@@ -57,9 +57,8 @@ conf = {
         [100e3, 50e3, 50e3]
     ],
     'FIRST_ORDER_DIFF': 0.006,                      # 第一个卖单间隔多少
-    'EVERY_ORDER_DIFF': 0.006,                      # 每个卖单间隔多少
     'NEED_LOSS': True,
-    'LOSS_PRICE_DIFF': 0.006,                       # 卖一价距离买入后的最高价达到多少就止损
+    'LOSS_ORDER_DIFF': 0.006,                       # 卖一价距离买入后的最高价达到多少就止损
     'sell_all_to_over': False,                      # 尾盘清仓，只对日内短炒的生效，False时只有盈利时才清仓
 
     'AUTO_MOVE_POSITION': False,                    # 是否自动强制移仓，是则下面的MOVE_POSITION_DICT生效
@@ -825,7 +824,7 @@ def modify_order2(index, order_list, price):
     if glb['auto_place_order_flag'] or glb['loss'][order.code]:
         glb['timer'].clearTimeoutHandler()
         return False
-    _modify_order(order, price + conf['EVERY_ORDER_DIFF'] * (index + 1))
+    _modify_order(order, get_order_price(price, index + 1))
 
 
 def _profit_order(order_list):
@@ -836,9 +835,9 @@ def _profit_order(order_list):
     order_list2 = order_list2[1:]
     for i in range(0, len(order_list2)):
         item = order_list2[i]
-        price2 = round(order.price + conf['EVERY_ORDER_DIFF'] * (i + 1), 3)
+        price2 = get_order_price(order.price, i + 1)
         if price2 != item.price:
-            glb['timer'] = Timer(modify_order2, count=len(order_list2) - i, delay=1.5, order_list=order_list2[i:], price=order.price + conf['EVERY_ORDER_DIFF'] * i)
+            glb['timer'] = Timer(modify_order2, count=len(order_list2) - i, delay=1.5, order_list=order_list2[i:], price=get_order_price(order.price, i))
             glb['timer'].repeat()
             break
 
@@ -862,12 +861,12 @@ def _check_profit_loss(code, bid_price, ask_price, caller='', need_log=True):
         log.info('%s check_profit_loss %s, ask_price: %s, max_price: %s' % (caller, code, ask_price, max_price))
 
     max_price_diff = round(max_price - ask_price, 3)
-    if max_price_diff >= conf['LOSS_PRICE_DIFF'] or glb['almost_over']:
+    if max_price_diff >= conf['LOSS_ORDER_DIFF'] or glb['almost_over']:
         glb['loss'][code] = True
         buy_price = find_buy_price(order)
         if need_log:
             log.info('%s loss %s, buy_price: %s, ask_price: %s, max_price: %s' % (caller, code, buy_price, ask_price, max_price))
-        loss_price = min(ask_price, last_filled_price) + conf['EVERY_ORDER_DIFF']
+        loss_price = min(ask_price, last_filled_price) + conf['LOSS_ORDER_DIFF']
         force_loss = ask_price <= buy_price and ('牛' in order.stock_name and glb['cur_price'] < glb['line']['long'] or '熊' in order.stock_name and glb['cur_price'] > glb['line']['long'])
         if (force_loss or glb['almost_over']) and ask_price < last_filled_price:
             loss_price = ask_price + 0.001
@@ -901,6 +900,10 @@ class OrderBook(ft.OrderBookHandlerBase):
         return ret, data
 
 
+def get_order_price(price, index):
+    return round(price + (math.pow(index, 2) + 3 * index) / 2 * 0.001, 3)
+
+
 def auto_place_order(code, volume, price, cancel=False):
     if not conf['AUTO_PLACE_ORDER'] or glb['to_over']:
         return False
@@ -931,15 +934,13 @@ def auto_place_order(code, volume, price, cancel=False):
     volume_diff = volume - item[0]
     if glb['move_position']:
         first_order_price += 0.015
-    last_order_price = 0
     for i in range(1, len(item)): # 从1开始
         vol = item[i]
         if volume_diff > 0 and i == 1:
             vol += volume_diff
         if vol == 0:
             continue
-        last_order_price = first_order_price + conf['EVERY_ORDER_DIFF'] * (i - 1)
-        data = smart_sell(code, vol, last_order_price)
+        data = smart_sell(code, vol, get_order_price(first_order_price, i - 1))
         if data is False:
             log.info('auto_place_order => smart_sell error')
         elif glb['move_position']:
@@ -1097,11 +1098,11 @@ def to_buy(stock_type, code='', volume=None, type='Bid', force=False, cur_price_
             if not last_price:
                 log.info('to_buy code: %s, no filled_all_last_order, \n%s' % (code, glb['filled_all_last_order']))
                 last_price = data0.cost_price
-            add_price_diff = round(last_price - data0.nominal_price, 3)
-            if total_qty >= conf['BUY_VOLUME'] and add_price_diff < conf['ADD_PRICE_DIFF']:
-                log.info('code: %s, nominal_price: %s, last_price: %s, diff: %s < %s, not allow add' % (code, data0.nominal_price, last_price, add_price_diff, conf['ADD_PRICE_DIFF']))
+            add_order_diff = round(last_price - data0.nominal_price, 3)
+            if total_qty >= conf['BUY_VOLUME'] and add_order_diff < conf['ADD_ORDER_DIFF']:
+                log.info('code: %s, nominal_price: %s, last_price: %s, diff: %s < %s, not allow add' % (code, data0.nominal_price, last_price, add_order_diff, conf['ADD_ORDER_DIFF']))
                 return False
-            log.info('code: %s, nominal_price: %s, last_price: %s, diff: %s >= %s, allow add' % (code, data0.nominal_price, last_price, add_price_diff, conf['ADD_PRICE_DIFF']))
+            log.info('code: %s, nominal_price: %s, last_price: %s, diff: %s >= %s, allow add' % (code, data0.nominal_price, last_price, add_order_diff, conf['ADD_ORDER_DIFF']))
 
     if code == 'auto':
         data = _get_stock_code(stock_type=stock_type, cur_price_min=cur_price_min, cur_price_max=cur_price_max)
@@ -1178,7 +1179,7 @@ def _auto_adjust_sell(delta_price):
     rise_price = order_book['Ask'][1][0]
     fall_price = order_book['Ask'][0][0]
     if order.code in glb['today_hold_code_list']:
-        fall_price = max(glb['filled_all_last_order'].get(order.code, {}).get('price') + conf['EVERY_ORDER_DIFF'], fall_price)
+        fall_price = max(glb['filled_all_last_order'].get(order.code, {}).get('price') + conf['LOSS_ORDER_DIFF'], fall_price)
     rise_condition = False
     if '牛' in order.stock_name:
         rise_condition = delta_price >= 5
@@ -1202,7 +1203,7 @@ def _auto_adjust_buy(delta_price):
     rise_price = order_book['Bid'][0][0]
     fall_price = order_book['Bid'][1][0]
     # if order.code in glb['today_hold_code_list']:
-    #     rise_price = round(min(rise_price, find_buy_price(order) - conf['ADD_PRICE_DIFF']), 3)
+    #     rise_price = round(min(rise_price, find_buy_price(order) - conf['ADD_ORDER_DIFF']), 3)
     fall_condition = False
     if '牛' in order.stock_name:
         fall_condition = delta_price <= -5
