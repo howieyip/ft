@@ -238,7 +238,7 @@ def get_cur_kline(num=80, begin=None):
     # 19  HK.MHImain  小恒指主连(2406)  2024-06-17 09:16:00  17796.0  17796.0  17796.0  17796.0       0       0.0       0.0            0.0     17796.0
     glb['klines'] = klines
     if begin is not None:
-        klines = klines[klines.time_key.str[11:19] > begin]
+        klines = klines[(klines.time_key.str[11:19] > begin) & (klines.time_key.str[11:19] < '16:00:00')]
         klines = klines[-num:].reset_index(drop=True)
     return klines
 

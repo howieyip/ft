@@ -33,7 +33,7 @@ glb = {
 def get_cur_kline(num=80, begin=None):
     klines = glb['klines']
     if begin is not None:
-        klines = klines[klines.time_key.str[11:19] > begin]
+        klines = klines[(klines.time_key.str[11:19] > begin) & (klines.time_key.str[11:19] < '16:00:00')]
     klines = klines[-num:].reset_index(drop=True)
     return klines
 
