@@ -869,7 +869,7 @@ def _check_profit_loss(code, bid_price, ask_price, caller='', need_log=True):
         loss_price = min(ask_price, last_filled_price) + conf['LOSS_ORDER_DIFF']
         force_loss = ask_price <= buy_price and ('牛' in order.stock_name and glb['cur_price'] < glb['line']['long'] or '熊' in order.stock_name and glb['cur_price'] > glb['line']['long'])
         if (force_loss or glb['almost_over']) and ask_price < last_filled_price:
-            loss_price = ask_price + 0.001
+            loss_price = ask_price + 0.002
         if loss_price < order.price:
             modify_order(order, loss_price)
     else:
@@ -901,7 +901,7 @@ class OrderBook(ft.OrderBookHandlerBase):
 
 
 def get_order_price(price, index):
-    return round(price + (math.pow(index, 2) + 3 * index) / 2 * 0.001, 3)
+    return round(price + (math.pow(index, 2) + 5 * index) / 2 * 0.001, 3)
 
 
 def auto_place_order(code, volume, price, cancel=False):
@@ -916,7 +916,7 @@ def auto_place_order(code, volume, price, cancel=False):
     if code in glb['submitted_sell_orders'] and len(glb['submitted_sell_orders'][code]) > 0:
         order_list = conf['ADD_ORDER_LIST']
         _modify_order(glb['submitted_sell_orders'][code][0], first_order_price)
-        first_order_price += 0.004
+        first_order_price += 0.006
     if cancel:
         cancel_all(code, trd_side=ft.TrdSide.SELL)
     if volume < 100e3 or glb['almost_over']:
