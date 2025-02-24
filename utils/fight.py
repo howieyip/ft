@@ -97,6 +97,7 @@ glb = {
     'loss': {},
     'today_pl_val_bull': 0,
     'today_pl_val_bear': 0,
+    'today_pl_val': 0,
     'trade_date': {},
     'afternoon': False,
     'soon_over': False,
@@ -361,7 +362,10 @@ def check_line(buy_all=False):
         check_result = 'bands_narrow'
     elif (check_position(last_kline, line['lower']) or check_position(last2_kline, line['lower2']) or check_position(last3_kline, line['lower3'])) and line['mid'] - last_kline.close > profit:
         if not conf['NEED_LOSS']:
-            check_result = 'long_far_bull'
+            if delta_price >= 0:
+                check_result = 'long_far_bull'
+            else:
+                check_result = 'wait_long_trend'
         elif delta_price > 0 or delta_price == 0 and last2_kline.close - last2_kline.last_close >= kline_len*2:
             if last_kline.close >= last3_kline.high and last3_kline.close < last3_kline.open and (last3_kline.open - last2_kline.close) / (last3_kline.high - last3_kline.low) < 1/3 and last3_kline.high - last3_kline.low >= kline_len:
                 check_result = 'long_swallow1_bull'
@@ -489,6 +493,8 @@ def find_last_price(code, price, order_id, create_time, type='last'):
         return last_buy_filled_order.get(order_id).get('price')
     elif type == 'sell' and last_sell_filled_order.get(code):
         return last_sell_filled_order.get(code).get('price')
+    elif type == 'last' and last_filled_order.get(code):
+        return last_filled_order.get(code).get('price')
     else:
         filled_data = order_list_query(code)
         if filled_data is False or filled_data is None or filled_data.empty:
@@ -739,13 +745,15 @@ def reset_hold():
 def sum_today_pl_val(today_buy_data):
     glb['today_pl_val_bull'] = 0
     glb['today_pl_val_bear'] = 0
+    glb['today_pl_val'] = 0
     for i in range(0, len(today_buy_data)):
         item = today_buy_data.iloc[i]
         if item.stock_name.find('牛') > -1:
             glb['today_pl_val_bull'] += item.today_pl_val
         elif item.stock_name.find('熊') > -1:
             glb['today_pl_val_bear'] += item.today_pl_val
-    log.info('MHI cur_price: %s, today bull: %s, today bear: %s' % (glb['cur_price'], glb['today_pl_val_bull'], glb['today_pl_val_bear']))
+    glb['today_pl_val'] = glb['today_pl_val_bull'] + glb['today_pl_val_bear']
+    log.info('MHI cur_price: %s, today pl: %s, bull: %s, bear: %s' % (glb['cur_price'], glb['today_pl_val'], glb['today_pl_val_bull'], glb['today_pl_val_bear']))
 
 
 # 自动移仓
@@ -897,8 +905,11 @@ def _check_profit_loss(code, bid_price, ask_price, caller='', need_log=True):
             log.info('%s loss %s, buy_price: %s, ask_price: %s, max_price: %s' % (caller, code, buy_price, ask_price, max_price))
         loss_price = min(ask_price, last_price) + conf['LOSS_ORDER_DIFF']
         force_loss = ask_price <= buy_price and ('牛' in order.stock_name and glb['cur_price'] < glb['line']['long'] or '熊' in order.stock_name and glb['cur_price'] > glb['line']['long'])
-        if (force_loss or glb['almost_over']) and ask_price < last_price:
-            loss_price = ask_price + 0.002
+        if ask_price < last_price:
+            if force_loss:
+                loss_price = ask_price + 0.002
+            elif glb['almost_over']:
+                loss_price = ask_price
         if loss_price < order.price:
             modify_order(order, loss_price)
     else:
@@ -962,7 +973,7 @@ def auto_place_order(code, volume, price, cancel=False):
             ],
     if cancel:
         cancel_all(code, trd_side=ft.TrdSide.SELL)
-    if volume < 60e3 or glb['almost_over']:
+    if volume < 60e3 or conf['NEED_LOSS'] and glb['almost_over']:
         data = smart_sell(code, volume, first_order_price)
         if data is False:
             log.info('auto_place_order => smart_sell error')
@@ -1232,7 +1243,7 @@ def _auto_adjust_sell(delta_price):
     order_book = glb['order_book'][order.code]
     rise_price = order_book['Ask'][1][0]
     fall_price = order_book['Ask'][0][0]
-    if order.code in glb['today_hold_code_list']:
+    if not glb['almost_over'] or glb['today_pl_val'] < 0:
         fall_price = max(find_last_price(order.code, type='sell') + conf['LOSS_ORDER_DIFF'], fall_price)
     rise_condition = False
     if '牛' in order.stock_name:
@@ -1323,7 +1334,7 @@ class Ticker(ft.TickerHandlerBase):
                     if not glb['to_over']:
                         glb['to_over'] = True
                         log.info('[%s]--------------------to_over--------------------' % t)
-                        if not glb['over'] and (conf['sell_all_to_over'] or glb['today_pl_val_bull'] + glb['today_pl_val_bear'] > 0):
+                        if not glb['over'] and (conf['sell_all_to_over'] or glb['today_pl_val'] > 0):
                             if conf['BULL_CODE'] != '' and conf['BEAR_CODE'] != '':
                                 sell_all()
                             elif conf['BULL_CODE'] != '':
