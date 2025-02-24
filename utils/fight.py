@@ -108,8 +108,9 @@ glb = {
     'last_3s_price': 0,
     'klines': None,
     'max_nominal_price': {},
-    'filled_all_last_order': {},
-    'filled_all_buy_order': {},
+    'last_filled_order': {},
+    'last_buy_filled_order': {},
+    'last_sell_filled_order': {},
     'submitted_buy_bull_flag': False,
     'submitted_buy_bear_flag': False,
     'submitted_buy_last_bull': None,
@@ -419,8 +420,8 @@ def _smart_buy(code, volume, price=None, type='Bid'):
         else:
             price = max(0.01, data[type][1][0])
     if not conf['NEED_LOSS']:
-        last_price = glb['filled_all_last_order'].get(code, {}).get('price')
-        if last_price and last_price > price:
+        last_price = find_last_price(code)
+        if last_price and price < last_price:
             order_diff_times = math.floor((last_price - price) / conf['EVERY_ORDER_DIFF'])
             per_volume = conf['FAR_ORDER_LIST'][0][1]
             volume = per_volume * order_diff_times
@@ -480,27 +481,45 @@ def _modify_order(order, price, qty=None):
         return data
 
 
-def find_buy_price(order):
-    buy_order = glb['filled_all_buy_order']
-    if buy_order.get(order.order_id):
-        return buy_order.get(order.order_id).get('price')
+def find_last_price(code, price, order_id, create_time, type='last'):
+    last_buy_filled_order = glb['last_buy_filled_order']
+    last_sell_filled_order = glb['last_sell_filled_order']
+    last_filled_order = glb['last_filled_order']
+    if type == 'buy' and last_buy_filled_order.get(order_id):
+        return last_buy_filled_order.get(order_id).get('price')
+    elif type == 'sell' and last_sell_filled_order.get(code):
+        return last_sell_filled_order.get(code).get('price')
     else:
-        data = order_list_query(order.code)
-        if data is False or data is None:
-            log.info('order_list_query data is False or data is None')
-            return order.price
-        filled_all_buy_data = data[((data.order_status == ft.OrderStatus.FILLED_ALL) | (data.order_status == ft.OrderStatus.CANCELLED_PART)) & (data.trd_side == ft.TrdSide.BUY)]
-        if filled_all_buy_data.empty:
-            log.info('error: filled_all_buy_data is empty')
-            return order.price
-        for index, row in filled_all_buy_data.iterrows():
-            if buy_order.get(order.order_id) is None:
-                buy_order[order.order_id] = {'create_time': row.create_time, 'price': row.price, 'code': row.code}
-            else:
-                if row.create_time > buy_order[order.order_id].get('create_time') and row.create_time <= order.get('create_time'):
-                    buy_order[order.order_id] = {'create_time': row.create_time, 'price': row.price, 'code': row.code}
-        log.info('filled_all_buy_order:\n%s' % buy_order)
-        return buy_order.get(order.order_id).get('price')
+        filled_data = order_list_query(code)
+        if filled_data is False or filled_data is None or filled_data.empty:
+            log.info('order_list_query filled_data is False or None or empty')
+            return price
+        if type == 'buy':
+            buy_filled_data = filled_data[filled_data.trd_side == ft.TrdSide.BUY]
+            if buy_filled_data.empty:
+                log.info('error: buy_filled_data is empty')
+                return price
+            for index, row in buy_filled_data.iterrows():
+                if last_buy_filled_order.get(order_id) is None:
+                    last_buy_filled_order[order_id] = {'create_time': row.create_time, 'price': row.price, 'code': row.code}
+                else:
+                    if row.create_time > last_buy_filled_order[order_id].get('create_time') and row.create_time <= create_time:
+                        last_buy_filled_order[order_id] = {'create_time': row.create_time, 'price': row.price, 'code': row.code}
+            log.info('last_buy_filled_order:\n%s' % last_buy_filled_order)
+            return last_buy_filled_order.get(order_id).get('price')
+        elif type == 'sell':
+            sell_filled_data = filled_data[filled_data.trd_side == ft.TrdSide.SELL]
+            if sell_filled_data.empty:
+                log.info('error: sell_filled_data is empty')
+                return price
+            last_sell_filled_order = sell_filled_data[sell_filled_data.updated_time == max(sell_filled_data.updated_time)].iloc[0]
+            last_sell_filled_order[code] = {'updated_time': last_sell_filled_order.updated_time, 'price': last_sell_filled_order.price, 'trd_side': last_sell_filled_order.trd_side}
+            log.info('last_sell_filled_order:\n%s' % last_sell_filled_order)
+            return last_sell_filled_order.get(code).get('price')
+        last_filled_data = filled_data[filled_data.updated_time == max(filled_data.updated_time)].iloc[0]
+        last_filled_order[code] = {'updated_time': last_filled_data.updated_time, 'price': last_filled_data.price, 'trd_side': last_filled_data.trd_side}
+        log.info('last_filled_order:\n%s' % last_filled_order)
+        return last_filled_order.get(code).get('price')
 
 
 def _order_list_query(code='', status_filter_list=[ft.OrderStatus.SUBMITTED, ft.OrderStatus.FILLED_PART, ft.OrderStatus.FILLED_ALL, ft.OrderStatus.CANCELLED_PART]):
@@ -511,21 +530,20 @@ def _order_list_query(code='', status_filter_list=[ft.OrderStatus.SUBMITTED, ft.
         return False
     log.info('order_list_query success, code: %s' % code)
     if ft.OrderStatus.FILLED_ALL in status_filter_list:
-        last_order = glb['filled_all_last_order']
-        filled_all_data = data[(data.order_status == ft.OrderStatus.FILLED_ALL) | (data.order_status == ft.OrderStatus.CANCELLED_PART)]
-        if not filled_all_data.empty:
-            last_data = filled_all_data[filled_all_data.updated_time == max(filled_all_data.updated_time)].iloc[0]
-            last_order['last'] = {'updated_time': last_data.updated_time, 'price': last_data.price, 'trd_side': last_data.trd_side}
-            for index, row in filled_all_data.iterrows():
-                # code, updated_time, price = row.code, row.updated_time, row.price
-                if row.code not in last_order:
-                    last_order[row.code] = {'updated_time': row.updated_time, 'price': row.price, 'trd_side': row.trd_side}
-                else:
-                    if row.updated_time > last_order[row.code].get('updated_time'):
-                        last_order[row.code] = {'updated_time': row.updated_time, 'price': row.price, 'trd_side': row.trd_side}
-            log.info('filled_all_last_order:\n%s' % last_order)
+        last_order = glb['last_filled_order']
+        filled_data = data[(data.order_status == ft.OrderStatus.FILLED_ALL) | (data.order_status == ft.OrderStatus.CANCELLED_PART)]
+        if not filled_data.empty:
+            last_filled_data = filled_data[filled_data.updated_time == max(filled_data.updated_time)].iloc[0]
+            last_order['last'] = {'updated_time': last_filled_data.updated_time, 'price': last_filled_data.price, 'trd_side': last_filled_data.trd_side}
+            # for index, row in filled_data.iterrows():
+            #     if row.code not in last_order:
+            #         last_order[row.code] = {'updated_time': row.updated_time, 'price': row.price, 'trd_side': row.trd_side}
+            #     else:
+            #         if row.updated_time > last_order[row.code].get('updated_time'):
+            #             last_order[row.code] = {'updated_time': row.updated_time, 'price': row.price, 'trd_side': row.trd_side}
+            # log.info('last_filled_order:\n%s' % last_order)
         else:
-            log.info('filled_all_data is empty')
+            log.info('filled_data is empty')
     data = data[~data.code.isin(glb['past_hold_code_list']) & ~data.stock_name.str.contains(conf['LONG_BULL_ISSUER'])]
     data = data[(data.order_status == ft.OrderStatus.SUBMITTED) | (data.order_status == ft.OrderStatus.FILLED_PART)]
     for i in range(0, len(data)):
@@ -535,7 +553,7 @@ def _order_list_query(code='', status_filter_list=[ft.OrderStatus.SUBMITTED, ft.
         elif item.trd_side == ft.TrdSide.SELL:
             set_submitted_sell(item)
     if ft.OrderStatus.FILLED_ALL in status_filter_list:
-        return filled_all_data
+        return filled_data
     return data
 
 
@@ -860,7 +878,7 @@ def _check_profit_loss(code, bid_price, ask_price, caller='', need_log=True):
     order = order_list[0]
     if code not in glb['max_nominal_price'] or bid_price > glb['max_nominal_price'][code]:
         glb['max_nominal_price'][code] = bid_price
-    last_price = glb['filled_all_last_order'].get(code, {}).get('price')
+    last_price = find_last_price(code)
     if last_price > glb['max_nominal_price'][code]:
         glb['max_nominal_price'][code] = last_price
 
@@ -874,7 +892,7 @@ def _check_profit_loss(code, bid_price, ask_price, caller='', need_log=True):
     max_price_diff = round(max_price - ask_price, 3)
     if max_price_diff >= conf['LOSS_ORDER_DIFF'] or glb['almost_over']:
         glb['loss'][code] = True
-        buy_price = find_buy_price(order)
+        buy_price = find_last_price(order.code, order.price, order.order_id, order.create_time, 'buy')
         if need_log:
             log.info('%s loss %s, buy_price: %s, ask_price: %s, max_price: %s' % (caller, code, buy_price, ask_price, max_price))
         loss_price = min(ask_price, last_price) + conf['LOSS_ORDER_DIFF']
@@ -920,7 +938,7 @@ def get_order_price(price, index):
 def auto_place_order(code, volume, price, cancel=False):
     if not conf['AUTO_PLACE_ORDER'] or glb['to_over'] or glb['auto_place_order_flag']:
         return False
-    last_price = glb['filled_all_last_order'].get(code, {}).get('price')
+    last_price = find_last_price(code)
     if price < last_price - 0.01:
         return False
     glb['auto_place_order_flag'] = True
@@ -989,9 +1007,10 @@ class TradeOrder(ft.TradeOrderHandlerBase):
         if order.code in glb['past_hold_code_list'] or conf['LONG_BULL_ISSUER'] in order.stock_name:
             return ret, data
         if order.order_status == ft.OrderStatus.FILLED_ALL or order.order_status == ft.OrderStatus.CANCELLED_PART:
-            glb['filled_all_last_order'][order.code] = {'updated_time': order.updated_time, 'price': order.price, 'trd_side': order.trd_side}
-            glb['filled_all_last_order']['last'] = {'updated_time': order.updated_time, 'price': order.price, 'trd_side': order.trd_side}
+            glb['last_filled_order'][order.code] = {'updated_time': order.updated_time, 'price': order.price, 'trd_side': order.trd_side}
+            glb['last_filled_order']['last'] = {'updated_time': order.updated_time, 'price': order.price, 'trd_side': order.trd_side}
             if order.trd_side == ft.TrdSide.BUY:
+                # glb['last_buy_filled_order'][order.code] = {'updated_time': order.updated_time, 'price': order.price, 'trd_side': order.trd_side}
                 if conf['NEED_LOSS']:
                     glb['max_nominal_price'][order.code] = order.price
                 reset_submitted_buy(order.code, order.stock_name)
@@ -999,6 +1018,7 @@ class TradeOrder(ft.TradeOrderHandlerBase):
                 time.sleep(2)
                 auto_place_order(order.code, order.dealt_qty, order.price)
             elif order.trd_side == ft.TrdSide.SELL:
+                glb['last_sell_filled_order'][order.code] = {'updated_time': order.updated_time, 'price': order.price, 'trd_side': order.trd_side}
                 reset_submitted_sell(order)
                 position_list_query(caller=order.order_status + '-' + order.trd_side)
         elif order.order_status == ft.OrderStatus.FILLED_PART:
@@ -1116,9 +1136,9 @@ def to_buy(stock_type, code='', volume=None, type='Bid', force=False, cur_price_
                     return False
             data0 = data.iloc[0]
             code = data0.code
-            last_price = glb['filled_all_last_order'].get(code, {}).get('price')
+            last_price = find_last_price(code)
             if not last_price:
-                log.info('to_buy code: %s, no filled_all_last_order, \n%s' % (code, glb['filled_all_last_order']))
+                log.info('to_buy code: %s, no last_filled_order, \n%s' % (code, glb['last_filled_order']))
                 last_price = data0.cost_price
             add_order_diff = round(last_price - data0.nominal_price, 3)
             if total_qty >= conf['BUY_VOLUME'] and add_order_diff < conf['ADD_ORDER_DIFF']:
@@ -1126,9 +1146,9 @@ def to_buy(stock_type, code='', volume=None, type='Bid', force=False, cur_price_
                 return False
             log.info('code: %s, nominal_price: %s, last_price: %s, diff: %s >= %s, allow add' % (code, data0.nominal_price, last_price, add_order_diff, conf['ADD_ORDER_DIFF']))
     if not conf['NEED_LOSS']:
-        last_price = glb['filled_all_last_order'].get(code, {}).get('price')
+        last_price = find_last_price(code)
         if not last_price:
-            log.info('to_buy code: %s, no filled_all_last_order, \n%s' % (code, glb['filled_all_last_order']))
+            log.info('to_buy code: %s, no last_filled_order, \n%s' % (code, glb['last_filled_order']))
             return False
         order_book = glb['order_book'][code]
         nominal_price = order_book['Bid'][0][0]
@@ -1213,7 +1233,7 @@ def _auto_adjust_sell(delta_price):
     rise_price = order_book['Ask'][1][0]
     fall_price = order_book['Ask'][0][0]
     if order.code in glb['today_hold_code_list']:
-        fall_price = max(glb['filled_all_last_order'].get(order.code, {}).get('price') + conf['LOSS_ORDER_DIFF'], fall_price)
+        fall_price = max(find_last_price(order.code, type='sell') + conf['LOSS_ORDER_DIFF'], fall_price)
     rise_condition = False
     if '牛' in order.stock_name:
         rise_condition = delta_price >= 5
@@ -1237,7 +1257,7 @@ def _auto_adjust_buy(delta_price):
     rise_price = order_book['Bid'][0][0]
     fall_price = order_book['Bid'][1][0]
     if not conf['NEED_LOSS']:
-        last_price = glb['filled_all_last_order'].get(order.code, {}).get('price')
+        last_price = find_last_price(order.code)
         if last_price:
             rise_price = round(min(rise_price, last_price - conf['ADD_ORDER_DIFF']), 3)
     fall_condition = False
@@ -1303,7 +1323,7 @@ class Ticker(ft.TickerHandlerBase):
                     if not glb['to_over']:
                         glb['to_over'] = True
                         log.info('[%s]--------------------to_over--------------------' % t)
-                        if not glb['over'] and (conf['sell_all_to_over'] or conf['NEED_LOSS'] and (glb['today_pl_val_bull'] + glb['today_pl_val_bear']) > 0):
+                        if not glb['over'] and (conf['sell_all_to_over'] or glb['today_pl_val_bull'] + glb['today_pl_val_bear'] > 0):
                             if conf['BULL_CODE'] != '' and conf['BEAR_CODE'] != '':
                                 sell_all()
                             elif conf['BULL_CODE'] != '':
