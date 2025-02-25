@@ -51,6 +51,8 @@ conf = {
         [100e3, 50e3, 50e3]
     ],
     'FAR_ORDER_LIST': [                             # 长线订单
+        [120e3, 30e3, 30e3, 30e3, 30e3],
+        [90e3, 30e3, 30e3, 30e3],
         [60e3, 30e3, 30e3]
     ],
     'ADD_ORDER_LIST': [                             # 补仓的订单
@@ -336,7 +338,7 @@ def check_position(kline, band, direction=0):
             return False
         if direction == 1 and golden_line['100'] < golden_line['0'] and float(k) >= 150:
             return False
-        if kline.low - distance < golden_line[k] < kline.high + distance:
+        if not conf['NEED_LOSS'] or kline.low - distance < golden_line[k] < kline.high + distance:
             if direction == 0:
                 if kline.low - band < distance*1.5:
                     return True
@@ -421,13 +423,13 @@ def get_order_book(code):
 
 def _smart_buy(code, volume, price=None, type='Bid'):
     if price is None:
-        data = get_order_book(code)
-        if not data:
-            return False
+        order_book = get_order_book(code)
+        if not order_book:
+            order_book = glb['order_book'][code]
         if type == 'Ask':
-            price = max(0.01, data[type][0][0])
+            price = max(0.01, order_book[type][0][0])
         else:
-            price = max(0.01, data[type][1][0])
+            price = max(0.01, order_book[type][1][0])
     if not conf['NEED_LOSS']:
         last_price = find_last_price(code)
         if last_price and price < last_price:
@@ -448,10 +450,10 @@ def _smart_buy(code, volume, price=None, type='Bid'):
 
 def _smart_sell(code, volume, price=None, type='Ask'):
     if price is None:
-        data = get_order_book(code)
-        if not data or not data[type][0]:
-            return False
-        price = max(0.01, data[type][0][0])
+        order_book = get_order_book(code)
+        if not order_book:
+            order_book = glb['order_book'][code]
+        price = max(0.01, order_book[type][0][0])
     price = round(price, 3)
     ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.SELL, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
     # log.info('_smart_sell, ret: %s, data:\n%s' % (ret, data))
@@ -536,9 +538,12 @@ def find_last_price(code, price=None, order_id=None, create_time=None, type='las
 def _order_list_query(code='', status_filter_list=[ft.OrderStatus.SUBMITTED, ft.OrderStatus.FILLED_PART, ft.OrderStatus.FILLED_ALL, ft.OrderStatus.CANCELLED_PART]):
     ret, data = trade_ctx.order_list_query(status_filter_list=status_filter_list, code=code, trd_env=conf['TRADE_ENV'], refresh_cache=True, acc_id=conf['acc_id'])
     # log.info('order_list_query, ret: %s, data:\n%s' % (ret, data))
-    if ret != ft.RET_OK:
-        log.info('order_list_query error, ret: %s, data:\n%s, code: %s' % (ret, data, code))
-        return False
+    if data.empty:
+        log.info('order_list_query empty, ret: %s, data:\n%s, code: %s' % (ret, data, code))
+        today = datetime.date.today()
+        start_day = today - datetime.timedelta(days=5)
+        ret, data = trade_ctx.history_order_list_query(start=start_day.strftime('%Y-%m-%d'), end=today.strftime('%Y-%m-%d 16:00:00'), status_filter_list=status_filter_list, code=code, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
+        # return False
     log.info('order_list_query success, code: %s' % code)
     if ft.OrderStatus.FILLED_ALL in status_filter_list:
         last_order = glb['last_filled_order']
@@ -990,13 +995,13 @@ def auto_place_order(code, volume, price, cancel=False):
         if volume >= order_list[i][0]:
             item = order_list[i]
             break
-    volume_diff = volume - item[0]
+    # volume_diff = volume - item[0]
     if glb['move_position']:
         first_order_price += 0.015
     for i in range(1, len(item)): # 从1开始
         vol = item[i]
-        if volume_diff > 0 and i == 1:
-            vol += volume_diff
+        # if volume_diff > 0 and i == 1:
+        #     vol += volume_diff
         if vol == 0:
             continue
         data = smart_sell(code, vol, get_order_price(first_order_price, i - 1))
@@ -1166,7 +1171,9 @@ def to_buy(stock_type, code='', volume=None, type='Bid', force=False, cur_price_
         if not last_price:
             log.info('to_buy code: %s, no last_filled_order, \n%s' % (code, glb['last_filled_order']))
             return False
-        order_book = glb['order_book'][code]
+        order_book = get_order_book(code)
+        if not order_book:
+            order_book = glb['order_book'][code]
         nominal_price = order_book['Bid'][0][0]
         add_order_diff = round(last_price - nominal_price, 3)
         if add_order_diff < conf['ADD_ORDER_DIFF']:
@@ -1475,7 +1482,8 @@ def start(config=None):
     trade_ctx.set_handler(TradeOrder())
     if conf['NEED_LOSS'] or conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']:
         quote_ctx.set_handler(OrderBook())
-
+    if conf['BULL_CODE']:
+        subscribe([conf['BULL_CODE']], [ft.SubType.ORDER_BOOK])
     ret, data = quote_ctx.query_subscription()
     log.info('query_subscription, ret: %s, data:%s' % (ret, data))
     if ret != ft.RET_OK:
