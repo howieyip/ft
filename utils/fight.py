@@ -270,10 +270,10 @@ def draw_line():
     line['mid'] = last_boll_bands['mid']
     line['upper'] = last_boll_bands['upper']
     line['lower'] = last_boll_bands['lower']
-    # line['mid2'] = last2_boll_bands['mid']
+    line['mid2'] = last2_boll_bands['mid']
     line['upper2'] = last2_boll_bands['upper']
     line['lower2'] = last2_boll_bands['lower']
-    # line['mid3'] = last3_boll_bands['mid']
+    line['mid3'] = last3_boll_bands['mid']
     line['upper3'] = last3_boll_bands['upper']
     line['lower3'] = last3_boll_bands['lower']
     log.info('draw_line: %s' % line)
@@ -360,6 +360,11 @@ def check_line(buy_all=False):
     kline_len = 10
     if line['upper'] - line['lower'] < 25:
         check_result = 'bands_narrow'
+    elif not conf['NEED_LOSS'] and (check_position(last_kline, line['mid']) or check_position(last2_kline, line['mid2']) or check_position(last3_kline, line['mid3'])) and line['upper'] - last_kline.close > profit:
+          if delta_price >= 0:
+              check_result = 'long_far_bull'
+          else:
+              check_result = 'wait_long_trend'
     elif (check_position(last_kline, line['lower']) or check_position(last2_kline, line['lower2']) or check_position(last3_kline, line['lower3'])) and line['mid'] - last_kline.close > profit:
         if not conf['NEED_LOSS']:
             if delta_price >= 0:
@@ -485,7 +490,7 @@ def _modify_order(order, price, qty=None):
         return data
 
 
-def find_last_price(code, price, order_id, create_time, type='last'):
+def find_last_price(code, price=None, order_id=None, create_time=None, type='last'):
     last_buy_filled_order = glb['last_buy_filled_order']
     last_sell_filled_order = glb['last_sell_filled_order']
     last_filled_order = glb['last_filled_order']
@@ -1357,7 +1362,7 @@ class Ticker(ft.TickerHandlerBase):
             position_list_query(need_log=False, caller='per_min')
 
         # 自动买入
-        if conf['AUTO_BUY'] and not glb['soon_over'] and (s == 56 or s == 57 or s == 58 or s == 59):
+        if conf['AUTO_BUY'] and not glb['soon_over'] and ((s == 56 or s == 57 or s == 58 or s == 59) or not conf['NEED_LOSS'] and s % 30 == 0):
             pre_buy()
         # 自动调价
         if (conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']) and s % 3 == 0:
