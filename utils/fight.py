@@ -63,7 +63,7 @@ conf = {
     'EVERY_ORDER_DIFF': 0.005,
     'NEED_LOSS': False,
     'LOSS_ORDER_DIFF': 0.005,                       # 卖一价距离买入后的最高价达到多少就止损
-    'sell_all_to_over': False,                      # 尾盘清仓，只对日内短炒的生效，False时只有盈利时才清仓
+    'loss_sell_all_over': False,                    # 亏损时尾盘清仓，只对日内短炒的生效，False时只有盈利时才清仓
 
     'AUTO_MOVE_POSITION': False,                    # 是否自动强制移仓，是则下面的MOVE_POSITION_DICT生效
     'MOVE_POSITION_DICT': {
@@ -827,7 +827,13 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
             # 如果一单也没挂，则自动挂单
             if item.can_sell_qty == item.qty:
                 log.info('auto_place_order, code: %s, nominal_price: %s, can_sell_qty: %s' % (item.code, item.nominal_price, item.can_sell_qty))
-                auto_place_order(item.code, item.qty, item.nominal_price)
+                order_book = get_order_book(code)
+                if not order_book:
+                    order_book = glb['order_book'][code]
+                if order_book['Bid'] and order_book['Bid'][0] and order_book['Bid'][0][0] and order_book['Ask'][0][0] - order_book['Bid'][0][0] < 0.002:
+                    auto_place_order(item.code, item.qty, order_book['Bid'][0][0])
+                else:
+                    log.info('auto_place_order warning, order_book: %s' % order_book)
             # 检查止损
             # if conf['NEED_LOSS'] and caller in ['per_min', 'fluctuate']:
             #     check_profit_loss(item.code, item.nominal_price, round(item.nominal_price + 0.001, 3), caller='position')
@@ -976,11 +982,11 @@ def auto_place_order(code, volume, price, cancel=False):
         order_list = conf['FAR_ORDER_LIST']
         if price >= round(last_price + conf['FIRST_ORDER_DIFF'], 3):
             first_order_price = price
-            order_diff_times = math.floor((price - last_price) / conf['EVERY_ORDER_DIFF'])
+            order_diff_times = math.floor((first_order_price - last_price) / conf['EVERY_ORDER_DIFF'])
             per_volume = order_list[0][1]
             order_list = [
-                [volume, math.max(per_volume, math.min(per_volume * order_diff_times, volume)), math.max(0, math.min(volume - per_volume * order_diff_times, per_volume))]
-            ],
+                [volume, max(per_volume, min(per_volume * order_diff_times, volume)), max(0, min(volume - per_volume * order_diff_times, per_volume))]
+            ]
     if cancel:
         cancel_all(code, trd_side=ft.TrdSide.SELL)
     if volume < 60e3 or conf['NEED_LOSS'] and glb['almost_over']:
@@ -1255,7 +1261,9 @@ def _auto_adjust_sell(delta_price):
     order_book = glb['order_book'][order.code]
     rise_price = order_book['Ask'][1][0]
     fall_price = order_book['Ask'][0][0]
-    if not glb['almost_over'] or glb['today_pl_val'] < 0:
+    if conf['NEED_LOSS'] and glb['almost_over'] and (conf['loss_sell_all_over'] or glb['today_pl_val'] > 0):
+        fall_price = fall_price
+    else:
         fall_price = max(find_last_price(order.code, type='sell') + conf['LOSS_ORDER_DIFF'], fall_price)
     rise_condition = False
     if '牛' in order.stock_name:
@@ -1346,7 +1354,7 @@ class Ticker(ft.TickerHandlerBase):
                     if not glb['to_over']:
                         glb['to_over'] = True
                         log.info('[%s]--------------------to_over--------------------' % t)
-                        if not glb['over'] and (conf['sell_all_to_over'] or glb['today_pl_val'] > 0):
+                        if conf['NEED_LOSS'] and not glb['over'] and (conf['loss_sell_all_over'] or glb['today_pl_val'] > 0):
                             if conf['BULL_CODE'] != '' and conf['BEAR_CODE'] != '':
                                 sell_all()
                             elif conf['BULL_CODE'] != '':
