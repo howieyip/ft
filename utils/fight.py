@@ -827,9 +827,9 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
             # 如果一单也没挂，则自动挂单
             if item.can_sell_qty == item.qty:
                 log.info('auto_place_order, code: %s, nominal_price: %s, can_sell_qty: %s' % (item.code, item.nominal_price, item.can_sell_qty))
-                order_book = get_order_book(code)
+                order_book = get_order_book(item.code)
                 if not order_book:
-                    order_book = glb['order_book'][code]
+                    order_book = glb['order_book'][item.code]
                 if order_book['Bid'] and order_book['Bid'][0] and order_book['Bid'][0][0] and order_book['Ask'][0][0] - order_book['Bid'][0][0] < 0.002:
                     auto_place_order(item.code, item.qty, order_book['Bid'][0][0])
                 else:
