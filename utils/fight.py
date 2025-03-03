@@ -525,8 +525,8 @@ def find_last_price(code, price=None, order_id=None, create_time=None, type='las
             if sell_filled_data.empty:
                 log.info('error: sell_filled_data is empty')
                 return price
-            last_sell_filled_order = sell_filled_data[sell_filled_data.updated_time == max(sell_filled_data.updated_time)].iloc[0]
-            last_sell_filled_order[code] = {'updated_time': last_sell_filled_order.updated_time, 'price': last_sell_filled_order.price, 'trd_side': last_sell_filled_order.trd_side}
+            last_sell_filled_data = sell_filled_data[sell_filled_data.updated_time == max(sell_filled_data.updated_time)].iloc[0]
+            last_sell_filled_order[code] = {'updated_time': last_sell_filled_data.updated_time, 'price': last_sell_filled_data.price, 'trd_side': last_sell_filled_data.trd_side}
             log.info('last_sell_filled_order:\n%s' % last_sell_filled_order)
             return last_sell_filled_order.get(code).get('price')
         last_filled_data = filled_data[filled_data.updated_time == max(filled_data.updated_time)].iloc[0]
