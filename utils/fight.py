@@ -825,7 +825,7 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
             item = today_buy_hold_data.iloc[i]
             set_hold(item.code, item.stock_name)
             # 如果一单也没挂，则自动挂单
-            if item.can_sell_qty == item.qty:
+            if caller != 'start' and item.can_sell_qty == item.qty:
                 log.info('auto_place_order, code: %s, nominal_price: %s, can_sell_qty: %s' % (item.code, item.nominal_price, item.can_sell_qty))
                 order_book = get_order_book(item.code)
                 if not order_book:
