@@ -830,7 +830,7 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
                 order_book = get_order_book(item.code)
                 if not order_book:
                     order_book = glb['order_book'][item.code]
-                if order_book['Bid'] and order_book['Bid'][0] and order_book['Bid'][0][0] and order_book['Ask'][0][0] - order_book['Bid'][0][0] < 0.002:
+                if order_book['Bid'][0] and order_book['Ask'][0] and 0 < order_book['Ask'][0][0] - order_book['Bid'][0][0] < 0.003:
                     auto_place_order(item.code, item.qty, order_book['Bid'][0][0])
                 else:
                     log.info('auto_place_order warning, order_book: %s' % order_book)
