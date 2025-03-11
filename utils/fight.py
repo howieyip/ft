@@ -29,7 +29,7 @@ conf = {
     'LONG_BULL_ISSUER': '法兴',
     'BEAR_CODE': '',                                # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
 
-    'BUY_VOLUME': 60e3,                             # 下单多少股
+    'BUY_VOLUME': 120e3,                             # 下单多少股
     'MAX_VOLUME': 3000e3,                           # 最大持仓股数，若超过则不会再买入
     'CUR_PRICE_MIN': 0.1,
     'CUR_PRICE_MAX': 0.2,
@@ -38,7 +38,7 @@ conf = {
     'AUTO_ADJUST_SELL': True,                       # 是否自动调整挂的卖单的价格
 
     'ALLOW_ADD': True,                              # 是否允许补仓，若是则下面的ADD_ORDER_DIFF有效
-    'ADD_ORDER_DIFF': 0.01,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
+    'ADD_ORDER_DIFF': 0.04,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
     'AUTO_PLACE_ORDER': True,                       # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
     'ORDER_LIST': [                                 # 下单多少股以上（大的写前面），每单挂多少股，例如下单800k，分3档200k 200k 400k挂单
         [800e3, 200e3, 200e3, 200e3, 200e3],
@@ -50,17 +50,17 @@ conf = {
         [200e3, 50e3, 50e3, 50e3, 50e3],
         [100e3, 50e3, 50e3]
     ],
-    'FAR_ORDER_LIST': [                             # 长线订单
+    'FAR_ORDER_LIST': [                             # 长线订单，超过60e3的也只挂两个单就够，全部成交后再自动挂剩余的
         [60e3, 30e3, 30e3]
     ],
     'ADD_ORDER_LIST': [                             # 补仓的订单
         [200e3, 100e3, 100e3],
         [100e3, 50e3, 50e3]
     ],
-    'FIRST_ORDER_DIFF': 0.005,                      # 第一个卖单间隔多少
-    'EVERY_ORDER_DIFF': 0.005,
+    'EVERY_ORDER_DIFF': 0.01,
     'NEED_LOSS': False,
-    'LOSS_ORDER_DIFF': 0.005,                       # 卖一价距离买入后的最高价达到多少就止损
+    'FIRST_ORDER_DIFF': 0.002,                      # 第一个卖单间隔多少
+    'LOSS_ORDER_DIFF': 0.003,                       # 卖一价距离买入后的最高价达到多少就止损
     'loss_sell_all_over': False,                    # 亏损时尾盘清仓，只对日内短炒的生效，False时只有盈利时才清仓
 
     'AUTO_MOVE_POSITION': False,                    # 是否自动强制移仓，是则下面的MOVE_POSITION_DICT生效
@@ -967,9 +967,12 @@ def auto_place_order(code, volume, price, cancel=False):
     if price < last_price - 0.01:
         return False
     glb['auto_place_order_flag'] = True
-    if price < last_price + conf['FIRST_ORDER_DIFF']:
+    first_order_diff = conf['EVERY_ORDER_DIFF']
+    if conf['NEED_LOSS']:
+        first_order_diff = conf['FIRST_ORDER_DIFF']
+    if price < last_price + first_order_diff:
         price = last_price
-    first_order_price = price + conf['FIRST_ORDER_DIFF']
+    first_order_price = price + first_order_diff
     order_list = conf['ORDER_LIST']
     if conf['NEED_LOSS']:
         if code in glb['submitted_sell_orders'] and len(glb['submitted_sell_orders'][code]) > 0:
@@ -978,15 +981,15 @@ def auto_place_order(code, volume, price, cancel=False):
             first_order_price += 0.006
     else:
         order_list = conf['FAR_ORDER_LIST']
-        if price >= round(last_price + conf['FIRST_ORDER_DIFF'], 3):
+        if price >= round(last_price + first_order_diff, 3):
             first_order_price = price
             order_diff_times = math.floor((first_order_price - last_price) / conf['EVERY_ORDER_DIFF'])
             per_volume = order_list[0][1]
             order_list = [
                 [volume, max(per_volume, min(per_volume * order_diff_times, volume)), max(0, min(volume - per_volume * order_diff_times, per_volume))]
             ]
-    if cancel:
-        cancel_all(code, trd_side=ft.TrdSide.SELL)
+        if cancel:
+            cancel_all(code, trd_side=ft.TrdSide.SELL)
     if volume < 60e3 or conf['NEED_LOSS'] and glb['almost_over']:
         data = smart_sell(code, volume, first_order_price)
         if data is False:
@@ -1041,7 +1044,7 @@ class TradeOrder(ft.TradeOrderHandlerBase):
                 reset_submitted_buy(order.code, order.stock_name)
                 set_hold(order.code, order.stock_name)
                 time.sleep(2)
-                auto_place_order(order.code, order.dealt_qty, order.price)
+                auto_place_order(order.code, order.dealt_qty, order.price, True)
             elif order.trd_side == ft.TrdSide.SELL:
                 glb['last_sell_filled_order'][order.code] = {'updated_time': order.updated_time, 'price': order.price, 'trd_side': order.trd_side}
                 reset_submitted_sell(order)
@@ -1261,8 +1264,10 @@ def _auto_adjust_sell(delta_price):
     fall_price = order_book['Ask'][0][0]
     if conf['NEED_LOSS'] and glb['almost_over'] and (conf['loss_sell_all_over'] or glb['today_pl_val'] > 0):
         fall_price = fall_price
-    else:
+    elif conf['NEED_LOSS']:
         fall_price = max(find_last_price(order.code, type='sell') + conf['LOSS_ORDER_DIFF'], fall_price)
+    else:
+        fall_price = max(find_last_price(order.code, type='sell') + conf['EVERY_ORDER_DIFF'], fall_price)
     rise_condition = False
     if '牛' in order.stock_name:
         rise_condition = delta_price >= 5
