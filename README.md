@@ -12,7 +12,7 @@
 ```
 pip install futu-api
 pip3 show futu-api
-pip3 install --upgrade futu-api==9.0.5008
+pip3 install --upgrade futu-api==9.1.5108
 
 ```
 
