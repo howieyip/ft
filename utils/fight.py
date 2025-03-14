@@ -149,7 +149,7 @@ glb = {
 
 # 添加数组元素，不重复
 def add_unique_element(arr, element):
-    if element not in arr:
+    if element and element not in arr:
         arr.append(element)
     return arr
 
@@ -1419,6 +1419,7 @@ def resetData():
     glb['almost_over'] = False
     glb['to_over'] = False
     glb['over'] = False
+    add_unique_element(glb['auto_buy_code_list'], conf['BULL_CODE'])
     request_trading_days()
 
 
