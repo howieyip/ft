@@ -536,39 +536,26 @@ def find_last_price(code, price=None, order_id=None, create_time=None, type='las
 def _order_list_query(code='', status_filter_list=[ft.OrderStatus.SUBMITTED, ft.OrderStatus.FILLED_PART, ft.OrderStatus.FILLED_ALL, ft.OrderStatus.CANCELLED_PART]):
     ret, data = trade_ctx.order_list_query(status_filter_list=status_filter_list, code=code, trd_env=conf['TRADE_ENV'], refresh_cache=True, acc_id=conf['acc_id'])
     # log.info('order_list_query, ret: %s, data:\n%s' % (ret, data))
-    if data.empty:
-        log.info('order_list_query empty, ret: %s, data:\n%s, code: %s' % (ret, data, code))
-        today = datetime.date.today()
-        start_day = today - datetime.timedelta(days=5)
-        ret, data = trade_ctx.history_order_list_query(start=start_day.strftime('%Y-%m-%d'), end=today.strftime('%Y-%m-%d 16:00:00'), status_filter_list=status_filter_list, code=code, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
-        # return False
     log.info('order_list_query success, code: %s' % code)
-    if ft.OrderStatus.FILLED_ALL in status_filter_list:
-        last_order = glb['last_filled_order']
-        filled_data = data[(data.order_status == ft.OrderStatus.FILLED_ALL) | (data.order_status == ft.OrderStatus.CANCELLED_PART)]
-        if not filled_data.empty:
-            last_filled_data = filled_data[filled_data.updated_time == max(filled_data.updated_time)].iloc[0]
-            last_order['last'] = {'updated_time': last_filled_data.updated_time, 'price': last_filled_data.price, 'trd_side': last_filled_data.trd_side}
-            # for index, row in filled_data.iterrows():
-            #     if row.code not in last_order:
-            #         last_order[row.code] = {'updated_time': row.updated_time, 'price': row.price, 'trd_side': row.trd_side}
-            #     else:
-            #         if row.updated_time > last_order[row.code].get('updated_time'):
-            #             last_order[row.code] = {'updated_time': row.updated_time, 'price': row.price, 'trd_side': row.trd_side}
-            # log.info('last_filled_order:\n%s' % last_order)
-        else:
-            log.info('filled_data is empty')
     data = data[~data.code.isin(glb['past_hold_code_list']) & ~data.stock_name.str.contains(conf['LONG_BULL_ISSUER'])]
-    data = data[(data.order_status == ft.OrderStatus.SUBMITTED) | (data.order_status == ft.OrderStatus.FILLED_PART)]
-    for i in range(0, len(data)):
-        item = data.iloc[i]
+    submitted_data = data[(data.order_status == ft.OrderStatus.SUBMITTED) | (data.order_status == ft.OrderStatus.FILLED_PART)]
+    for i in range(0, len(submitted_data)):
+        item = submitted_data.iloc[i]
         if item.trd_side == ft.TrdSide.BUY:
             set_submitted_buy(item.code, item.stock_name, item)
         elif item.trd_side == ft.TrdSide.SELL:
             set_submitted_sell(item)
     if ft.OrderStatus.FILLED_ALL in status_filter_list:
+        filled_data = data[(data.order_status == ft.OrderStatus.FILLED_ALL) | (data.order_status == ft.OrderStatus.CANCELLED_PART)]
+        if filled_data.empty:
+            log.info('order_list_query empty, ret: %s, data:\n%s, code: %s' % (ret, data, code))
+            today = datetime.date.today()
+            start_day = today - datetime.timedelta(days=5)
+            ret, data = trade_ctx.history_order_list_query(start=start_day.strftime('%Y-%m-%d'), end=today.strftime('%Y-%m-%d 16:00:00'), status_filter_list=status_filter_list, code=code, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
+            # return False
+        filled_data = data[(data.order_status == ft.OrderStatus.FILLED_ALL) | (data.order_status == ft.OrderStatus.CANCELLED_PART)]
         return filled_data
-    return data
+    return submitted_data
 
 
 def _cancel_all(code='', trd_side=''):
@@ -964,7 +951,7 @@ def auto_place_order(code, volume, price, cancel=False):
     if not conf['AUTO_PLACE_ORDER'] or glb['to_over'] or glb['auto_place_order_flag']:
         return False
     last_price = find_last_price(code)
-    if price < last_price - 0.01:
+    if price < last_price - 0.005:
         return False
     glb['auto_place_order_flag'] = True
     first_order_diff = conf['EVERY_ORDER_DIFF']
@@ -1036,7 +1023,6 @@ class TradeOrder(ft.TradeOrderHandlerBase):
             return ret, data
         if order.order_status == ft.OrderStatus.FILLED_ALL or order.order_status == ft.OrderStatus.CANCELLED_PART:
             glb['last_filled_order'][order.code] = {'updated_time': order.updated_time, 'price': order.price, 'trd_side': order.trd_side}
-            glb['last_filled_order']['last'] = {'updated_time': order.updated_time, 'price': order.price, 'trd_side': order.trd_side}
             if order.trd_side == ft.TrdSide.BUY:
                 # glb['last_buy_filled_order'][order.code] = {'updated_time': order.updated_time, 'price': order.price, 'trd_side': order.trd_side}
                 if conf['NEED_LOSS']:
@@ -1269,9 +1255,9 @@ def _auto_adjust_sell(delta_price):
     if conf['NEED_LOSS'] and glb['almost_over'] and (conf['loss_sell_all_over'] or glb['today_pl_val'] > 0):
         fall_price = fall_price
     elif conf['NEED_LOSS']:
-        fall_price = max(find_last_price(order.code, type='sell') + conf['LOSS_ORDER_DIFF'], fall_price)
+        fall_price = max(find_last_price(order.code) + conf['LOSS_ORDER_DIFF'], fall_price)
     else:
-        fall_price = max(find_last_price(order.code, type='sell') + conf['EVERY_ORDER_DIFF'], fall_price)
+        fall_price = max(find_last_price(order.code) + conf['EVERY_ORDER_DIFF'], fall_price)
     rise_condition = False
     if '牛' in order.stock_name:
         rise_condition = delta_price >= 5
