@@ -1370,7 +1370,7 @@ class Ticker(ft.TickerHandlerBase):
             position_list_query(need_log=False, caller='per_min')
 
         # 自动买入
-        if conf['AUTO_BUY'] and not glb['soon_over'] and ((s == 56 or s == 57 or s == 58 or s == 59) or not conf['NEED_LOSS'] and s % 30 == 0):
+        if conf['AUTO_BUY'] and (not glb['soon_over'] and (s == 56 or s == 57 or s == 58 or s == 59) or not conf['NEED_LOSS'] and s % 30 == 0):
             pre_buy()
         # 自动调价
         if (conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']) and s % 3 == 0:
