@@ -815,8 +815,10 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
                 order_book = get_order_book(item.code)
                 if not order_book:
                     order_book = glb['order_book'][item.code]
-                if 0 < order_book['Ask'][0][0] - order_book['Bid'][0][0] < 0.003:
-                    auto_place_order(item.code, item.qty, order_book['Bid'][0][0])
+                bid_pirce = order_book['Bid'][0][0]
+                ask_price = order_book['Ask'][0][0]
+                if bid_pirce and ask_price and ask_price - bid_pirce < 0.006:
+                    auto_place_order(item.code, item.qty, bid_pirce)
                 else:
                     log.info('auto_place_order warning, order_book: %s' % order_book)
             # 检查止损
@@ -951,7 +953,7 @@ def auto_place_order(code, volume, price, cancel=False):
     if not conf['AUTO_PLACE_ORDER'] or glb['to_over'] or glb['auto_place_order_flag']:
         return False
     last_price = find_last_price(code)
-    if price < last_price - 0.005:
+    if price < last_price:
         return False
     glb['auto_place_order_flag'] = True
     first_order_diff = conf['EVERY_ORDER_DIFF']
@@ -1247,7 +1249,7 @@ def _auto_adjust_sell(delta_price):
     order = glb['submitted_sell_last_bull']
     if order is None:
         order = glb['submitted_sell_last_bear']
-    if order is None or order.code not in glb['order_book'] or order.code not in glb['auto_buy_code_list'] or len(glb['submitted_sell_orders'][order.code]) > 1:
+    if order is None or order.code not in glb['order_book'] or order.code not in glb['auto_buy_code_list'] or len(glb['submitted_sell_orders'][order.code]) > 1 or order.price >= 0.25:
         return False
     order_book = glb['order_book'][order.code]
     rise_price = order_book['Ask'][1][0]
@@ -1275,7 +1277,7 @@ def _auto_adjust_buy(delta_price):
     order = glb['submitted_buy_last_bull']
     if order is None:
         order = glb['submitted_buy_last_bear']
-    if order is None or order.code not in glb['order_book'] or order.code not in glb['auto_buy_code_list']:
+    if order is None or order.code not in glb['order_book'] or order.code not in glb['auto_buy_code_list'] or order.price >= 0.25:
         return False
     order_book = glb['order_book'][order.code]
     rise_price = order_book['Bid'][0][0]
