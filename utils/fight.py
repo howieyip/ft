@@ -50,14 +50,14 @@ conf = {
         [200e3, 50e3, 50e3, 50e3, 50e3],
         [100e3, 50e3, 50e3]
     ],
-    'FAR_ORDER_LIST': [                             # 长线订单，超过60e3的也只挂两个单就够，全部成交后再自动挂剩余的
-        [60e3, 30e3, 30e3]
+    'FAR_ORDER_LIST': [                             # 长线订单，持仓超过60k只挂一个60k的卖单就够，成交后再自动挂剩余的
+        [60e3, 60e3]
     ],
-    'ADD_ORDER_LIST': [                             # 补仓的订单
+    'ADD_ORDER_LIST': [                             # 短炒补仓的订单
         [200e3, 100e3, 100e3],
         [100e3, 50e3, 50e3]
     ],
-    'EVERY_ORDER_DIFF': 0.01,
+    'EVERY_ORDER_DIFF': 0.02,
     'NEED_LOSS': False,
     'FIRST_ORDER_DIFF': 0.002,                      # 第一个卖单间隔多少
     'LOSS_ORDER_DIFF': 0.003,                       # 卖一价距离买入后的最高价达到多少就止损
