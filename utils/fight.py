@@ -550,7 +550,7 @@ def _order_list_query(code='', status_filter_list=[ft.OrderStatus.SUBMITTED, ft.
         if filled_data.empty:
             log.info('order_list_query empty, ret: %s, data:\n%s, code: %s' % (ret, data, code))
             today = datetime.date.today()
-            start_day = today - datetime.timedelta(days=5)
+            start_day = today - datetime.timedelta(days=10)
             ret, data = trade_ctx.history_order_list_query(start=start_day.strftime('%Y-%m-%d'), end=today.strftime('%Y-%m-%d 16:00:00'), status_filter_list=status_filter_list, code=code, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
             # return False
         filled_data = data[(data.order_status == ft.OrderStatus.FILLED_ALL) | (data.order_status == ft.OrderStatus.CANCELLED_PART)]
@@ -957,7 +957,7 @@ def auto_place_order(code, volume, price, cancel=False):
     if not conf['AUTO_PLACE_ORDER'] or glb['to_over'] or glb['auto_place_order_flag']:
         return False
     last_price = find_last_price(code)
-    if price < last_price:
+    if last_price is None or price < last_price:
         return False
     glb['auto_place_order_flag'] = True
     first_order_diff = conf['EVERY_ORDER_DIFF']
