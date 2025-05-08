@@ -431,7 +431,7 @@ def _smart_buy(code, volume, price=None, type='Bid'):
     if not conf['NEED_LOSS']:
         last_price = find_last_price(code)
         if last_price and price < last_price:
-            order_diff_times = round((last_price - price) / conf['EVERY_ORDER_DIFF'])
+            order_diff_times = math.floor((last_price - price) / conf['EVERY_ORDER_DIFF'])
             per_volume = conf['FAR_ORDER_LIST'][0][1]
             volume = per_volume * order_diff_times
     ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.BUY, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
@@ -976,7 +976,7 @@ def auto_place_order(code, volume, price, cancel=False):
         order_list = conf['FAR_ORDER_LIST']
         if price >= round(last_price + first_order_diff, 3):
             first_order_price = price
-            order_diff_times = round((first_order_price - last_price) / conf['EVERY_ORDER_DIFF'])
+            order_diff_times = math.floor((first_order_price - last_price) / conf['EVERY_ORDER_DIFF'])
             per_volume = order_list[0][1]
             order_list = [
                 [volume, max(per_volume, min(per_volume * order_diff_times, volume)), max(0, min(volume - per_volume * order_diff_times, per_volume))]
