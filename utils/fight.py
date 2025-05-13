@@ -1175,7 +1175,7 @@ def to_buy(stock_type, code='', volume=None, type='Bid', force=False, cur_price_
             order_book = glb['order_book'][code]
         bid_pirce = order_book['Bid'][0][0]
         ask_price = order_book['Ask'][0][0]
-        if not bid_pirce or not ask_price or ask_price - bid_pirce > 0.003:
+        if not bid_pirce or not ask_price or (bid_pirce >= 0.25 and ask_price - bid_pirce > 0.005) or (bid_pirce < 0.25 and ask_price - bid_pirce > 0.003):
             log.info('to_buy warning, order_book: %s' % order_book)
             return False
         add_order_diff = round(last_price - bid_pirce, 3)
