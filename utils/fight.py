@@ -817,7 +817,7 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
                     order_book = glb['order_book'][item.code]
                 bid_pirce = order_book['Bid'][0][0]
                 ask_price = order_book['Ask'][0][0]
-                if bid_pirce and ask_price and ask_price - bid_pirce < 0.006:
+                if bid_pirce and ask_price and round(ask_price - bid_pirce, 3) < 0.006:
                     auto_place_order(item.code, item.qty, bid_pirce)
                 else:
                     log.info('auto_place_order warning, order_book: %s' % order_book)
@@ -1144,15 +1144,15 @@ def to_buy(stock_type, code='', volume=None, type='Bid', force=False, cur_price_
             return False
         if len(data) > 0:
             if not conf['ALLOW_ADD']:
-                log.info('not allow add')
+                log.info('to_buy not allow add')
                 return False
             total_qty = sum(data.qty)
             if total_qty + volume > conf['MAX_VOLUME']:
                 if conf['MAX_VOLUME'] - total_qty >= 100e3:
                     volume = math.floor((conf['MAX_VOLUME'] - total_qty) / 100e3) * 100e3
-                    log.info('current total_qty: %s, MAX_VOLUME: %s, can only buy %s' % (total_qty, conf['MAX_VOLUME'], volume))
+                    log.info('to_buy current total_qty: %s, MAX_VOLUME: %s, can only buy %s' % (total_qty, conf['MAX_VOLUME'], volume))
                 else:
-                    log.info('current total_qty: %s, MAX_VOLUME: %s, not allow add' % (total_qty, conf['MAX_VOLUME']))
+                    log.info('to_buy current total_qty: %s, MAX_VOLUME: %s, not allow add' % (total_qty, conf['MAX_VOLUME']))
                     return False
             data0 = data.iloc[0]
             code = data0.code
@@ -1164,7 +1164,7 @@ def to_buy(stock_type, code='', volume=None, type='Bid', force=False, cur_price_
             if total_qty >= conf['BUY_VOLUME'] and add_order_diff < conf['ADD_ORDER_DIFF']:
                 log.info('code: %s, nominal_price: %s, last_price: %s, diff: %s < %s, not allow add' % (code, data0.nominal_price, last_price, add_order_diff, conf['ADD_ORDER_DIFF']))
                 return False
-            log.info('code: %s, nominal_price: %s, last_price: %s, diff: %s >= %s, allow add' % (code, data0.nominal_price, last_price, add_order_diff, conf['ADD_ORDER_DIFF']))
+            log.info('to_buy code: %s, nominal_price: %s, last_price: %s, diff: %s >= %s, allow add' % (code, data0.nominal_price, last_price, add_order_diff, conf['ADD_ORDER_DIFF']))
     if not conf['NEED_LOSS']:
         last_price = find_last_price(code)
         if not last_price:
@@ -1175,14 +1175,15 @@ def to_buy(stock_type, code='', volume=None, type='Bid', force=False, cur_price_
             order_book = glb['order_book'][code]
         bid_pirce = order_book['Bid'][0][0]
         ask_price = order_book['Ask'][0][0]
-        if not bid_pirce or not ask_price or (bid_pirce >= 0.25 and ask_price - bid_pirce > 0.005) or (bid_pirce < 0.25 and ask_price - bid_pirce > 0.003):
+        bid_ask_diff = round(ask_price - bid_pirce, 3)
+        if not bid_pirce or not ask_price or (bid_pirce >= 0.25 and bid_ask_diff > 0.005) or (bid_pirce < 0.25 and bid_ask_diff > 0.003):
             log.info('to_buy warning, order_book: %s' % order_book)
             return False
         add_order_diff = round(last_price - bid_pirce, 3)
         if add_order_diff < conf['ADD_ORDER_DIFF']:
-            log.info('code: %s, bid_pirce: %s, last_price: %s, diff: %s < %s, not allow add' % (code, bid_pirce, last_price, add_order_diff, conf['ADD_ORDER_DIFF']))
+            log.info('to_buy code: %s, bid_pirce: %s, last_price: %s, diff: %s < %s, not allow add' % (code, bid_pirce, last_price, add_order_diff, conf['ADD_ORDER_DIFF']))
             return False
-        log.info('code: %s, bid_pirce: %s, last_price: %s, diff: %s >= %s, allow add' % (code, bid_pirce, last_price, add_order_diff, conf['ADD_ORDER_DIFF']))
+        log.info('to_buy code: %s, bid_pirce: %s, last_price: %s, diff: %s >= %s, allow add' % (code, bid_pirce, last_price, add_order_diff, conf['ADD_ORDER_DIFF']))
 
     if code == 'auto':
         data = _get_stock_code(stock_type=stock_type, cur_price_min=cur_price_min, cur_price_max=cur_price_max)
