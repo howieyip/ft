@@ -411,19 +411,17 @@ def check_line(buy_all=False):
 
 
 def get_order_book(code):
-    ret, data = quote_ctx.get_order_book(code, num=3)
-    log.info('get_order_book, ret: %s, data:%s' % (ret, data))
-    if ret != ft.RET_OK:
+    ret, order_book = quote_ctx.get_order_book(code, num=3)
+    log.info('get_order_book, ret: %s, order_book:%s' % (ret, order_book))
+    if ret != ft.RET_OK or not order_book:
         log.info('get_order_book error')
-        return False
-    return data
+        order_book = glb['order_book'][code]
+    return order_book
 
 
 def _smart_buy(code, volume, price=None, type='Bid'):
     if price is None:
         order_book = get_order_book(code)
-        if not order_book:
-            order_book = glb['order_book'][code]
         if type == 'Ask':
             price = max(0.01, order_book[type][0][0])
         else:
@@ -449,8 +447,6 @@ def _smart_buy(code, volume, price=None, type='Bid'):
 def _smart_sell(code, volume, price=None, type='Ask'):
     if price is None:
         order_book = get_order_book(code)
-        if not order_book:
-            order_book = glb['order_book'][code]
         price = max(0.01, order_book[type][0][0])
     price = round(price, 3)
     ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.SELL, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
@@ -550,7 +546,7 @@ def _order_list_query(code='', status_filter_list=[ft.OrderStatus.SUBMITTED, ft.
         if filled_data.empty:
             log.info('order_list_query empty, ret: %s, data:\n%s, code: %s' % (ret, data, code))
             today = datetime.date.today()
-            start_day = today - datetime.timedelta(days=10)
+            start_day = today - datetime.timedelta(days=14)
             ret, data = trade_ctx.history_order_list_query(start=start_day.strftime('%Y-%m-%d'), end=today.strftime('%Y-%m-%d 16:00:00'), status_filter_list=status_filter_list, code=code, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
             # return False
         filled_data = data[(data.order_status == ft.OrderStatus.FILLED_ALL) | (data.order_status == ft.OrderStatus.CANCELLED_PART)]
@@ -784,6 +780,15 @@ def auto_move_position(hsi_data):
     return has_sold
 
 
+def check_bid_ask_diff(order_book):
+    bid_price = order_book['Bid'][0][0]
+    ask_price = order_book['Ask'][0][0]
+    bid_ask_diff = round(ask_price - bid_price, 3)
+    if bid_price and ask_price and ((bid_price < 0.25 and bid_ask_diff <= 0.003) or (bid_price >= 0.25 and bid_ask_diff <= 0.005) or (bid_price >= 0.5 and bid_ask_diff <= 0.01)):
+        return True
+    return False
+
+
 def _position_list_query(stock_type='', need_log=True, caller='', code=''):
     # log.info('position_list_query, caller: %s' % caller)
     ret, data = trade_ctx.position_list_query(trd_env=conf['TRADE_ENV'], refresh_cache=True, acc_id=conf['acc_id'])
@@ -813,12 +818,8 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
             if caller != 'start' and item.can_sell_qty == item.qty:
                 log.info('auto_place_order, code: %s, nominal_price: %s, can_sell_qty: %s' % (item.code, item.nominal_price, item.can_sell_qty))
                 order_book = get_order_book(item.code)
-                if not order_book:
-                    order_book = glb['order_book'][item.code]
-                bid_pirce = order_book['Bid'][0][0]
-                ask_price = order_book['Ask'][0][0]
-                if bid_pirce and ask_price and round(ask_price - bid_pirce, 3) < 0.006:
-                    auto_place_order(item.code, item.qty, bid_pirce)
+                if check_bid_ask_diff(order_book):
+                    auto_place_order(item.code, item.qty, order_book['Bid'][0][0])
                 else:
                     log.info('auto_place_order warning, order_book: %s' % order_book)
             # 检查止损
@@ -1171,12 +1172,8 @@ def to_buy(stock_type, code='', volume=None, type='Bid', force=False, cur_price_
             log.info('to_buy code: %s, no last_filled_order, \n%s' % (code, glb['last_filled_order']))
             return False
         order_book = get_order_book(code)
-        if not order_book:
-            order_book = glb['order_book'][code]
         bid_pirce = order_book['Bid'][0][0]
-        ask_price = order_book['Ask'][0][0]
-        bid_ask_diff = round(ask_price - bid_pirce, 3)
-        if not bid_pirce or not ask_price or (bid_pirce >= 0.25 and bid_ask_diff > 0.005) or (bid_pirce < 0.25 and bid_ask_diff > 0.003):
+        if not check_bid_ask_diff(order_book):
             log.info('to_buy warning, order_book: %s' % order_book)
             return False
         add_order_diff = round(last_price - bid_pirce, 3)
