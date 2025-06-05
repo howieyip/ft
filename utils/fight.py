@@ -946,12 +946,14 @@ class OrderBook(ft.OrderBookHandlerBase):
 
 def get_order_price(price, index):
     if conf['NEED_LOSS']:
-        order_price =  price + (math.pow(index, 2) + 5 * index) / 2 * 0.001
-        return round(order_price, 3)
-    order_price = price + index * conf['EVERY_ORDER_DIFF']
+        order_price =  round(price + (math.pow(index, 2) + 5 * index) / 2 * 0.001, 3)
+        return order_price
+    order_price = round(price + index * conf['EVERY_ORDER_DIFF'], 3)
     if order_price > 0.25:
-        return round(math.ceil(round(order_price * 200, 3)) / 200, 3)
-    return round(order_price, 3)
+        return round(math.ceil(order_price * 200) / 200, 3)
+    if order_price > 0.5:
+        return round(math.ceil(order_price * 100) / 100, 3)
+    return order_price
 
 
 def auto_place_order(code, volume, price, cancel=False):
