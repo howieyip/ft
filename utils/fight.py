@@ -949,10 +949,10 @@ def get_order_price(price, index):
         order_price =  round(price + (math.pow(index, 2) + 5 * index) / 2 * 0.001, 3)
         return order_price
     order_price = round(price + index * conf['EVERY_ORDER_DIFF'], 3)
-    if order_price > 0.5:
-        return round(math.ceil(order_price * 100) / 100, 3)
-    if order_price > 0.25:
-        return round(math.ceil(order_price * 200) / 200, 3)
+    if order_price > 0.5 and f'{order_price:.3f}'[-1] != '0':
+        return round(math.ceil(round(order_price * 100, 3)) / 100, 3)
+    if order_price > 0.25 and f'{order_price:.3f}'[-1] not in ['0', '5']:
+        return round(math.ceil(round(order_price * 200, 3)) / 200, 3)
     return order_price
 
 
