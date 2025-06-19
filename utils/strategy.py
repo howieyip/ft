@@ -216,8 +216,8 @@ def cal(klines):
     log.info('-------------------- %s -------------------- %s' % (klines.iloc[0]['time_key'], delta))
     for index, row in klines.iterrows():
         glb['klines'] = klines[0:index+1]
-        # if row.time_key == '2025-02-03 10:57:00':
-        #     log.info('debugger')
+        # if row.time_key == '2025-06-19 10:15:00':
+        #     log.info('draw_line: %s' % glb['line'])
         check_result = check_line()
         if 'bull' in check_result or 'bear' in check_result:
             log.info('draw_line: %s' % glb['line'])

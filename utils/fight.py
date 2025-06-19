@@ -221,8 +221,10 @@ def get_rt_data():
     # 1    HK.800000  2023-10-31 09:31:00     False          571   17214.94    17406.36  17276.320000       0  1.822654e+09
     # 2    HK.800000  2023-10-31 09:32:00     False          572   17223.84    17406.36  17258.826667       0  8.516341e+08
     # 3    HK.800000  2023-10-31 09:33:00     False          573   17224.69    17406.36  17250.292500       0  7.468972e+08
-    # ret, data = (0, {'opened_mins': [570, 571, 572, 573],
-    # 'cur_price': [17337.70, 17214.94, 17223.84, 17212.21]})
+    # data = {
+    # 'opened_mins': [570, 571, 572, 573],
+    # 'cur_price': [17337.70, 17214.94, 17223.84, 17212.21]
+    # }
     # data = pd.DataFrame(data)
     glb['rt_data'] = rt_data
     return rt_data
@@ -419,6 +421,12 @@ def get_order_book(code):
     return order_book
 
 
+def get_diff_volume(price1, price2):
+    order_diff_times = math.floor(abs(price1 - price2) / conf['EVERY_ORDER_DIFF'])
+    per_volume = conf['FAR_ORDER_LIST'][0][1]
+    return per_volume * order_diff_times
+
+
 def _smart_buy(code, volume, price=None, type='Bid'):
     if price is None:
         order_book = get_order_book(code)
@@ -426,12 +434,6 @@ def _smart_buy(code, volume, price=None, type='Bid'):
             price = max(0.01, order_book[type][0][0])
         else:
             price = max(0.01, order_book[type][1][0])
-    if not conf['NEED_LOSS']:
-        last_price = find_last_price(code)
-        if last_price and price < last_price:
-            order_diff_times = math.floor((last_price - price) / conf['EVERY_ORDER_DIFF'])
-            per_volume = conf['FAR_ORDER_LIST'][0][1]
-            volume = per_volume * order_diff_times
     ret, data = trade_ctx.place_order(price=price, qty=volume, code=code, trd_side=ft.TrdSide.BUY, trd_env=conf['TRADE_ENV'], acc_id=conf['acc_id'])
     # log.info('_smart_buy, ret: %s, data:\n%s' % (ret, data))
     if ret != ft.RET_OK:
@@ -783,9 +785,12 @@ def auto_move_position(hsi_data):
 def check_bid_ask_diff(order_book):
     bid_price = order_book['Bid'][0][0]
     ask_price = order_book['Ask'][0][0]
-    bid_ask_diff = round(ask_price - bid_price, 3)
-    if bid_price and ask_price and ((bid_price < 0.25 and bid_ask_diff <= 0.003) or (bid_price >= 0.25 and bid_ask_diff <= 0.005) or (bid_price >= 0.5 and bid_ask_diff <= 0.01)):
-        return True
+    bid_volume = order_book['Bid'][0][1]
+    ask_volume = order_book['Ask'][0][1]
+    if bid_price and ask_price and bid_volume >= 1e6 and ask_volume >= 1e6:
+        bid_ask_diff = round(ask_price - bid_price, 3)
+        if (bid_price < 0.25 and bid_ask_diff <= 0.003) or (bid_price >= 0.25 and bid_ask_diff <= 0.005) or (bid_price >= 0.5 and bid_ask_diff <= 0.01):
+            return True
     return False
 
 
@@ -926,6 +931,7 @@ class OrderBook(ft.OrderBookHandlerBase):
     def on_recv_rsp(self, rsp_str):
         ret, data = super(OrderBook, self).on_recv_rsp(rsp_str)
         # log.info('OrderBook push ret: %s, data:%s' % (ret, data))
+        # ret: 0, data:{'code': 'HK.50756', 'svr_recv_time_bid': '2025-05-02 15:35:44.961', 'svr_recv_time_ask': '2025-05-02 15:35:44.961', 'Bid': [(0.38, 4940000, 1, {}), (0.375, 0, 0, {}), (0.37, 0, 0, {})], 'Ask': [(0.385, 5000000, 1, {}), (0.39, 0, 0, {}), (0.395, 0, 0, {})]}
         if ret != ft.RET_OK:
             log.info('OrderBook push error, ret: %s, data:%s' % (ret, data))
             return ret, data
@@ -985,10 +991,10 @@ def auto_place_order(code, volume, price, cancel=False):
         order_list = conf['FAR_ORDER_LIST']
         if price >= round(last_price + first_order_diff, 3):
             first_order_price = price
-            order_diff_times = math.floor((first_order_price - last_price) / conf['EVERY_ORDER_DIFF'])
-            per_volume = order_list[0][1]
+            per_volume = conf['FAR_ORDER_LIST'][0][1]
+            diff_volume = get_diff_volume(first_order_price, last_price)
             order_list = [
-                [volume, max(per_volume, min(per_volume * order_diff_times, volume)), max(0, min(volume - per_volume * order_diff_times, per_volume))]
+                [volume, max(per_volume, min(diff_volume, volume)), max(0, min(volume - diff_volume, per_volume))]
             ]
         if cancel:
             cancel_all(code, trd_side=ft.TrdSide.SELL)
@@ -1180,15 +1186,15 @@ def to_buy(stock_type, code='', volume=None, type='Bid', force=False, cur_price_
             log.info('to_buy code: %s, no last_filled_order, \n%s' % (code, glb['last_filled_order']))
             return False
         order_book = get_order_book(code)
-        bid_pirce = order_book['Bid'][0][0]
         if not check_bid_ask_diff(order_book):
             log.info('to_buy warning, order_book: %s' % order_book)
             return False
-        add_order_diff = round(last_price - bid_pirce, 3)
+        bid_price = order_book['Bid'][0][0]
+        add_order_diff = round(last_price - bid_price, 3)
         if add_order_diff < conf['ADD_ORDER_DIFF']:
-            log.info('to_buy code: %s, bid_pirce: %s, last_price: %s, diff: %s < %s, not allow add' % (code, bid_pirce, last_price, add_order_diff, conf['ADD_ORDER_DIFF']))
+            log.info('to_buy code: %s, bid_price: %s, last_price: %s, diff: %s < %s, not allow add' % (code, bid_price, last_price, add_order_diff, conf['ADD_ORDER_DIFF']))
             return False
-        log.info('to_buy code: %s, bid_pirce: %s, last_price: %s, diff: %s >= %s, allow add' % (code, bid_pirce, last_price, add_order_diff, conf['ADD_ORDER_DIFF']))
+        log.info('to_buy code: %s, bid_price: %s, last_price: %s, diff: %s >= %s, allow add' % (code, bid_price, last_price, add_order_diff, conf['ADD_ORDER_DIFF']))
 
     if code == 'auto':
         data = _get_stock_code(stock_type=stock_type, cur_price_min=cur_price_min, cur_price_max=cur_price_max)
@@ -1201,7 +1207,15 @@ def to_buy(stock_type, code='', volume=None, type='Bid', force=False, cur_price_
             stock_type = 'bear'
 
     set_submitted_buy(code, CONST[stock_type])
-    data = smart_buy(code, volume, type='Ask' if force else type)
+    if conf['NEED_LOSS']:
+        data = smart_buy(code, volume, type='Ask' if force else type)
+    else:
+        price = bid_price
+        ask_price = order_book['Ask'][0][0]
+        add_order_diff = round(last_price - ask_price, 3)
+        if add_order_diff >= conf['ADD_ORDER_DIFF']:
+            price = ask_price
+        data = smart_buy(code, get_diff_volume(last_price, price), price)
     if data is False or data is None:
         reset_submitted_buy(code, CONST[stock_type])
     else:
@@ -1319,7 +1333,8 @@ class Ticker(ft.TickerHandlerBase):
             return ret, data
         #       code              time                 price        volume  turnover    ticker_direction       sequence   type      push_data_type
         # 0     HK_FUTURE.999010  2019-03-01 00:59:55  28655.0       1   28655.0              BUY  6663097136416030721  AUTO_MATCH          CACHE
-        # ret, data = (0, {'code': ['HK_FUTURE.999010', 'HK_FUTURE.999011'],
+        # data = {
+        # 'code': ['HK_FUTURE.999010', 'HK_FUTURE.999011'],
         # 'time': ['2019-03-01 09:59:55', '2019-03-01 09:59:59'],
         # 'price': [28655.0, 28655.0],
         # 'volume': [1, 1],
@@ -1327,7 +1342,8 @@ class Ticker(ft.TickerHandlerBase):
         # 'ticker_direction': ['BUY', 'BUY'],
         # 'sequence': [6663097136416030721, 6663097136416030721],
         # 'type': ['AUTO_MATCH', 'AUTO_MATCH'],
-        # 'push_data_type': ['CACHE', 'CACHE']})
+        # 'push_data_type': ['CACHE', 'CACHE']
+        # }
         # data = pd.DataFrame(data)
 
         cur_ticker = data.iloc[-1]
