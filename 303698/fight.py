@@ -18,8 +18,8 @@ start({
     # 'EVERY_ORDER_DIFF': 0.003,
     # 'NEED_LOSS': True,
     'BULL_CODE': 'HK.50756',
-    'BUY_VOLUME' : 240e3,
-    'ADD_ORDER_DIFF': 0.08,
-    # 'FAR_ORDER_LIST': [[60e3, 30e3, 30e3]],
+    'BUY_VOLUME' : 200e3,
+    'ADD_ORDER_DIFF': 0.1,
+    'FAR_ORDER_LIST': [[40e3, 40e3]],
     # 'EVERY_ORDER_DIFF': 0.005,
 })
