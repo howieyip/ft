@@ -787,7 +787,7 @@ def check_bid_ask_diff(order_book):
     ask_price = order_book['Ask'][0][0]
     bid_volume = order_book['Bid'][0][1]
     ask_volume = order_book['Ask'][0][1]
-    if bid_price and ask_price and bid_volume >= 1e6 and ask_volume >= 1e6:
+    if bid_price and ask_price and bid_volume >= 1e6 and ask_volume >= 500e3:
         bid_ask_diff = round(ask_price - bid_price, 3)
         if (bid_price < 0.25 and bid_ask_diff <= 0.003) or (bid_price >= 0.25 and bid_ask_diff <= 0.005) or (bid_price >= 0.5 and bid_ask_diff <= 0.01):
             return True
