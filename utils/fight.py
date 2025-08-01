@@ -421,8 +421,12 @@ def get_order_book(code):
     return order_book
 
 
-def get_diff_volume(price1, price2):
-    order_diff_times = math.floor(abs(price1 - price2) / conf['EVERY_ORDER_DIFF'])
+def get_diff_volume(last_price, cur_price):
+    order_diff_times = abs(last_price - cur_price) / conf['EVERY_ORDER_DIFF']
+    if cur_price >= 0.5:
+        order_diff_times = round(order_diff_times)
+    else:
+        order_diff_times = math.floor(order_diff_times)
     per_volume = conf['FAR_ORDER_LIST'][0][1]
     return per_volume * order_diff_times
 
@@ -992,7 +996,7 @@ def auto_place_order(code, volume, price, cancel=False):
         if price >= round(last_price + first_order_diff, 3):
             first_order_price = price
             per_volume = conf['FAR_ORDER_LIST'][0][1]
-            diff_volume = get_diff_volume(first_order_price, last_price)
+            diff_volume = get_diff_volume(last_price, first_order_price)
             order_list = [
                 [volume, max(per_volume, min(diff_volume, volume)), max(0, min(volume - diff_volume, per_volume))]
             ]
