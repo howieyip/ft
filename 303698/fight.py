@@ -17,7 +17,7 @@ start({
     # 'ADD_ORDER_DIFF': 0.004,
     # 'EVERY_ORDER_DIFF': 0.003,
     # 'NEED_LOSS': True,
-    'BULL_CODE': 'HK.50731',
+    'BULL_CODE': 'HK.51227',
     'BUY_VOLUME' : 200e3,
     'ADD_ORDER_DIFF': 0.1,
     'FAR_ORDER_LIST': [[40e3, 40e3]],
