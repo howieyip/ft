@@ -39,7 +39,7 @@ conf = {
 
     'ALLOW_ADD': True,                              # 是否允许补仓，若是则下面的ADD_ORDER_DIFF有效
     'ADD_ORDER_DIFF': 0.04,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
-    'AUTO_PLACE_ORDER': True,                       # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
+    'AUTO_SELL': True,                       # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
     'ORDER_LIST': [                                 # 下单多少股以上（大的写前面），每单挂多少股，例如下单800k，分3档200k 200k 400k挂单
         [800e3, 200e3, 200e3, 200e3, 200e3],
         [700e3, 200e3, 200e3, 200e3, 100e3],
@@ -125,7 +125,7 @@ glb = {
     'today_hold_code_list': [],
     'today_hold_bull_list': [],
     'today_hold_bear_list': [],
-    'auto_place_order_flag': False,
+    'auto_sell_flag': False,
     'move_position': False,
     'cache_get_stock_code': {
         'bull': {
@@ -825,12 +825,12 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
             set_hold(item.code, item.stock_name)
             # 如果一单也没挂，则自动挂单
             if caller != 'start' and item.can_sell_qty == item.qty:
-                log.info('auto_place_order, code: %s, nominal_price: %s, can_sell_qty: %s' % (item.code, item.nominal_price, item.can_sell_qty))
+                log.info('auto_sell, code: %s, nominal_price: %s, can_sell_qty: %s' % (item.code, item.nominal_price, item.can_sell_qty))
                 order_book = get_order_book(item.code)
                 if check_bid_ask_diff(order_book):
-                    auto_place_order(item.code, item.qty, order_book['Bid'][0][0])
+                    auto_sell(item.code, item.qty, order_book['Bid'][0][0])
                 else:
-                    log.info('auto_place_order warning, order_book: %s' % order_book)
+                    log.info('auto_sell warning, order_book: %s' % order_book)
             # 检查止损
             # if conf['NEED_LOSS'] and caller in ['per_min', 'fluctuate']:
             #     check_profit_loss(item.code, item.nominal_price, round(item.nominal_price + 0.001, 3), caller='position')
@@ -871,7 +871,7 @@ class SysNotify(ft.SysNotifyHandlerBase):
 
 def modify_order2(index, order_list, price):
     order = order_list[index]
-    if glb['auto_place_order_flag'] or glb['loss'][order.code]:
+    if glb['auto_sell_flag'] or glb['loss'][order.code]:
         glb['timer'].clearTimeoutHandler()
         return False
     _modify_order(order, get_order_price(price, index + 1))
@@ -972,13 +972,13 @@ def get_order_price(price, index):
     return order_price
 
 
-def auto_place_order(code, volume, price, cancel=False):
-    if not conf['AUTO_PLACE_ORDER'] or glb['to_over'] or glb['auto_place_order_flag']:
+def auto_sell(code, volume, price, cancel=False):
+    if not conf['AUTO_SELL'] or glb['to_over'] or glb['auto_sell_flag']:
         return False
     last_price = find_last_price(code)
     if last_price is None or price < last_price:
         return False
-    glb['auto_place_order_flag'] = True
+    glb['auto_sell_flag'] = True
     first_order_diff = conf['EVERY_ORDER_DIFF']
     if conf['NEED_LOSS']:
         first_order_diff = conf['FIRST_ORDER_DIFF']
@@ -1005,8 +1005,8 @@ def auto_place_order(code, volume, price, cancel=False):
     if volume < 60e3 or conf['NEED_LOSS'] and glb['almost_over']:
         data = smart_sell(code, volume, first_order_price)
         if data is False:
-            log.info('auto_place_order => smart_sell error')
-        glb['auto_place_order_flag'] = False
+            log.info('auto_sell => smart_sell error')
+        glb['auto_sell_flag'] = False
         return
     item = []
     # [[600e3, 150e3, 150e3, 150e3, 150e3]]
@@ -1025,10 +1025,10 @@ def auto_place_order(code, volume, price, cancel=False):
             continue
         data = smart_sell(code, vol, get_order_price(first_order_price, i - 1))
         if data is False:
-            log.info('auto_place_order => smart_sell error')
+            log.info('auto_sell => smart_sell error')
         elif glb['move_position']:
             glb['move_position'] = False
-    glb['auto_place_order_flag'] = False
+    glb['auto_sell_flag'] = False
 
 
 class TradeOrder(ft.TradeOrderHandlerBase):
@@ -1055,7 +1055,7 @@ class TradeOrder(ft.TradeOrderHandlerBase):
                 reset_submitted_buy(order.code, order.stock_name)
                 set_hold(order.code, order.stock_name)
                 time.sleep(2)
-                auto_place_order(order.code, order.dealt_qty, order.price, True)
+                auto_sell(order.code, order.dealt_qty, order.price, True)
             elif order.trd_side == ft.TrdSide.SELL:
                 glb['last_sell_filled_order'][order.code] = {'updated_time': order.updated_time, 'price': order.price, 'trd_side': order.trd_side}
                 reset_submitted_sell(order)
@@ -1227,7 +1227,7 @@ def to_buy(stock_type, code='', volume=None, type='Bid', force=False, cur_price_
     return data
 
 
-def _pre_buy():
+def _auto_buy():
     check_result = check_line()
     if 'bull' in check_result and conf['BULL_CODE'] != '' and not glb['submitted_buy_bull_flag'] and (conf['ALLOW_ADD'] or len(glb['today_hold_bull_list']) == 0):
         to_buy('bull')
@@ -1403,7 +1403,7 @@ class Ticker(ft.TickerHandlerBase):
 
         # 自动买入
         if conf['AUTO_BUY'] and (not glb['soon_over'] and (s == 56 or s == 57 or s == 58 or s == 59) or not conf['NEED_LOSS'] and s % 30 == 0):
-            pre_buy()
+            auto_buy()
         # 自动调价
         if (conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']) and s % 3 == 0:
             delta_price = glb['cur_price'] - glb['last_3s_price']
@@ -1446,7 +1446,7 @@ def resetData():
 
 
 # 限制n秒内最多查1次
-pre_buy = throttle(_pre_buy, 1, need_log=False)
+auto_buy = throttle(_auto_buy, 1, need_log=False)
 check_profit_loss = throttle(_check_profit_loss, 2, need_log=False)
 profit_order = throttle(_profit_order, 2)
 auto_adjust_buy = throttle(_auto_adjust_buy, 2, need_log=False)

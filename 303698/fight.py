@@ -8,7 +8,7 @@ start({
     'PORT' : 11111,
     'acc_id': 281756481226004224,
     'PASSWORD_MD5': 'd7866f93b87fc9c1b0a06a6a6669bada',
-    'AUTO_BUY': True,
+    'AUTO_BUY': False,
     # 'BULL_CODE': 'auto',
     # 'BUY_VOLUME' : 200e3,
     # 'MAX_VOLUME': 400e3,
