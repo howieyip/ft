@@ -6,13 +6,14 @@
 
 - [官方在线文档](https://openapi.futunn.com/futu-api-doc/)
 
--------------------
+---
 
 ### 安装
+
 ```
 pip install futu-api
-pip3 show futu-api
-pip3 install --upgrade futu-api==9.1.5108
+pip show futu-api
+pip install --upgrade futu-api==10.3.6308
 
 ```
 
@@ -21,6 +22,7 @@ pip3 install --upgrade futu-api==9.1.5108
 ---
 
 ### 快速上手
+
 ```
 
 # 导入futu-api
@@ -177,20 +179,19 @@ trade_hk_ctx.close()
 
 ![image](https://futunnopen.github.io/futu-api-doc/_images/API.png)
 
-***
-
+---
 
 ### API及FutuOpenD客户端交流方式
 
-* 富途开放API群(229850364, 108534288)
-* 有一定交易额或特殊需求的用户请在入群后联系群主
+- 富途开放API群(229850364, 108534288)
+- 有一定交易额或特殊需求的用户请在入群后联系群主
 
-***
+---
 
 ### 使用说明
 
-* 有任何问题可以到 issues  处提出，我们会及时进行解答。
-* 使用新版本时请先仔细阅读接口文档，大部分问题都可以在接口文档中找到你想要的答案。
-* 欢迎大家提出建议、也可以提出各种需求，我们一定会尽量满足大家的需求。
+- 有任何问题可以到 issues 处提出，我们会及时进行解答。
+- 使用新版本时请先仔细阅读接口文档，大部分问题都可以在接口文档中找到你想要的答案。
+- 欢迎大家提出建议、也可以提出各种需求，我们一定会尽量满足大家的需求。
 
 ---

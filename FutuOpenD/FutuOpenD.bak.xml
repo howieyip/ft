@@ -9,6 +9,8 @@
 		<api_port>11111</api_port>
 		<!-- 登录帐号 -->
 		<!-- Login account -->
+		<!-- 登录账号可以是用户ID，手机号，邮箱，其中手机号格式为：+86 13800138000 -->
+		<!-- The login account can be user ID, phone number, or email. The phone number format is: +86 13800138000 -->
 		<login_account>100000</login_account>
 		<!-- 登录密码32位MD5加密16进制 -->
 		<!-- Login password, 32-bit MD5 encrypted hexadecimal --> 

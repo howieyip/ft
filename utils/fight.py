@@ -3,6 +3,7 @@ import time
 import datetime
 import math
 import futu as ft
+import platform
 from utils.logger import Logger
 from utils.timer import Timer
 import pandas as pd
@@ -60,7 +61,7 @@ conf = {
     'EVERY_ORDER_DIFF': 0.02,
     'NEED_LOSS': False,
     'FIRST_ORDER_DIFF': 0.002,                      # 第一个卖单间隔多少
-    'LOSS_ORDER_DIFF': 0.003,                       # 卖一价距离买入后的最高价达到多少就止损
+    'LOSS_ORDER_DIFF': 0.002,                       # 卖一价距离买入后的最高价达到多少就止损
     'loss_sell_all_over': False,                    # 亏损时尾盘清仓，只对日内短炒的生效，False时只有盈利时才清仓
 
     'AUTO_MOVE_POSITION': False,                    # 是否自动强制移仓，是则下面的MOVE_POSITION_DICT生效
@@ -910,17 +911,17 @@ def _check_profit_loss(code, bid_price, ask_price, caller='', need_log=True):
     if need_log and not glb['loss'][code]:
         log.info('%s check_profit_loss %s, ask_price: %s, max_price: %s' % (caller, code, ask_price, max_price))
 
-    max_price_diff = round(max_price - ask_price, 3)
+    max_price_diff = round(max_price - bid_price, 3)
     if max_price_diff >= conf['LOSS_ORDER_DIFF'] or glb['almost_over']:
         glb['loss'][code] = True
         buy_price = find_last_price(order.code, order.price, order.order_id, order.create_time, 'buy')
         if need_log:
             log.info('%s loss %s, buy_price: %s, ask_price: %s, max_price: %s' % (caller, code, buy_price, ask_price, max_price))
         loss_price = min(ask_price, last_price) + conf['LOSS_ORDER_DIFF']
-        force_loss = ask_price <= buy_price and ('牛' in order.stock_name and glb['cur_price'] < glb['line']['long'] or '熊' in order.stock_name and glb['cur_price'] > glb['line']['long'])
+        force_loss = ask_price <= buy_price
         if ask_price < last_price:
             if force_loss:
-                loss_price = ask_price + 0.002
+                loss_price = ask_price
             elif glb['almost_over']:
                 loss_price = ask_price
         if loss_price < order.price:
@@ -956,7 +957,7 @@ class OrderBook(ft.OrderBookHandlerBase):
 
 def get_order_price(price, index):
     if conf['NEED_LOSS']:
-        order_price =  round(price + (math.pow(index, 2) + 5 * index) / 2 * 0.001, 3)
+        order_price =  round(price + (math.pow(index, 2) + 3 * index) / 2 * 0.001, 3)
         return order_price
     order_price = round(price + index * conf['EVERY_ORDER_DIFF'], 3)
     if order_price > 0.5:
@@ -1486,7 +1487,7 @@ def start(config=None):
     # ret, data = trade_ctx.get_acc_list()
     # log.info(data)
     resetData()
-    if conf['TRADE_ENV'] == ft.TrdEnv.REAL:
+    if conf['TRADE_ENV'] == ft.TrdEnv.REAL and platform.system() == "Linux":
         ret, data = trade_ctx.unlock_trade(password_md5=conf['PASSWORD_MD5'], password=conf['PASSWORD'])
         log.info('unlock_trade, ret: %s, data:%s' % (ret, data))
         if ret != ft.RET_OK:
@@ -1516,7 +1517,7 @@ def start(config=None):
     trade_ctx.set_handler(TradeOrder())
     if conf['NEED_LOSS'] or conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']:
         quote_ctx.set_handler(OrderBook())
-    if conf['BULL_CODE']:
+    if conf['BULL_CODE'] != 'auto':
         subscribe([conf['BULL_CODE']], [ft.SubType.ORDER_BOOK])
     ret, data = quote_ctx.query_subscription()
     log.info('query_subscription, ret: %s, data:%s' % (ret, data))
