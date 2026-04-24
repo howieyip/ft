@@ -124,10 +124,6 @@ def check_position(kline, band, direction=0):
     if golden_line is False:
         return False
     for k in golden_line:
-        if direction == 0 and golden_line['100'] > golden_line['0'] and float(k) >= 150:
-            return False
-        if direction == 1 and golden_line['100'] < golden_line['0'] and float(k) >= 150:
-            return False
         if kline.low - distance < golden_line[k] < kline.high + distance:
             if direction == 0:
                 if kline.low - band < distance*1.5:
@@ -165,13 +161,13 @@ def check_line(buy_all=False):
     last2_kline = klines.iloc[-2]
     last3_kline = klines.iloc[-3]
     delta_price = last_kline.close - last_kline.last_close
-    profit = 20
+    profit = 5
     kline_len = 10
     if line['upper'] - line['lower'] < 25:
         check_result = 'bands_narrow'
     elif (check_position(last_kline, line['lower']) or check_position(last2_kline, line['lower2']) or check_position(last3_kline, line['lower3'])) and line['mid'] - last_kline.close > profit:
-        if delta_price > 0 or delta_price == 0 and last2_kline.close - last2_kline.last_close >= kline_len*2:
-            if last_kline.close >= last3_kline.high and last3_kline.close < last3_kline.open and (last3_kline.open - last2_kline.close) / (last3_kline.high - last3_kline.low) < 1/3 and last3_kline.high - last3_kline.low >= kline_len:
+        if delta_price > 0 or last2_kline.close - last2_kline.last_close >= kline_len:
+            if last_kline.close >= last3_kline.close and last3_kline.close < last3_kline.open and (last3_kline.open - last2_kline.close) / (last3_kline.open - last3_kline.close) <= 0.4 and last3_kline.high - last3_kline.low >= kline_len:
                 check_result = 'long_swallow1_bull'
             elif last_kline.close >= last3_kline.open and last_kline.high >= last3_kline.high and last2_kline.close < last2_kline.open and last3_kline.close < last3_kline.open and last2_kline.high - last2_kline.low + last3_kline.high - last3_kline.low >= kline_len*2:
                 check_result = 'long_swallow2_bull'
@@ -179,16 +175,11 @@ def check_line(buy_all=False):
                 check_result = 'long_pinba_bull'
             else:
                 check_result = 'wait_long_signal'
-        elif last_kline.low - line['lower'] < 5:
-            if last_kline.close > line['long'] and delta_price > -kline_len*3:
-                check_result = 'wave_bull'
-            else:
-                check_result = 'wait_long_wave'
         else:
             check_result = 'wait_long_trend'
     elif buy_all and ((check_position(last_kline, line['upper'], 1) or check_position(last2_kline, line['upper2'], 1) or check_position(last3_kline, line['upper3'], 1)) and last_kline.close - line['mid'] > profit):
-        if delta_price < 0 or delta_price == 0 and last2_kline.close - last2_kline.last_close <= -kline_len*2:
-            if last_kline.close <= last3_kline.low and last3_kline.close > last3_kline.open and (last2_kline.close - last3_kline.open) / (last3_kline.high - last3_kline.low) < 1/3 and last3_kline.high - last3_kline.low >= kline_len:
+        if delta_price < 0 or last2_kline.close - last2_kline.last_close <= -kline_len:
+            if last_kline.close <= last3_kline.close and last3_kline.close > last3_kline.open and (last2_kline.close - last3_kline.open) / (last3_kline.close - last3_kline.open) <= 0.4 and last3_kline.high - last3_kline.low >= kline_len:
                 check_result = 'short_swallow1_bear'
             elif last_kline.close <= last3_kline.open and last_kline.low <= last3_kline.low and last2_kline.close > last2_kline.open and last3_kline.close > last3_kline.open and last2_kline.high - last2_kline.low + last3_kline.high - last3_kline.low >= kline_len*2:
                 check_result = 'short_swallow2_bear'
@@ -196,11 +187,6 @@ def check_line(buy_all=False):
                 check_result = 'short_pinba_bear'
             else:
                 check_result = 'wait_short_signal'
-        elif last_kline.high - line['upper'] > -5:
-            if last_kline.close < line['long'] and delta_price < kline_len*3:
-                check_result = 'wave_bear'
-            else:
-                check_result = 'wait_short_wave'
         else:
             check_result = 'wait_short_trend'
     else:
@@ -216,7 +202,7 @@ def cal(klines):
     log.info('-------------------- %s -------------------- %s' % (klines.iloc[0]['time_key'], delta))
     for index, row in klines.iterrows():
         glb['klines'] = klines[0:index+1]
-        # if row.time_key == '2025-06-19 10:15:00':
+        # if row.time_key == '2026-04-24 14:54:00':
         #     log.info('draw_line: %s' % glb['line'])
         check_result = check_line()
         if 'bull' in check_result or 'bear' in check_result:
