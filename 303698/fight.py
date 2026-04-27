@@ -20,6 +20,6 @@ start({
     'BULL_CODE': 'HK.51227',
     'BUY_VOLUME' : 200e3,
     'ADD_ORDER_DIFF': 0.1,
-    'FAR_ORDER_LIST': [[40e3, 40e3]],
+    'FAR_ORDER_LIST': [[50e3, 50e3]],
     # 'EVERY_ORDER_DIFF': 0.005,
 })

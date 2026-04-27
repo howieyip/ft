@@ -892,11 +892,14 @@ def _profit_order(order_list):
 def _check_profit_loss(code, bid_price, ask_price, caller='', need_log=True):
     if code not in glb['today_hold_code_list'] or code not in glb['submitted_sell_orders'] or len(glb['submitted_sell_orders'][code]) == 0:
         return False
+    last_price = find_last_price(code)
+    if not last_price:
+        log.info('check_profit_loss code: %s, no last_filled_order, \n%s' % (code, glb['last_filled_order']))
+        return False
     order_list = glb['submitted_sell_orders'][code]
     order = order_list[0]
     if code not in glb['max_nominal_price'] or bid_price > glb['max_nominal_price'][code]:
         glb['max_nominal_price'][code] = bid_price
-    last_price = find_last_price(code)
     if last_price > glb['max_nominal_price'][code]:
         glb['max_nominal_price'][code] = last_price
 
@@ -1276,15 +1279,20 @@ def _auto_adjust_sell(delta_price):
         order = glb['submitted_sell_last_bear']
     if order is None or order.code not in glb['order_book'] or order.code not in glb['auto_buy_code_list'] or len(glb['submitted_sell_orders'][order.code]) > 1 or order.price >= 0.25:
         return False
+    last_price = find_last_price(order.code)
+    if not last_price:
+        log.info('auto_adjust_sell code: %s, no last_filled_order, \n%s' % (order.code, glb['last_filled_order']))
+        return False
     order_book = glb['order_book'][order.code]
     rise_price = order_book['Ask'][1][0]
     fall_price = order_book['Ask'][0][0]
-    if conf['NEED_LOSS'] and glb['almost_over'] and (conf['loss_sell_all_over'] or glb['today_pl_val'] > 0):
-        fall_price = fall_price
-    elif conf['NEED_LOSS']:
-        fall_price = max(find_last_price(order.code) + conf['LOSS_ORDER_DIFF'], fall_price)
+    if conf['NEED_LOSS']:
+        if glb['almost_over'] and (conf['loss_sell_all_over'] or glb['today_pl_val'] > 0):
+            fall_price = fall_price
+        else:
+            fall_price = max(last_price + conf['LOSS_ORDER_DIFF'], fall_price)
     else:
-        fall_price = max(find_last_price(order.code) + conf['EVERY_ORDER_DIFF'], fall_price)
+        fall_price = max(last_price + conf['EVERY_ORDER_DIFF'], fall_price)
     rise_condition = False
     if '牛' in order.stock_name:
         rise_condition = delta_price >= 5
