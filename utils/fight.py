@@ -1293,6 +1293,7 @@ def _auto_adjust_sell(delta_price):
             fall_price = max(last_price + conf['LOSS_ORDER_DIFF'], fall_price)
     else:
         fall_price = max(last_price + conf['EVERY_ORDER_DIFF'], fall_price)
+    fall_price = round(fall_price, 3)
     rise_condition = False
     if '牛' in order.stock_name:
         rise_condition = delta_price >= 5
@@ -1318,7 +1319,8 @@ def _auto_adjust_buy(delta_price):
     if not conf['NEED_LOSS']:
         last_price = find_last_price(order.code)
         if last_price:
-            rise_price = round(min(rise_price, last_price - conf['ADD_ORDER_DIFF']), 3)
+            rise_price = min(rise_price, last_price - conf['ADD_ORDER_DIFF'])
+    rise_price = round(rise_price, 3)
     fall_condition = False
     if '牛' in order.stock_name:
         fall_condition = delta_price <= -5
@@ -1407,7 +1409,7 @@ class Ticker(ft.TickerHandlerBase):
             position_list_query(need_log=False, caller='per_min')
 
         # 自动买入
-        if conf['AUTO_BUY'] and (not glb['soon_over'] and (s == 56 or s == 57 or s == 58 or s == 59) or not conf['NEED_LOSS'] and s % 30 == 0):
+        if conf['AUTO_BUY'] and (not glb['soon_over'] and s >= 56 or not conf['NEED_LOSS'] and s % 30 == 0):
             auto_buy()
         # 自动调价
         if (conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']) and s % 3 == 0:
