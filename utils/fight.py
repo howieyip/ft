@@ -357,20 +357,14 @@ def check_line(buy_all=False):
     delta_price = last_kline.close - last_kline.last_close
     profit = 5
     kline_len = 10
-    if line['upper'] - line['lower'] < 25:
+    is_neer_mid = check_position(last_kline, line['mid']) or check_position(last2_kline, line['mid2']) or check_position(last3_kline, line['mid3'])
+    is_neer_lower = check_position(last_kline, line['lower']) or check_position(last2_kline, line['lower2']) or check_position(last3_kline, line['lower3'])
+    if not conf['NEED_LOSS'] and (is_neer_mid or is_neer_lower):
+        check_result = 'long_far_bull'
+    elif line['upper'] - line['lower'] < 25:
         check_result = 'bands_narrow'
-    elif not conf['NEED_LOSS'] and (check_position(last_kline, line['mid']) or check_position(last2_kline, line['mid2']) or check_position(last3_kline, line['mid3'])) and line['upper'] - last_kline.close > profit:
-          if delta_price >= 0:
-              check_result = 'long_far_bull'
-          else:
-              check_result = 'wait_long_trend'
-    elif (check_position(last_kline, line['lower']) or check_position(last2_kline, line['lower2']) or check_position(last3_kline, line['lower3'])) and line['mid'] - last_kline.close > profit:
-        if not conf['NEED_LOSS']:
-            if delta_price >= 0:
-                check_result = 'long_far_bull'
-            else:
-                check_result = 'wait_long_trend'
-        elif delta_price > 0 or last2_kline.close - last2_kline.last_close >= kline_len:
+    elif is_neer_lower and line['mid'] - last_kline.close > profit:
+        if delta_price > 0 or last2_kline.close - last2_kline.last_close >= kline_len:
             if last_kline.close >= last3_kline.close and last3_kline.close < last3_kline.open and (last3_kline.open - last2_kline.close) / (last3_kline.open - last3_kline.close) <= 0.4 and last3_kline.high - last3_kline.low >= kline_len:
                 check_result = 'long_swallow1_bull'
             elif last_kline.close >= last3_kline.open and last_kline.high >= last3_kline.high and last2_kline.close < last2_kline.open and last3_kline.close < last3_kline.open and last2_kline.high - last2_kline.low + last3_kline.high - last3_kline.low >= kline_len*2:
@@ -423,7 +417,7 @@ def get_diff_volume(last_price, cur_price):
     if cur_price >= 0.5:
         order_diff_times = round(order_diff_times)
     else:
-        order_diff_times = math.floor(order_diff_times)
+        order_diff_times = math.ceil(order_diff_times)
     per_volume = conf['FAR_ORDER_LIST'][0][1]
     return per_volume * order_diff_times
 
