@@ -996,7 +996,7 @@ def auto_sell(code, volume, price, cancel=False):
             ]
         if cancel:
             cancel_all(code, trd_side=ft.TrdSide.SELL)
-    if volume < 60e3 or conf['NEED_LOSS'] and glb['almost_over']:
+    if volume < order_list[-1][0] or conf['NEED_LOSS'] and glb['almost_over']:
         data = smart_sell(code, volume, first_order_price)
         if data is False:
             log.info('auto_sell => smart_sell error')
