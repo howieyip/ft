@@ -30,7 +30,7 @@ conf = {
     'LONG_BULL_ISSUER': '法兴',
     'BEAR_CODE': '',                                # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
 
-    'BUY_VOLUME': 120e3,                             # 下单多少股
+    'BUY_VOLUME': 40e3,                             # 下单多少股
     'MAX_VOLUME': 3000e3,                           # 最大持仓股数，若超过则不会再买入
     'CUR_PRICE_MIN': 0.1,
     'CUR_PRICE_MAX': 0.2,
@@ -39,8 +39,8 @@ conf = {
     'AUTO_ADJUST_SELL': True,                       # 是否自动调整挂的卖单的价格
 
     'ALLOW_ADD': True,                              # 是否允许补仓，若是则下面的ADD_ORDER_DIFF有效
-    'ADD_ORDER_DIFF': 0.04,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
-    'AUTO_SELL': True,                       # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
+    'ADD_ORDER_DIFF': 0.008,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
+    'AUTO_SELL': True,                              # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
     'ORDER_LIST': [                                 # 下单多少股以上（大的写前面），每单挂多少股，例如下单800k，分3档200k 200k 400k挂单
         [800e3, 200e3, 200e3, 200e3, 200e3],
         [700e3, 200e3, 200e3, 200e3, 100e3],
@@ -52,16 +52,16 @@ conf = {
         [100e3, 50e3, 50e3]
     ],
     'FAR_ORDER_LIST': [                             # 长线订单，持仓超过60k只挂一个60k的卖单就够，成交后再自动挂剩余的
-        [60e3, 60e3]
+        [20e3, 20e3]
     ],
     'ADD_ORDER_LIST': [                             # 短炒补仓的订单
         [200e3, 100e3, 100e3],
         [100e3, 50e3, 50e3]
     ],
-    'EVERY_ORDER_DIFF': 0.02,
+    'EVERY_ORDER_DIFF': 0.004,
     'NEED_LOSS': False,
     'FIRST_ORDER_DIFF': 0.002,                      # 第一个卖单间隔多少
-    'LOSS_ORDER_DIFF': 0.002,                       # 卖一价距离买入后的最高价达到多少就止损
+    'LOSS_ORDER_DIFF': 0.002,                       # 买一价距离买入后的最高价达到多少就止损
     'loss_sell_all_over': False,                    # 亏损时尾盘清仓，只对日内短炒的生效，False时只有盈利时才清仓
 
     'AUTO_MOVE_POSITION': False,                    # 是否自动强制移仓，是则下面的MOVE_POSITION_DICT生效
