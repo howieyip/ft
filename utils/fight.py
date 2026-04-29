@@ -412,12 +412,12 @@ def get_order_book(code):
     return order_book
 
 
-def get_diff_volume(last_price, cur_price):
+def get_diff_volume(last_price, cur_price, is_ceil):
     order_diff_times = abs(last_price - cur_price) / conf['EVERY_ORDER_DIFF']
-    if cur_price >= 0.5:
-        order_diff_times = round(order_diff_times)
-    else:
+    if is_ceil:
         order_diff_times = math.ceil(order_diff_times)
+    else:
+        order_diff_times = math.floor(order_diff_times)
     per_volume = conf['FAR_ORDER_LIST'][0][1]
     return per_volume * order_diff_times
 
@@ -1213,7 +1213,7 @@ def to_buy(stock_type, code='', volume=None, type='Bid', force=False, cur_price_
         add_order_diff = round(last_price - ask_price, 3)
         if add_order_diff >= conf['ADD_ORDER_DIFF']:
             price = ask_price
-        data = smart_buy(code, get_diff_volume(last_price, price), price)
+        data = smart_buy(code, get_diff_volume(last_price, price, True), price)
     if data is False or data is None:
         reset_submitted_buy(code, CONST[stock_type])
     else:
