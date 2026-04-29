@@ -1312,8 +1312,10 @@ def _auto_adjust_buy(delta_price):
     fall_price = order_book['Bid'][1][0]
     if not conf['NEED_LOSS']:
         last_price = find_last_price(order.code)
-        if last_price:
-            rise_price = min(rise_price, last_price - conf['ADD_ORDER_DIFF'])
+        if not last_price:
+            log.info('auto_adjust_buy code: %s, no last_filled_order, \n%s' % (order.code, glb['last_filled_order']))
+            return False
+        rise_price = min(rise_price, last_price - conf['ADD_ORDER_DIFF'])
     rise_price = round(rise_price, 3)
     fall_condition = False
     if '牛' in order.stock_name:
