@@ -412,7 +412,7 @@ def get_order_book(code):
     return order_book
 
 
-def get_diff_volume(last_price, cur_price, is_ceil):
+def get_diff_volume(last_price, cur_price, is_ceil=False):
     order_diff_times = abs(last_price - cur_price) / conf['EVERY_ORDER_DIFF']
     if is_ceil:
         order_diff_times = math.ceil(order_diff_times)
