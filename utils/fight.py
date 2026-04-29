@@ -273,10 +273,10 @@ def draw_line():
     line['mid'] = last_boll_bands['mid']
     line['upper'] = last_boll_bands['upper']
     line['lower'] = last_boll_bands['lower']
-    line['mid2'] = last2_boll_bands['mid']
+    # line['mid2'] = last2_boll_bands['mid']
     line['upper2'] = last2_boll_bands['upper']
     line['lower2'] = last2_boll_bands['lower']
-    line['mid3'] = last3_boll_bands['mid']
+    # line['mid3'] = last3_boll_bands['mid']
     line['upper3'] = last3_boll_bands['upper']
     line['lower3'] = last3_boll_bands['lower']
     log.info('draw_line: %s' % line)
@@ -357,9 +357,9 @@ def check_line(buy_all=False):
     delta_price = last_kline.close - last_kline.last_close
     profit = 5
     kline_len = 10
-    is_neer_mid = check_position(last_kline, line['mid']) or check_position(last2_kline, line['mid2']) or check_position(last3_kline, line['mid3'])
     is_neer_lower = check_position(last_kline, line['lower']) or check_position(last2_kline, line['lower2']) or check_position(last3_kline, line['lower3'])
-    if not conf['NEED_LOSS'] and (is_neer_mid or is_neer_lower):
+    is_neer_upper = check_position(last_kline, line['upper'], 1) or check_position(last2_kline, line['upper2'], 1) or check_position(last3_kline, line['upper3'], 1)
+    if not conf['NEED_LOSS'] and is_neer_lower:
         check_result = 'long_far_bull'
     elif line['upper'] - line['lower'] < 25:
         check_result = 'bands_narrow'
@@ -375,7 +375,7 @@ def check_line(buy_all=False):
                 check_result = 'wait_long_signal'
         else:
             check_result = 'wait_long_trend'
-    elif buy_all and ((check_position(last_kline, line['upper'], 1) or check_position(last2_kline, line['upper2'], 1) or check_position(last3_kline, line['upper3'], 1)) and last_kline.close - line['mid'] > profit):
+    elif buy_all and is_neer_upper and last_kline.close - line['mid'] > profit:
         if delta_price < 0 or last2_kline.close - last2_kline.last_close <= -kline_len:
             if last_kline.close <= last3_kline.close and last3_kline.close > last3_kline.open and (last2_kline.close - last3_kline.open) / (last3_kline.close - last3_kline.open) <= 0.4 and last3_kline.high - last3_kline.low >= kline_len:
                 check_result = 'short_swallow1_bear'

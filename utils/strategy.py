@@ -10,6 +10,7 @@ conf = {
     'HOST': '127.0.0.1',
     'PORT': 11111,
     'acc_id': 281756481226004224,
+    'NEED_LOSS': False,
 }
 log = Logger(conf['log_file']).get_logger()
 
@@ -124,7 +125,7 @@ def check_position(kline, band, direction=0):
     if golden_line is False:
         return False
     for k in golden_line:
-        if kline.low - distance < golden_line[k] < kline.high + distance:
+        if not conf['NEED_LOSS'] or kline.low - distance < golden_line[k] < kline.high + distance:
             if direction == 0:
                 if kline.low - band < distance*1.5:
                     return True
@@ -163,9 +164,13 @@ def check_line(buy_all=False):
     delta_price = last_kline.close - last_kline.last_close
     profit = 5
     kline_len = 10
-    if line['upper'] - line['lower'] < 25:
+    is_neer_lower = check_position(last_kline, line['lower']) or check_position(last2_kline, line['lower2']) or check_position(last3_kline, line['lower3'])
+    is_neer_upper = check_position(last_kline, line['upper'], 1) or check_position(last2_kline, line['upper2'], 1) or check_position(last3_kline, line['upper3'], 1)
+    if not conf['NEED_LOSS'] and is_neer_lower:
+        check_result = 'long_far_bull'
+    elif line['upper'] - line['lower'] < 25:
         check_result = 'bands_narrow'
-    elif (check_position(last_kline, line['lower']) or check_position(last2_kline, line['lower2']) or check_position(last3_kline, line['lower3'])) and line['mid'] - last_kline.close > profit:
+    elif is_neer_lower and line['mid'] - last_kline.close > profit:
         if delta_price > 0 or last2_kline.close - last2_kline.last_close >= kline_len:
             if last_kline.close >= last3_kline.close and last3_kline.close < last3_kline.open and (last3_kline.open - last2_kline.close) / (last3_kline.open - last3_kline.close) <= 0.4 and last3_kline.high - last3_kline.low >= kline_len:
                 check_result = 'long_swallow1_bull'
@@ -177,7 +182,7 @@ def check_line(buy_all=False):
                 check_result = 'wait_long_signal'
         else:
             check_result = 'wait_long_trend'
-    elif buy_all and ((check_position(last_kline, line['upper'], 1) or check_position(last2_kline, line['upper2'], 1) or check_position(last3_kline, line['upper3'], 1)) and last_kline.close - line['mid'] > profit):
+    elif buy_all and is_neer_upper and last_kline.close - line['mid'] > profit:
         if delta_price < 0 or last2_kline.close - last2_kline.last_close <= -kline_len:
             if last_kline.close <= last3_kline.close and last3_kline.close > last3_kline.open and (last2_kline.close - last3_kline.open) / (last3_kline.close - last3_kline.open) <= 0.4 and last3_kline.high - last3_kline.low >= kline_len:
                 check_result = 'short_swallow1_bear'
@@ -202,8 +207,8 @@ def cal(klines):
     log.info('-------------------- %s -------------------- %s' % (klines.iloc[0]['time_key'], delta))
     for index, row in klines.iterrows():
         glb['klines'] = klines[0:index+1]
-        # if row.time_key == '2026-04-24 14:54:00':
-        #     log.info('draw_line: %s' % glb['line'])
+        if row.time_key == '2026-04-29 09:35:00':
+            log.info('draw_line: %s' % glb['line'])
         check_result = check_line()
         if 'bull' in check_result or 'bear' in check_result:
             log.info('draw_line: %s' % glb['line'])
