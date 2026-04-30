@@ -36,7 +36,7 @@ conf = {
     'CUR_PRICE_MAX': 0.2,
 
     'AUTO_ADJUST_BUY': True,                        # Whether to auto-adjust the price of pending buy orders
-    'AUTO_ADJUST_SELL': True,                       # Whether to auto-adjust the price of pending sell orders
+    'AUTO_ADJUST_SELL': False,                       # Whether to auto-adjust the price of pending sell orders
 
     'ALLOW_ADD': True,                              # Whether to allow adding positions, if yes, the following ADD_ORDER_DIFF is effective
     'ADD_ORDER_DIFF': 0.008,                        # The price difference between the current price of held stocks and the latest transaction price must be >= this value to allow adding positions
@@ -413,7 +413,7 @@ def get_order_book(code):
 
 
 def get_diff_volume(last_price, cur_price, is_ceil=False):
-    order_diff_times = abs(last_price - cur_price) / conf['EVERY_ORDER_DIFF']
+    order_diff_times = round(abs(last_price - cur_price) / conf['EVERY_ORDER_DIFF'], 3)
     if is_ceil:
         order_diff_times = math.ceil(order_diff_times)
     else:
@@ -1410,8 +1410,10 @@ class Ticker(ft.TickerHandlerBase):
         # Auto adjust price
         if (conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']) and s % 3 == 0:
             delta_price = glb['cur_price'] - glb['last_3s_price']
-            auto_adjust_buy(delta_price)
-            auto_adjust_sell(delta_price)
+            if conf['AUTO_ADJUST_BUY']:
+                auto_adjust_buy(delta_price)
+            if conf['AUTO_ADJUST_SELL']:
+                auto_adjust_sell(delta_price)
             glb['last_3s_price'] = glb['cur_price']
 
         return ret, data
