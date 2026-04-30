@@ -12,36 +12,36 @@ pd.set_option('display.max_rows', 1000)
 pd.set_option('display.max_columns', 1000)
 
 
-# 配置
+# Configuration
 conf = {
     'log_file': 'logs/fight',
-    'TRADE_ENV': ft.TrdEnv.REAL,                          # 实盘交易：REAL，模拟交易：SIMULATE
-    'PASSWORD_MD5': '',                                   # 优先使用 PASSWORD_MD5 解锁
-    'PASSWORD': '',                                       # 如果PASSWORD_MD5为空，则使用 PASSWORD 解锁
+    'TRADE_ENV': ft.TrdEnv.REAL,                    # Real trading: REAL, Simulated trading: SIMULATE
+    'PASSWORD_MD5': '',                             # Prefer to use PASSWORD_MD5 to unlock
+    'PASSWORD': '',                                 # If PASSWORD_MD5 is empty, use PASSWORD to unlock
     'HOST': '127.0.0.1',
     'PORT': 11111,
     'acc_id': 0,
 
     'exclude_code_list': [],
-    'AUTO_BUY': False,                              # 是否自动买入，若是则下面的配置有效
-    'TRY_RECOVERY': False,                          # 是否买快回收的且价格比正常低很多的股票
-    'TRY_FOLLOW_RECOVERY': False,                   # 是否顺势买快回收的反方向的股票
-    'BULL_CODE': '',                                # 自动买入牛证的股票代码，格式HK.00700，填auto则会自动选股
+    'AUTO_BUY': False,                              # Whether to auto-buy, if yes, the following configurations are effective
+    'TRY_RECOVERY': False,                          # Whether to buy stocks that recover quickly and have prices much lower than normal
+    'TRY_FOLLOW_RECOVERY': False,                   # Whether to buy stocks in the opposite direction of quick recovery
+    'BULL_CODE': '',                                # Auto-buy bull warrant stock code, format HK.00700, fill 'auto' to auto-select stocks
     'LONG_BULL_ISSUER': '法兴',
-    'BEAR_CODE': '',                                # 自动买入熊证的股票代码，格式HK.00700，填auto则会自动选股
+    'BEAR_CODE': '',                                # Auto-buy bear warrant stock code, format HK.00700, fill 'auto' to auto-select stocks
 
-    'BUY_VOLUME': 40e3,                             # 下单多少股
-    'MAX_VOLUME': 3000e3,                           # 最大持仓股数，若超过则不会再买入
+    'BUY_VOLUME': 40e3,                             # How many volumes to order
+    'MAX_VOLUME': 3000e3,                           # Maximum holding volumes, will not buy more if exceeded
     'CUR_PRICE_MIN': 0.1,
     'CUR_PRICE_MAX': 0.2,
 
-    'AUTO_ADJUST_BUY': True,                        # 是否自动调整挂的买单的价格
-    'AUTO_ADJUST_SELL': True,                       # 是否自动调整挂的卖单的价格
+    'AUTO_ADJUST_BUY': True,                        # Whether to auto-adjust the price of pending buy orders
+    'AUTO_ADJUST_SELL': True,                       # Whether to auto-adjust the price of pending sell orders
 
-    'ALLOW_ADD': True,                              # 是否允许补仓，若是则下面的ADD_ORDER_DIFF有效
-    'ADD_ORDER_DIFF': 0.008,                        # 持仓股票的现价与最近一次成交价的价差大于等于多少元，才允许补仓
-    'AUTO_SELL': True,                              # 买入后是否自动挂单分批卖出，若是则下面的ORDER_LIST有效
-    'ORDER_LIST': [                                 # 下单多少股以上（大的写前面），每单挂多少股，例如下单800k，分3档200k 200k 400k挂单
+    'ALLOW_ADD': True,                              # Whether to allow adding positions, if yes, the following ADD_ORDER_DIFF is effective
+    'ADD_ORDER_DIFF': 0.008,                        # The price difference between the current price of held stocks and the latest transaction price must be >= this value to allow adding positions
+    'AUTO_SELL': True,                              # Whether to auto-place orders to sell in batches after buying, if yes, the following ORDER_LIST is effective
+    'ORDER_LIST': [                                 # Order volumes above (write large ones first), how many volumes per order, e.g., order 800k, split into batches 200k 200k 400k pending orders
         [800e3, 200e3, 200e3, 200e3, 200e3],
         [700e3, 200e3, 200e3, 200e3, 100e3],
         [600e3, 200e3, 200e3, 100e3, 100e3],
@@ -51,22 +51,22 @@ conf = {
         [200e3, 50e3, 50e3, 50e3, 50e3],
         [100e3, 50e3, 50e3]
     ],
-    'FAR_ORDER_LIST': [                             # 长线订单，持仓超过60k只挂一个60k的卖单就够，成交后再自动挂剩余的
+    'FAR_ORDER_LIST': [                             # Long-term orders, holding over 20k only need one 20k sell order, then auto-place remaining after transaction
         [20e3, 20e3]
     ],
-    'ADD_ORDER_LIST': [                             # 短炒补仓的订单
+    'ADD_ORDER_LIST': [                             # Short-term trading add position orders
         [200e3, 100e3, 100e3],
         [100e3, 50e3, 50e3]
     ],
     'EVERY_ORDER_DIFF': 0.004,
     'NEED_LOSS': False,
-    'FIRST_ORDER_DIFF': 0.002,                      # 第一个卖单间隔多少
-    'LOSS_ORDER_DIFF': 0.002,                       # 买一价距离买入后的最高价达到多少就止损
-    'loss_sell_all_over': False,                    # 亏损时尾盘清仓，只对日内短炒的生效，False时只有盈利时才清仓
+    'FIRST_ORDER_DIFF': 0.002,                      # How much interval for the first sell order
+    'LOSS_ORDER_DIFF': 0.002,                       # Stop loss when bid price reaches this distance from the highest price after buying
+    'loss_sell_all_over': False,                    # Sell all at closing when losing, only effective for intraday short-term trading, when False only sell when profitable
 
-    'AUTO_MOVE_POSITION': False,                    # 是否自动强制移仓，是则下面的MOVE_POSITION_DICT生效
+    'AUTO_MOVE_POSITION': False,                    # Whether to auto-force position transfer, if yes, the following MOVE_POSITION_DICT is effective
     'MOVE_POSITION_DICT': {
-        'from_code': 'HK.',                         # 指定code移仓目前是一次性应急用
+        'from_code': 'HK.',                         # Specify code for position transfer, currently for one-time emergency use
         'to_code': 'auto',
         'volume': 400e3,
         'cur_price_min': 0.23,
@@ -75,7 +75,7 @@ conf = {
 }
 
 
-# 常量
+# Constants
 CONST = {
     'HSI_CODE': 'HK.800000',
     'MHI_CODE': 'HK.MHImain',
@@ -84,7 +84,7 @@ CONST = {
 }
 
 
-# 全局变量
+# Global variables
 log = None
 quote_ctx = None
 trade_ctx = None
@@ -148,14 +148,14 @@ glb = {
 }
 
 
-# 添加数组元素，不重复
+# Add array element, no duplicates
 def add_unique_element(arr, element):
     if element and element not in arr:
         arr.append(element)
     return arr
 
 
-# 节流函数
+# Throttle function
 def throttle(fn, wait, need_log=True):
     last_call_time = None
     logged = False
@@ -184,7 +184,7 @@ def throttle(fn, wait, need_log=True):
     return throttled
 
 
-# 延时函数
+# Delay function
 def delay_execution(func, delay):
     def delayed_func(*args, **kwargs):
         result = func(*args, **kwargs)
@@ -194,16 +194,16 @@ def delay_execution(func, delay):
     return delayed_func
 
 
-# 将10位时间戳转换为时间字符串，默认为2017-10-01 13:37:04格式
+# Convert 10-digit timestamp to time string, default format 2017-10-01 13:37:04
 def timestamp_to_datestr(time_stamp, format_string="%Y-%m-%d %H:%M:%S"):
     time_array = time.localtime(time_stamp)
     str_date = time.strftime(format_string, time_array)
     return str_date
 
 
-# 将时间字符串转换为10位时间戳，时间字符串默认为2017-10-01 13:37:04格式
+# Convert time string to 10-digit timestamp, time string default format 2017-10-01 13:37:04
 def datestr_to_timestamp(time_str, format_str="%Y-%m-%d %H:%M:%S", pattern=r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}'):
-    # 去掉小数部分
+    # Remove decimal part
     time_str = time_str.split('.')[0]
     # if re.fullmatch(pattern, time_str):
     return datetime.datetime.strptime(time_str, format_str).timestamp()
@@ -392,7 +392,7 @@ def check_line(buy_all=False):
     # if 'bull' in check_result or 'bear' in check_result:
     #     line['last_signal'] = check_result
     log.info('check_line: %s' % check_result)
-    # 不符合条件就撤单
+    # Cancel order if conditions not met
     if conf['NEED_LOSS']:
         if glb['submitted_buy_last_bull'] is not None and (check_result == 'not_near_bands' or 'bear' in check_result):
             cancel_all(glb['submitted_buy_last_bull'].code, trd_side=ft.TrdSide.BUY)
@@ -575,7 +575,7 @@ def _cancel_all(code='', trd_side=''):
                 cancel_order(item.order_id)
 
 
-# 买一价强制卖掉指定股票
+# Force sell specified stock at bid price
 def force_sell(code='', qty=''):
     data = smart_sell(code, qty, type='Bid')
     if data is False:
@@ -592,13 +592,13 @@ def force_sell(code='', qty=''):
         else:
             log.info('force_sell success')
 
-# 卖掉指定的股票
+# Sell specified stock
 def sell_all(code='', qty='', stock_type=''):
     if code != '':
         cancel_all(code)
         force_sell(code, qty)
         return True
-    cancel_all() # 尽量调用撤销全部订单接口比较快
+    cancel_all() # Try to call cancel all orders interface as it's faster
     data = _position_list_query(stock_type=stock_type, caller='sell_all')
     if data is False or data is None:
         return False
@@ -729,7 +729,7 @@ def reset_hold():
     glb['today_hold_code_list'] = []
 
 
-# 统计今日盈亏
+# Calculate today's profit and loss
 def sum_today_pl_val(today_buy_data):
     glb['today_pl_val_bull'] = 0
     glb['today_pl_val_bear'] = 0
@@ -744,7 +744,7 @@ def sum_today_pl_val(today_buy_data):
     log.info('MHI cur_price: %s, today pl: %s, bull: %s, bear: %s' % (glb['cur_price'], glb['today_pl_val'], glb['today_pl_val_bull'], glb['today_pl_val_bear']))
 
 
-# 自动移仓
+# Auto move position
 def auto_move_position(hsi_data):
     if not conf['AUTO_MOVE_POSITION']:
         return False
@@ -755,7 +755,7 @@ def auto_move_position(hsi_data):
         if round(item.nominal_price, 3) <= 0.021:
             log.info('code: %s, move_position, nominal_price: %s, cost_price: %s' % (item.code, item.nominal_price, item.cost_price))
             glb['move_position'] = True
-            subscribe([item.code], [ft.SubType.ORDER_BOOK]) # 有可能不是今天买的，所以可能没订阅
+            subscribe([item.code], [ft.SubType.ORDER_BOOK]) # May not be subscribed if not bought today
             sell_all(code=item.code, qty=item.qty)
             if item.stock_name.find('熊') > -1:
                 to_buy('bear', volume=item.qty, force=True, cur_price_min=conf['CUR_PRICE_MAX'] + 0.03, cur_price_max=conf['CUR_PRICE_MAX'] + 0.08)
@@ -800,11 +800,11 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
     reset_hold()
     hsi_data = data[data.stock_name.str.contains('恒指') & ~data.stock_name.str.contains(conf['LONG_BULL_ISSUER'])]
 
-    # 自动移仓
+    # Auto move position
     if auto_move_position(hsi_data):
         return False
 
-    # today_buy_hold_data要符合5个条件
+    # today_buy_hold_data must meet 5 conditions
     today_buy_data = hsi_data[(hsi_data.code == conf['BULL_CODE']) | ~hsi_data.code.isin(conf['exclude_code_list']) & (hsi_data.today_buy_qty > 0) & (hsi_data.qty == hsi_data.today_buy_qty - hsi_data.today_sell_qty)]
     sum_today_pl_val(today_buy_data)
 
@@ -814,7 +814,7 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
         for i in range(0, len(today_buy_hold_data)):
             item = today_buy_hold_data.iloc[i]
             set_hold(item.code, item.stock_name)
-            # 如果一单也没挂，则自动挂单
+            # If no orders are placed, place orders automatically
             if caller != 'start' and item.can_sell_qty == item.qty:
                 log.info('auto_sell, code: %s, nominal_price: %s, can_sell_qty: %s' % (item.code, item.nominal_price, item.can_sell_qty))
                 order_book = get_order_book(item.code)
@@ -822,7 +822,7 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
                     auto_sell(item.code, item.qty, order_book['Bid'][0][0])
                 else:
                     log.info('auto_sell warning, order_book: %s' % order_book)
-            # 检查止损
+            # Check stop loss
             # if conf['NEED_LOSS'] and caller in ['per_min', 'fluctuate']:
             #     check_profit_loss(item.code, item.nominal_price, round(item.nominal_price + 0.001, 3), caller='position')
 
@@ -869,7 +869,7 @@ def modify_order2(index, order_list, price):
 
 
 def _profit_order(order_list):
-    order_list2 = order_list[:] # 用新的数组，因为旧的成交了就会变化
+    order_list2 = order_list[:] # Use new array, because the old one changes when filled
     order = order_list2[0]
     if glb['timer'] and glb['timer'].running:
         return False
@@ -934,7 +934,7 @@ class OrderBook(ft.OrderBookHandlerBase):
             log.info('OrderBook push error, ret: %s, data:%s' % (ret, data))
             return ret, data
         t = data['svr_recv_time_ask']
-        if len(t) < 19: # 部分数据的接收时间为空字符串，例如服务器重启或第一次推送的缓存数据
+        if len(t) < 19: # Some data's receive time is empty string, such as server restart or first push cache data
             # log.info('OrderBook push warning, t: %s, data:%s' % (t, data))
             return ret, data
         s = int(t[17:19])
@@ -1011,7 +1011,7 @@ def auto_sell(code, volume, price, cancel=False):
     # volume_diff = volume - item[0]
     if glb['move_position']:
         first_order_price += 0.015
-    for i in range(1, len(item)): # 从1开始
+    for i in range(1, len(item)): # From 1 start
         vol = item[i]
         # if volume_diff > 0 and i == 1:
         #     vol += volume_diff
@@ -1070,7 +1070,7 @@ class TradeOrder(ft.TradeOrderHandlerBase):
             elif order.trd_side == ft.TrdSide.SELL:
                 set_submitted_sell(order)
         elif order.order_status == ft.OrderStatus.DISABLED:
-            # 需要重新获取订单以重置一些全局变量
+            # Need to re-query orders to reset some global variables
             order_list_query()
 
         return ret, data
@@ -1079,26 +1079,26 @@ class TradeOrder(ft.TradeOrderHandlerBase):
 def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur_price_max=None, sort_field=ft.SortField.VOLUME, ascend=False, get_list=False):
     cache = glb['cache_get_stock_code'].get(stock_type)
     if cache_first and cache['data'] is not None and time.time() - cache['last_time'] < cache['duration']:
-        log.info('读取缓存数据：%s' % cache)
+        log.info('Reading cache data: %s' % cache)
         return cache['data']
     cache['data'] = None
 
     req = ft.WarrantRequest()
     if stock_type == 'bull':
-        req.type_list = [ft.WrtType.BULL]  # Qot_Common.WarrantType, 窝轮类型过滤列表 WrtType
+        req.type_list = [ft.WrtType.BULL]  # Qot_Common.WarrantType, warrant type filter list WrtType
     elif stock_type == 'bear':
-        req.type_list = [ft.WrtType.BEAR]  # Qot_Common.WarrantType, 窝轮类型过滤列表 WrtType
-    req.issuer_list = [ft.Issuer.JP, ft.Issuer.UB, ft.Issuer.BP, ft.Issuer.CT, ft.Issuer.HS, ft.Issuer.MS, ft.Issuer.GJ]  # Qot_Common.Issuer, 发行人过滤列表
-    req.status = ft.WarrantStatus.NORMAL  # Qot_Common.WarrantStatus, 窝轮状态
-    req.cur_price_min = cur_price_min or conf['CUR_PRICE_MIN']  # 最新价过滤起点
-    req.cur_price_max = cur_price_max or conf['CUR_PRICE_MAX']  # 最新价过滤终点
-    req.conversion_min = 10000  # 换股比率过滤起点
-    req.conversion_max = 10000  # 换股比率过滤终点
-    req.vol_min = 1000  # 成交量的过滤下限，单位K
-    req.sort_field = sort_field  # 根据哪个字段排序
-    req.ascend = ascend  # 升序True, 降序False
-    req.begin = 0  # 数据起始点
-    req.num = 40 if cur_price_min == 0.01 else 3  # 返回数据个数，最大200
+        req.type_list = [ft.WrtType.BEAR]  # Qot_Common.WarrantType, warrant type filter list WrtType
+    req.issuer_list = [ft.Issuer.JP, ft.Issuer.UB, ft.Issuer.BP, ft.Issuer.CT, ft.Issuer.HS, ft.Issuer.MS, ft.Issuer.GJ]  # Qot_Common.Issuer, issuer filter list
+    req.status = ft.WarrantStatus.NORMAL  # Qot_Common.WarrantStatus, warrant status
+    req.cur_price_min = cur_price_min or conf['CUR_PRICE_MIN']  # Latest price filter start
+    req.cur_price_max = cur_price_max or conf['CUR_PRICE_MAX']  # Latest price filter end
+    req.conversion_min = 10000  # Conversion ratio filter start
+    req.conversion_max = 10000  # Conversion ratio filter end
+    req.vol_min = 1000  # Volume filter lower limit, unit K
+    req.sort_field = sort_field  # Sort by which field
+    req.ascend = ascend  # Ascending True, Descending False
+    req.begin = 0  # Data start point
+    req.num = 40 if cur_price_min == 0.01 else 3  # Number of data to return, max 200
 
     ret, data = quote_ctx.get_warrant(CONST['HSI_CODE'], req=req)
     # log.info('get_warrant, ret: %s, data:\n%s' % (ret, data))
@@ -1106,7 +1106,7 @@ def _get_stock_code(stock_type='all', cache_first=False, cur_price_min=None, cur
         log.info('get_warrant error')
     else:
         data = data[0]
-        # FUTU BUG: 返回的结果还要再过滤一次
+        # FUTU BUG: The returned results need to be filtered again
         data = data[(data.stock_owner == CONST['HSI_CODE']) & (data.status == ft.WarrantStatus.NORMAL)]
         data = data[~data.stock.isin(glb['past_hold_code_list']) & (data.bid_price >= 0.01)]
         if len(data) > 0:
@@ -1199,7 +1199,7 @@ def to_buy(stock_type, code='', volume=None, type='Bid', force=False, cur_price_
         if data is False or data is None:
             return False
         code = data.stock
-        if '牛' in data['name']: # 必须用中括号，data.name会访问到name属性而不是列
+        if '牛' in data['name']: # Must use brackets, data.name will access the name attribute instead of the column
             stock_type = 'bull'
         elif '熊' in data['name']:
             stock_type = 'bear'
@@ -1242,7 +1242,7 @@ def _buy_recovery_code():
 
 class RTData(ft.RTDataHandlerBase):
     def on_recv_rsp(self, rsp_str):
-        # log.info('--------------------分时推送--------------------')
+        # log.info('--------------------RT Data Push--------------------')
         ret, data = super(RTData, self).on_recv_rsp(rsp_str)
         if ret != ft.RET_OK:
             log.info('RTData push error, ret: %s, data: %s' % (ret, data))
@@ -1333,7 +1333,7 @@ def _auto_adjust_buy(delta_price):
 
 class Ticker(ft.TickerHandlerBase):
     def on_recv_rsp(self, rsp_str):
-        # log.info('--------------------逐笔明细--------------------')
+        # log.info('--------------------Ticker Details--------------------')
         ret, data = super(Ticker, self).on_recv_rsp(rsp_str)
         if ret != ft.RET_OK:
             log.info('Ticker push error, ret: %s, data:%s' % (ret, data))
@@ -1396,18 +1396,18 @@ class Ticker(ft.TickerHandlerBase):
 
         glb['cur_price'] = cur_ticker.price
 
-        # 每波动20点查询持仓列表，方便统计盈亏和止损
+        # Query position list every 20 points fluctuation, for profit/loss statistics and stop loss
         if abs(glb['cur_price'] - glb['last_price']) >= 20:
             glb['last_price'] = glb['cur_price']
             position_list_query(need_log=False, caller='fluctuate')
-        # 每分钟查询持仓列表
+        # Query position list every minute
         if s == 29:
             position_list_query(need_log=False, caller='per_min')
 
-        # 自动买入
+        # Auto buy
         if conf['AUTO_BUY'] and (not glb['soon_over'] and s >= 56 or not conf['NEED_LOSS'] and s % 30 == 0):
             auto_buy()
-        # 自动调价
+        # Auto adjust price
         if (conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']) and s % 3 == 0:
             delta_price = glb['cur_price'] - glb['last_3s_price']
             auto_adjust_buy(delta_price)
@@ -1417,7 +1417,7 @@ class Ticker(ft.TickerHandlerBase):
         return ret, data
 
 
-# 获取交易日
+# Get trading days
 def request_trading_days():
     today = datetime.date.today()
     if today.month < 12:
@@ -1436,7 +1436,7 @@ def request_trading_days():
     return glb['trade_date']
 
 
-# 重置数据
+# Reset data
 def resetData():
     log.info('--------------------resetData--------------------')
     glb['afternoon'] = False
@@ -1448,29 +1448,29 @@ def resetData():
     request_trading_days()
 
 
-# 限制n秒内最多查1次
+# Limit to query at most once in n seconds
 auto_buy = throttle(_auto_buy, 1, need_log=False)
 check_profit_loss = throttle(_check_profit_loss, 2, need_log=False)
 profit_order = throttle(_profit_order, 2)
 auto_adjust_buy = throttle(_auto_adjust_buy, 2, need_log=False)
 auto_adjust_sell = throttle(_auto_adjust_sell, 2, need_log=False)
-# 每 30 秒内最多请求 10 次查询持仓接口
+# At most 10 position list queries per 30 seconds
 position_list_query = throttle(_position_list_query, 3, need_log=False)
-# 每 30 秒内最多请求 15 次下单接口，且连续两次请求的间隔不可小于 0.02 秒
+# At most 15 order placements per 30 seconds, and interval between consecutive requests not less than 0.02 seconds
 smart_buy = throttle(_smart_buy, 2)
-smart_sell = delay_execution(_smart_sell, 1.5) # 自动挂卖单需要遍历，所以不能节流，只能延时
-# 每 30 秒内最多请求 60 次筛选窝轮接口
+smart_sell = delay_execution(_smart_sell, 1.5) # Auto sell needs to iterate, so cannot throttle, only delay
+# At most 60 warrant filter requests per 30 seconds
 get_stock_code = throttle(_get_stock_code, 0.5)
-# 每 300 秒内最多请求 1 次筛选最近回收牛熊接口
+# At most 1 recent recovery bull bear filter request per 300 seconds
 get_recovery_code = throttle(_get_recovery_code, 300)
-# 每 60 秒内最多请求 1 次购买最近回收牛熊接口
+# At most 1 recent recovery bull bear buy request per 60 seconds
 buy_recovery_code = throttle(_buy_recovery_code, 60)
-# 每 30 秒内最多请求 10 次查询今日订单接口
+# At most 10 today order queries per 30 seconds
 order_list_query = throttle(_order_list_query, 3)
-# 每 30 秒内最多请求 20 次改单撤单接口，且连续两次请求的间隔不可小于 0.04 秒
-modify_order = delay_execution(_modify_order, 1.5) # 自动调价需要遍历，所以不能节流，只能延时
-cancel_order = delay_execution(_cancel_order, 1.5) # 撤销订单需要遍历，所以不能节流，只能延时
-cancel_all = delay_execution(_cancel_all, 1.5) # 撤销全部订单需要遍历，所以不能节流，只能延时
+# At most 20 modify/cancel order requests per 30 seconds, and interval between consecutive requests not less than 0.04 seconds
+modify_order = delay_execution(_modify_order, 1.5) # Auto adjust price needs to iterate, so cannot throttle, only delay
+cancel_order = delay_execution(_cancel_order, 1.5) # Cancel order needs to iterate, so cannot throttle, only delay
+cancel_all = delay_execution(_cancel_all, 1.5) # Cancel all orders needs to iterate, so cannot throttle, only delay
 
 
 def set_config(config):
@@ -1505,9 +1505,9 @@ def start(config=None):
         data = subscribe([CONST['HSI_CODE']], [ft.SubType.RT_DATA], subscribe_push=conf['TRY_FOLLOW_RECOVERY'])
         if data is False:
             return False
-    # 查询最近回收牛熊
+    # Query recent recovery bull bear
     # get_recovery_code()
-    # 查询并检查均线
+    # Query and check moving average
     check_line()
     position_list_query(caller='start')
     order_list_query()
