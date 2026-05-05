@@ -39,7 +39,7 @@ conf = {
     'AUTO_ADJUST_SELL': False,                       # Whether to auto-adjust the price of pending sell orders
 
     'ALLOW_ADD': True,                              # Whether to allow adding positions, if yes, the following ADD_ORDER_DIFF is effective
-    'ADD_ORDER_DIFF': 0.008,                        # The price difference between the current price of held stocks and the latest transaction price must be >= this value to allow adding positions
+    'ADD_ORDER_DIFF': 0.008,                        # The price difference between the current price of held stocks and the latest filled price must be >= this value to allow adding positions
     'AUTO_SELL': True,                              # Whether to auto-place orders to sell in batches after buying, if yes, the following ORDER_LIST is effective
     'ORDER_LIST': [                                 # Order volumes above (write large ones first), how many volumes per order, e.g., order 800k, split into batches 200k 200k 400k pending orders
         [800e3, 200e3, 200e3, 200e3, 200e3],
@@ -51,7 +51,7 @@ conf = {
         [200e3, 50e3, 50e3, 50e3, 50e3],
         [100e3, 50e3, 50e3]
     ],
-    'FAR_ORDER_LIST': [                             # Long-term orders, holding over 20k only need one 20k sell order, then auto-place remaining after transaction
+    'FAR_ORDER_LIST': [                             # Long-term orders, holding over 20k only need one 20k sell order, then auto-place remaining after filled
         [20e3, 20e3]
     ],
     'ADD_ORDER_LIST': [                             # Short-term trading add position orders
@@ -405,7 +405,7 @@ def check_line(buy_all=False):
 
 def get_order_book(code):
     ret, order_book = quote_ctx.get_order_book(code, num=3)
-    log.info('get_order_book, ret: %s, order_book:%s' % (ret, order_book))
+    # log.info('get_order_book, ret: %s, order_book:%s' % (ret, order_book))
     if ret != ft.RET_OK or not order_book:
         log.info('get_order_book error')
         order_book = glb['order_book'][code]
