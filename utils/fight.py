@@ -344,7 +344,7 @@ def check_position(kline, band, direction=0):
     return False
 
 
-def check_line(buy_all=False):
+def check_line(buy_all=False, need_log=True):
     klines, line = draw_line()
     if line is False:
         return ''
@@ -354,14 +354,20 @@ def check_line(buy_all=False):
     last_kline = klines.iloc[-1]
     last2_kline = klines.iloc[-2]
     last3_kline = klines.iloc[-3]
+    is_neer_lower = check_position(last_kline, line['lower']) or check_position(last2_kline, line['lower2']) or check_position(last3_kline, line['lower3'])
+    if not conf['NEED_LOSS']:
+        if is_neer_lower:
+            check_result = 'long_far_bull'
+        else:
+            check_result = 'not_near_lower'
+        if need_log:
+            log.info('check_line: %s' % check_result)
+        return check_result
+    is_neer_upper = check_position(last_kline, line['upper'], 1) or check_position(last2_kline, line['upper2'], 1) or check_position(last3_kline, line['upper3'], 1)
     delta_price = last_kline.close - last_kline.last_close
     profit = 5
     kline_len = 10
-    is_neer_lower = check_position(last_kline, line['lower']) or check_position(last2_kline, line['lower2']) or check_position(last3_kline, line['lower3'])
-    is_neer_upper = check_position(last_kline, line['upper'], 1) or check_position(last2_kline, line['upper2'], 1) or check_position(last3_kline, line['upper3'], 1)
-    if not conf['NEED_LOSS'] and is_neer_lower:
-        check_result = 'long_far_bull'
-    elif line['upper'] - line['lower'] < 25:
+    if line['upper'] - line['lower'] < 25:
         check_result = 'bands_narrow'
     elif is_neer_lower and line['mid'] - last_kline.close > profit:
         if delta_price > 0 or last2_kline.close - last2_kline.last_close >= kline_len:
@@ -389,17 +395,15 @@ def check_line(buy_all=False):
             check_result = 'wait_short_trend'
     else:
         check_result = 'not_near_bands'
-    # if 'bull' in check_result or 'bear' in check_result:
-    #     line['last_signal'] = check_result
-    log.info('check_line: %s' % check_result)
+    if need_log:
+        log.info('check_line: %s' % check_result)
     # Cancel order if conditions not met
-    if conf['NEED_LOSS']:
-        if glb['submitted_buy_last_bull'] is not None and (check_result == 'not_near_bands' or 'bear' in check_result):
-            cancel_all(glb['submitted_buy_last_bull'].code, trd_side=ft.TrdSide.BUY)
-            log.info('cancel_all bull, check_result: %s' % check_result)
-        elif glb['submitted_buy_last_bear'] is not None and (check_result == 'not_near_bands' or 'bull' in check_result):
-            cancel_all(glb['submitted_buy_last_bear'].code, trd_side=ft.TrdSide.BUY)
-            log.info('cancel_all bear, check_result: %s' % check_result)
+    if glb['submitted_buy_last_bull'] is not None and (check_result == 'not_near_bands' or 'bear' in check_result):
+        cancel_all(glb['submitted_buy_last_bull'].code, trd_side=ft.TrdSide.BUY)
+        log.info('cancel_all bull, check_result: %s' % check_result)
+    elif glb['submitted_buy_last_bear'] is not None and (check_result == 'not_near_bands' or 'bull' in check_result):
+        cancel_all(glb['submitted_buy_last_bear'].code, trd_side=ft.TrdSide.BUY)
+        log.info('cancel_all bear, check_result: %s' % check_result)
     return check_result
 
 
