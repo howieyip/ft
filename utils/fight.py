@@ -1310,6 +1310,7 @@ def _auto_adjust_buy(delta_price):
     order_book = glb['order_book'][order.code]
     rise_price = order_book['Bid'][0][0]
     fall_price = order_book['Bid'][1][0]
+    last_price = None
     if not conf['NEED_LOSS']:
         last_price = find_last_price(order.code)
         if not last_price:
@@ -1325,10 +1326,16 @@ def _auto_adjust_buy(delta_price):
     if fall_condition:
         if fall_price < order.price:
             log.info('auto_adjust_buy order price: %s, fall_price: %s' % (order.price, fall_price))
-            modify_order(order, fall_price)
+            if last_price:
+                modify_order(order, fall_price, get_diff_volume(last_price, fall_price, True))
+            else:
+                modify_order(order, fall_price)
     elif rise_price > order.price:
         log.info('auto_adjust_buy order price: %s, rise_price: %s' % (order.price, rise_price))
-        modify_order(order, rise_price)
+        if last_price:
+            modify_order(order, rise_price, get_diff_volume(last_price, rise_price, True))
+        else:
+            modify_order(order, rise_price)
 
 
 class Ticker(ft.TickerHandlerBase):
