@@ -3,10 +3,8 @@
     Quote query
 """
 
-from futu.common.utils import *
-from futu.common.pb import Common_pb2
-from futu.quote.quote_stockfilter_info import *
-from futu.quote.quote_get_warrant import *
+from .quote_stockfilter_info import *
+from .quote_get_warrant import *
 
 # 无数据时的值
 NoneDataType = 'N/A'
@@ -57,6 +55,17 @@ def merge_pb_cnipoexdata_winningnumdata(winningnumdata):
     return data
 
 
+def set_qot_header(req, security_firm):
+    """设置行情请求的公共参数头
+    :param req: protobuf请求对象
+    :param security_firm: 券商标识，SecurityFirm枚举值
+    """
+    if security_firm is not None:
+        ret, firm_num = SecurityFirm.to_number(security_firm)
+        if ret:
+            req.c2s.header.securityFirm = firm_num
+
+
 # python_name, pb_name, is_required, conv_func
 pb_field_map_OptionBasicQotExData = [
     ('strike_price', 'strikePrice', True, None),
@@ -105,6 +114,17 @@ pb_field_map_PreAfterMarketData_after = [
     ("after_change_val", "changeVal", False, None),
     ("after_change_rate", "changeRate", False, None),
     ("after_amplitude", "amplitude", False, None),
+]
+
+pb_field_map_PreAfterMarketData_overnight = [
+    ("overnight_price", "price", False, None),
+    ("overnight_high_price", "highPrice", False, None),
+    ("overnight_low_price", "lowPrice", False, None),
+    ("overnight_volume", "volume", False, None),
+    ("overnight_turnover", "turnover", False, None),
+    ("overnight_change_val", "changeVal", False, None),
+    ("overnight_change_rate", "changeRate", False, None),
+    ("overnight_amplitude", "amplitude", False, None),
 ]
 
 pb_field_map_BasicIpoData = [
@@ -160,15 +180,16 @@ class InitConnect:
         pass
 
     @classmethod
-    def pack_req(cls, client_ver, client_id, recv_notify, is_encrypt, push_proto_fmt):
+    def pack_req(cls, client_ver, client_id, recv_notify, is_encrypt, push_proto_fmt, ai_type=0):
 
-        from futu.common.pb.InitConnect_pb2 import Request
+        from ..common.pb.InitConnect_pb2 import Request
         req = Request()
         req.c2s.clientVer = client_ver
         req.c2s.clientID = client_id
         req.c2s.recvNotify = recv_notify
         req.c2s.pushProtoFmt = push_proto_fmt
         req.c2s.programmingLanguage = 'Python'
+        req.c2s.aiType = ai_type
 
         if is_encrypt:
             req.c2s.packetEncAlgo = Common_pb2.PacketEncAlgo_AES_CBC
@@ -207,14 +228,14 @@ class RequestTradeDayQuery:
         pass
 
     @classmethod
-    def pack_req(cls, market, conn_id, start_date=None, end_date=None, code=None):
+    def pack_req(cls, market, conn_id, start_date=None, end_date=None, code=None, security_firm=SecurityFirm.NONE):
 
         # '''Parameter check'''
         r, v = TradeDateMarket.to_number(market)
         if not r:
             error_str = ERROR_STR_PREFIX + " market is %s, which is not valid." \
                                            % (market)
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
         if start_date is None: # start为往前365天
             today = datetime.today()
@@ -224,7 +245,7 @@ class RequestTradeDayQuery:
         else:
             ret, msg = normalize_date_format(start_date)
             if ret != RET_OK:
-                return ret, msg, None
+                return ret, msg, None, 0, 0
             start_date = msg
 
         if end_date is None: # end为当前时间
@@ -233,7 +254,7 @@ class RequestTradeDayQuery:
         else:
             ret, msg = normalize_date_format(end_date)
             if ret != RET_OK:
-                return ret, msg, None
+                return ret, msg, None, 0, 0
             end_date = msg
 
         """check stock_code 股票"""
@@ -243,11 +264,11 @@ class RequestTradeDayQuery:
             ret, content = split_stock_str(code)
             if ret == RET_ERROR:
                 error_str = content
-                return RET_ERROR, error_str, None
+                return RET_ERROR, error_str, None, 0, 0
             market_code, stock_code = content
 
         # pack to json
-        from futu.common.pb.Qot_RequestTradeDate_pb2 import Request
+        from ..common.pb.Qot_RequestTradeDate_pb2 import Request
         req = Request()
         req.c2s.market = v
         req.c2s.beginTime = start_date
@@ -256,6 +277,7 @@ class RequestTradeDayQuery:
             req.c2s.security.market = market_code
         if stock_code is not None:
             req.c2s.security.code = stock_code
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_RequestTradeDate, conn_id)
 
@@ -288,20 +310,20 @@ class StockBasicInfoQuery:
         pass
 
     @classmethod
-    def pack_req(cls, market, conn_id, stock_type='STOCK', code_list=None):
+    def pack_req(cls, market, conn_id, stock_type='STOCK', code_list=None, security_firm=SecurityFirm.NONE):
         query_code = code_list is not None and len(code_list) > 0
         if not query_code:
             if not Market.if_has_key(market):
                 error_str = ERROR_STR_PREFIX + " market is %s, which is not valid. (%s)" \
                                                % (market, Market.get_all_keys())
-                return RET_ERROR, error_str, None
+                return RET_ERROR, error_str, None, 0, 0
 
             if not SecurityType.if_has_key(stock_type) and code_list is None:
                 error_str = ERROR_STR_PREFIX + " stock_type is %s, which is not valid. (%s)" \
                                                % (stock_type, SecurityType.get_all_keys())
-                return RET_ERROR, error_str, None
+                return RET_ERROR, error_str, None, 0, 0
 
-        from futu.common.pb.Qot_GetStaticInfo_pb2 import Request
+        from ..common.pb.Qot_GetStaticInfo_pb2 import Request
         req = Request()
         if query_code:
             req.c2s.market = 0
@@ -312,10 +334,11 @@ class StockBasicInfoQuery:
                 if ret == RET_OK:
                     sec.market, sec.code = data
                 else:
-                    return RET_ERROR, data, None
+                    return RET_ERROR, data, None, 0, 0
         else:
             _, req.c2s.market = Market.to_number(market)
             _, req.c2s.secType = SecurityType.to_number(stock_type)
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_GetStaticInfo, conn_id)
 
@@ -367,7 +390,7 @@ class MarketSnapshotQuery:
         pass
 
     @classmethod
-    def pack_req(cls, stock_list, conn_id):
+    def pack_req(cls, stock_list, conn_id, security_firm=SecurityFirm.NONE):
         """Convert from user request for trading days to PLS request"""
         stock_tuple_list = []
         failure_tuple_list = []
@@ -383,14 +406,15 @@ class MarketSnapshotQuery:
 
         if len(failure_tuple_list) > 0:
             error_str = '\n'.join([x[1] for x in failure_tuple_list])
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, ProtoId.Qot_GetSecuritySnapshot, 0
 
-        from futu.common.pb.Qot_GetSecuritySnapshot_pb2 import Request
+        from ..common.pb.Qot_GetSecuritySnapshot_pb2 import Request
         req = Request()
         for market, code in stock_tuple_list:
             stock_inst = req.c2s.securityList.add()
             stock_inst.market = market
             stock_inst.code = code
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_GetSecuritySnapshot, conn_id)
 
@@ -410,13 +434,20 @@ class MarketSnapshotQuery:
             snapshot_tmp = {}
             snapshot_tmp['code'] = merge_qot_mkt_stock_str(
                 int(record.basic.security.market), record.basic.security.code)
+            snapshot_tmp['name'] = record.basic.name if record.basic.HasField('name') else 'N/A'
             snapshot_tmp['update_time'] = record.basic.updateTime
             snapshot_tmp['last_price'] = record.basic.curPrice
             snapshot_tmp['open_price'] = record.basic.openPrice
             snapshot_tmp['high_price'] = record.basic.highPrice
             snapshot_tmp['low_price'] = record.basic.lowPrice
             snapshot_tmp['prev_close_price'] = record.basic.lastClosePrice
-            snapshot_tmp['volume'] = record.basic.volume
+
+            # 成交量：优先使用高精度字段 hpVolume，如果没有则使用 volume
+            if record.basic.HasField('hpVolume'):
+                snapshot_tmp['volume'] = record.basic.hpVolume
+            else:
+                snapshot_tmp['volume'] = record.basic.volume
+
             snapshot_tmp['turnover'] = record.basic.turnover
             snapshot_tmp['turnover_rate'] = record.basic.turnoverRate
             snapshot_tmp['suspension'] = record.basic.isSuspend
@@ -426,8 +457,22 @@ class MarketSnapshotQuery:
             snapshot_tmp['lot_size'] = record.basic.lotSize
             snapshot_tmp['ask_price'] = record.basic.askPrice if record.basic.HasField('askPrice') else 'N/A'
             snapshot_tmp['bid_price'] = record.basic.bidPrice if record.basic.HasField('bidPrice') else 'N/A'
-            snapshot_tmp['ask_vol'] = record.basic.askVol if record.basic.HasField('askVol') else 'N/A'
-            snapshot_tmp['bid_vol'] = record.basic.bidVol if record.basic.HasField('bidVol') else 'N/A'
+
+            # 卖量：优先使用高精度字段 hpAskVol，如果没有则使用 askVol
+            if record.basic.HasField('hpAskVol'):
+                snapshot_tmp['ask_vol'] = record.basic.hpAskVol
+            elif record.basic.HasField('askVol'):
+                snapshot_tmp['ask_vol'] = record.basic.askVol
+            else:
+                snapshot_tmp['ask_vol'] = 'N/A'
+
+            # 买量：优先使用高精度字段 hpBidVol，如果没有则使用 bidVol
+            if record.basic.HasField('hpBidVol'):
+                snapshot_tmp['bid_vol'] = record.basic.hpBidVol
+            elif record.basic.HasField('bidVol'):
+                snapshot_tmp['bid_vol'] = record.basic.bidVol
+            else:
+                snapshot_tmp['bid_vol'] = 'N/A'
 
             # 窝轮 统一对枚举类型，初始化
             snapshot_tmp['wrt_type'] = WrtType.to_string2(
@@ -496,6 +541,11 @@ class MarketSnapshotQuery:
                 set_item_from_pb(snapshot_tmp, record.basic.afterMarket, pb_field_map_PreAfterMarketData_after)
             else:
                 set_item_none(snapshot_tmp, pb_field_map_PreAfterMarketData_after)
+
+            if record.basic.HasField('overnight'):
+                set_item_from_pb(snapshot_tmp, record.basic.overnight, pb_field_map_PreAfterMarketData_overnight)
+            else:
+                set_item_none(snapshot_tmp, pb_field_map_PreAfterMarketData_overnight)
             # ================================
 
             snapshot_tmp['equity_valid'] = False
@@ -632,18 +682,19 @@ class RtDataQuery:
         pass
 
     @classmethod
-    def pack_req(cls, code, conn_id):
+    def pack_req(cls, code, conn_id, security_firm=SecurityFirm.NONE):
 
         ret, content = split_stock_str(code)
         if ret == RET_ERROR:
             error_str = content
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
         market_code, stock_code = content
-        from futu.common.pb.Qot_GetRT_pb2 import Request
+        from ..common.pb.Qot_GetRT_pb2 import Request
         req = Request()
         req.c2s.security.market = market_code
         req.c2s.security.code = stock_code
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_GetRT, conn_id)
 
@@ -660,6 +711,7 @@ class RtDataQuery:
         rt_list = [
             {
                 "code": merge_qot_mkt_stock_str(rsp_pb.s2c.security.market, rsp_pb.s2c.security.code),
+                "name": rsp_pb.s2c.name if rsp_pb.s2c.HasField('name') else 'N/A',
                 "time": record.time,
                 "is_blank":  True if record.isBlank else False,
                 "opened_mins": record.minute,
@@ -670,7 +722,8 @@ class RtDataQuery:
                 # 所以不会因为期权价格回踩均线就怎么样的，均线也就没啥用了。
                 "avg_price": record.avgPrice if record.HasField('avgPrice') else 'N/A', # 初始化枚举类型
                 "turnover": record.turnover,
-                "volume": record.volume
+                # 成交量：优先使用高精度字段 hpVolume，如果没有则使用 volume
+                "volume": record.hpVolume if record.HasField('hpVolume') else record.volume
             } for record in raw_rt_data_list
         ]
         return RET_OK, "", rt_list
@@ -685,12 +738,13 @@ class SubplateQuery:
         pass
 
     @classmethod
-    def pack_req(cls, market, plate_class, conn_id):
+    def pack_req(cls, market, plate_class, conn_id, security_firm=SecurityFirm.NONE):
 
-        from futu.common.pb.Qot_GetPlateSet_pb2 import Request
+        from ..common.pb.Qot_GetPlateSet_pb2 import Request
         req = Request()
         _, req.c2s.market = Market.to_number(market)
         _, req.c2s.plateSetType = Plate.to_number(plate_class)
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_GetPlateSet, conn_id)
 
@@ -722,22 +776,23 @@ class PlateStockQuery:
         pass
 
     @classmethod
-    def pack_req(cls, plate_code, sort_field, ascend, conn_id):
+    def pack_req(cls, plate_code, sort_field, ascend, conn_id, security_firm=SecurityFirm.NONE):
 
         ret_code, content = split_stock_str(plate_code)
         if ret_code != RET_OK:
             msg = content
             error_str = ERROR_STR_PREFIX + msg
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
         market, code = content
         r, v = SortField.to_number(sort_field)
-        from futu.common.pb.Qot_GetPlateSecurity_pb2 import Request
+        from ..common.pb.Qot_GetPlateSecurity_pb2 import Request
         req = Request()
         req.c2s.plate.market = market
         req.c2s.plate.code = code
         req.c2s.sortField = v
         req.c2s.ascend = ascend
+        set_qot_header(req, security_firm)
         return pack_pb_req(req, ProtoId.Qot_GetPlateSecurity, conn_id)
 
     @classmethod
@@ -774,18 +829,19 @@ class BrokerQueueQuery:
         pass
 
     @classmethod
-    def pack_req(cls, code, conn_id):
+    def pack_req(cls, code, conn_id, security_firm=SecurityFirm.NONE):
 
         ret_code, content = split_stock_str(code)
         if ret_code == RET_ERROR:
             error_str = content
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
         market, code = content
-        from futu.common.pb.Qot_GetBroker_pb2 import Request
+        from ..common.pb.Qot_GetBroker_pb2 import Request
         req = Request()
         req.c2s.security.market = market
         req.c2s.security.code = code
+        set_qot_header(req, security_firm)
         return pack_pb_req(req, ProtoId.Qot_GetBroker, conn_id)
 
     @classmethod
@@ -805,6 +861,7 @@ class BrokerQueueQuery:
                 "bid_broker_name": record.name,
                 "bid_broker_pos": record.pos,
                 "code": merge_qot_mkt_stock_str(rsp_pb.s2c.security.market, rsp_pb.s2c.security.code),
+                "name": rsp_pb.s2c.name if rsp_pb.s2c.HasField('name') else 'N/A',
                 "order_id": record.orderID if record.HasField('orderID') else 'N/A',
                 "order_volume": record.volume if record.HasField('volume') else 'N/A'
             } for record in raw_broker_bid]
@@ -817,6 +874,7 @@ class BrokerQueueQuery:
                 "ask_broker_name": record.name,
                 "ask_broker_pos": record.pos,
                 "code": merge_qot_mkt_stock_str(rsp_pb.s2c.security.market, rsp_pb.s2c.security.code),
+                "name": rsp_pb.s2c.name if rsp_pb.s2c.HasField('name') else 'N/A',
                 "order_id": record.orderID if record.HasField('orderID') else 'N/A',
                 "order_volume": record.volume if record.HasField('volume') else 'N/A'
             } for record in raw_broker_ask]
@@ -831,11 +889,11 @@ class RequestHistoryKlineQuery:
 
     @classmethod
     def pack_req(cls, code, start_date, end_date, ktype, autype, fields,
-                 max_num, conn_id, next_req_key, extended_time):
+                 max_num, conn_id, next_req_key, extended_time, session, security_firm=SecurityFirm.NONE):
         ret, content = split_stock_str(code)
         if ret == RET_ERROR:
             error_str = content
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
         market_code, stock_code = content
 
@@ -843,14 +901,14 @@ class RequestHistoryKlineQuery:
         if not KLType.if_has_key(ktype):
             error_str = ERROR_STR_PREFIX + "ktype is %s, which is not valid. (%s)" \
                 % (ktype, KLType.get_all_keys())
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
         if not AuType.if_has_key(autype):
             error_str = ERROR_STR_PREFIX + "autype is %s, which is not valid. (%s)" \
                 % (autype, AuType.get_all_keys())
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
-        from futu.common.pb.Qot_RequestHistoryKL_pb2 import Request
+        from ..common.pb.Qot_RequestHistoryKL_pb2 import Request
 
         req = Request()
         _, req.c2s.rehabType = AuType.to_number(autype)
@@ -867,6 +925,8 @@ class RequestHistoryKlineQuery:
             req.c2s.nextReqKey = next_req_key
         if extended_time:
             req.c2s.extendedTime = True
+        _, req.c2s.session = Session.to_number(session)
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_RequestHistoryKL, conn_id)
 
@@ -883,12 +943,14 @@ class RequestHistoryKlineQuery:
 
         stock_code = merge_qot_mkt_stock_str(rsp_pb.s2c.security.market,
                                              rsp_pb.s2c.security.code)
+        stock_name = rsp_pb.s2c.name if rsp_pb.s2c.HasField('name') else "N/A"
 
         list_ret = []
         dict_data = {}
         raw_kline_list = rsp_pb.s2c.klList
         for record in raw_kline_list:
             dict_data['code'] = stock_code
+            dict_data['name'] = stock_name
             dict_data['time_key'] = record.time
             if record.isBlank:
                 continue
@@ -900,7 +962,9 @@ class RequestHistoryKlineQuery:
                 dict_data['low'] = record.lowPrice
             if record.HasField('closePrice'):
                 dict_data['close'] = record.closePrice
-            if record.HasField('volume'):
+            if record.HasField('hpVolume'):
+                dict_data['volume'] = record.hpVolume
+            elif record.HasField('volume'):
                 dict_data['volume'] = record.volume
             if record.HasField('turnover'):
                 dict_data['turnover'] = record.turnover
@@ -936,7 +1000,9 @@ class SubscriptionQuery:
                               is_detailed_orderbook,
                               extended_time,
                               reg_or_unreg_push,
-                              unsub_all=False):
+                              unsub_all=False,
+                              session=Session.NONE,
+                              security_firm=SecurityFirm.NONE):
 
         stock_tuple_list = []
 
@@ -948,7 +1014,7 @@ class SubscriptionQuery:
                 market_code, stock_code = content
                 stock_tuple_list.append((market_code, stock_code))
 
-        from futu.common.pb.Qot_Sub_pb2 import Request
+        from ..common.pb.Qot_Sub_pb2 import Request
         req = Request()
 
         if unsub_all is True:
@@ -967,11 +1033,14 @@ class SubscriptionQuery:
             req.c2s.isRegOrUnRegPush = reg_or_unreg_push
             req.c2s.isSubOrderBookDetail = is_detailed_orderbook
             req.c2s.extendedTime = extended_time
+            b, n = Session.to_number(session)
+            req.c2s.session = n
 
+        set_qot_header(req, security_firm)
         return pack_pb_req(req, ProtoId.Qot_Sub, conn_id)
 
     @classmethod
-    def pack_subscribe_req(cls, code_list, subtype_list, conn_id, is_first_push, subscribe_push, is_detailed_orderbook, extended_time):
+    def pack_subscribe_req(cls, code_list, subtype_list, conn_id, is_first_push, subscribe_push, is_detailed_orderbook, extended_time, session=Session.NONE, security_firm=SecurityFirm.NONE):
         return SubscriptionQuery.pack_sub_or_unsub_req(code_list,
                                                        subtype_list,
                                                        True,
@@ -979,7 +1048,9 @@ class SubscriptionQuery:
                                                        is_first_push,
                                                        is_detailed_orderbook,
                                                        extended_time,
-                                                       subscribe_push)  # True
+                                                       subscribe_push,
+                                                       session=session,
+                                                       security_firm=security_firm)
 
     @classmethod
     def unpack_subscribe_rsp(cls, rsp_pb):
@@ -990,7 +1061,7 @@ class SubscriptionQuery:
         return RET_OK, "", None
 
     @classmethod
-    def pack_unsubscribe_req(cls, code_list, subtype_list, unsubscribe_all, conn_id):
+    def pack_unsubscribe_req(cls, code_list, subtype_list, unsubscribe_all, conn_id, security_firm=SecurityFirm.NONE):
 
         return SubscriptionQuery.pack_sub_or_unsub_req(code_list,
                                                        subtype_list,
@@ -1000,7 +1071,8 @@ class SubscriptionQuery:
                                                        False,
                                                        False,
                                                        False,
-                                                       unsubscribe_all)
+                                                       unsubscribe_all,
+                                                       security_firm=security_firm)
 
     @classmethod
     def unpack_unsubscribe_rsp(cls, rsp_pb):
@@ -1013,7 +1085,7 @@ class SubscriptionQuery:
     @classmethod
     def pack_subscription_query_req(cls, is_all_conn, conn_id):
 
-        from futu.common.pb.Qot_GetSubInfo_pb2 import Request
+        from ..common.pb.Qot_GetSubInfo_pb2 import Request
         req = Request()
         req.c2s.isReqAllConn = is_all_conn
 
@@ -1033,6 +1105,17 @@ class SubscriptionQuery:
             conn_sub_info_tmp = {}
             conn_sub_info_tmp['used'] = conn_sub_info.usedQuota
             conn_sub_info_tmp['is_own_conn'] = conn_sub_info.isOwnConnData
+
+            # Handle securityFirm field if present
+            if conn_sub_info.HasField('securityFirm'):
+                r, str_security_firm = SecurityFirm.to_string(conn_sub_info.securityFirm)
+                if r:
+                    conn_sub_info_tmp['security_firm'] = str_security_firm
+                else:
+                    conn_sub_info_tmp['security_firm'] = SecurityFirm.NONE
+            else:
+                conn_sub_info_tmp['security_firm'] = SecurityFirm.NONE
+
             conn_sub_info_tmp['sub_list'] = []
             for sub_info in conn_sub_info.subInfoList:
                 sub_info_tmp = {}
@@ -1054,7 +1137,7 @@ class SubscriptionQuery:
         return RET_OK, "", result
 
     @classmethod
-    def pack_push_or_unpush_req(cls, code_list, subtype_list, is_push, conn_id, is_first_push):
+    def pack_push_or_unpush_req(cls, code_list, subtype_list, is_push, conn_id, is_first_push, security_firm=SecurityFirm.NONE):
         stock_tuple_list = []
         for code in code_list:
             ret_code, content = split_stock_str(code)
@@ -1063,7 +1146,7 @@ class SubscriptionQuery:
             market_code, stock_code = content
             stock_tuple_list.append((market_code, stock_code))
 
-        from futu.common.pb.Qot_RegQotPush_pb2 import Request
+        from ..common.pb.Qot_RegQotPush_pb2 import Request
         req = Request()
         for market_code, stock_code in stock_tuple_list:
             stock_inst = req.c2s.securityList.add()
@@ -1075,22 +1158,31 @@ class SubscriptionQuery:
         req.c2s.isRegOrUnReg = is_push
         req.c2s.isFirstPush = True if is_first_push else False
 
+        set_qot_header(req, security_firm)
         return pack_pb_req(req, ProtoId.Qot_RegQotPush, conn_id)
 
     @classmethod
-    def pack_push_req(cls, code_list, subtype_list, conn_id, is_first_push):
+    def pack_push_req(cls, code_list, subtype_list, conn_id, is_first_push, security_firm=SecurityFirm.NONE):
 
-        return SubscriptionQuery.pack_push_or_unpush_req(code_list, subtype_list, True, conn_id, is_first_push)
+        return SubscriptionQuery.pack_push_or_unpush_req(code_list, subtype_list, True, conn_id, is_first_push, security_firm=security_firm)
 
     @classmethod
-    def pack_unpush_req(cls, code_list, subtype_list, conn_id, is_first_push=False):
+    def pack_unpush_req(cls, code_list, subtype_list, conn_id, is_first_push=False, security_firm=SecurityFirm.NONE):
 
-        return SubscriptionQuery.pack_push_or_unpush_req(code_list, subtype_list, False, conn_id, is_first_push)
+        return SubscriptionQuery.pack_push_or_unpush_req(code_list, subtype_list, False, conn_id, is_first_push, security_firm=security_firm)
+
+    @classmethod
+    def unpack_unpush_query_rsp(cls, rsp_pb):
+        return RET_OK, "", None
 
 
 def parse_pb_BasicQot(pb):
+    # 成交量：优先使用高精度字段 hpVolume，如果没有则使用 volume
+    volume = pb.hpVolume if pb.HasField('hpVolume') else pb.volume
+
     item = {
         'code': merge_qot_mkt_stock_str(int(pb.security.market), pb.security.code),
+        'name': "N/A" if not pb.HasField('name') else pb.name,
         'data_date':pb.updateTime.split()[0] if len(pb.updateTime) > 0 else '',
         'data_time': pb.updateTime.split()[1] if len(pb.updateTime) > 0 else '',
         'last_price': pb.curPrice,
@@ -1098,7 +1190,7 @@ def parse_pb_BasicQot(pb):
         'high_price': pb.highPrice,
         'low_price': pb.lowPrice,
         'prev_close_price': pb.lastClosePrice,
-        'volume': int(pb.volume),
+        'volume': volume,
         'turnover': pb.turnover,
         'turnover_rate': pb.turnoverRate,
         'amplitude': pb.amplitude,
@@ -1130,6 +1222,11 @@ def parse_pb_BasicQot(pb):
     else:
         set_item_none(item, pb_field_map_PreAfterMarketData_after)
 
+    if pb.HasField('overnight'):
+        set_item_from_pb(item, pb.overnight, pb_field_map_PreAfterMarketData_overnight)
+    else:
+        set_item_none(item, pb_field_map_PreAfterMarketData_overnight)
+
     return item
 
 class StockQuoteQuery:
@@ -1141,7 +1238,7 @@ class StockQuoteQuery:
         pass
 
     @classmethod
-    def pack_req(cls, stock_list, conn_id):
+    def pack_req(cls, stock_list, conn_id, security_firm=SecurityFirm.NONE):
 
         stock_tuple_list = []
         failure_tuple_list = []
@@ -1157,14 +1254,15 @@ class StockQuoteQuery:
 
         if len(failure_tuple_list) > 0:
             error_str = '\n'.join([x[1] for x in failure_tuple_list])
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
-        from futu.common.pb.Qot_GetBasicQot_pb2 import Request
+        from ..common.pb.Qot_GetBasicQot_pb2 import Request
         req = Request()
         for market_code, stock_code in stock_tuple_list:
             stock_inst = req.c2s.securityList.add()
             stock_inst.market = market_code
             stock_inst.code = stock_code
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_GetBasicQot, conn_id)
 
@@ -1190,28 +1288,29 @@ class TickerQuery:
         pass
 
     @classmethod
-    def pack_req(cls, code, num, conn_id):
+    def pack_req(cls, code, num, conn_id, security_firm=SecurityFirm.NONE):
 
         ret, content = split_stock_str(code)
         if ret == RET_ERROR:
             error_str = content
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
         if isinstance(num, int) is False:
             error_str = ERROR_STR_PREFIX + "num is %s of type %s, and the type shoud be %s" \
                                            % (num, str(type(num)), str(int))
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
         if num < 0:
             error_str = ERROR_STR_PREFIX + "num is %s, which is less than 0" % num
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
         market_code, stock_code = content
-        from futu.common.pb.Qot_GetTicker_pb2 import Request
+        from ..common.pb.Qot_GetTicker_pb2 import Request
         req = Request()
         req.c2s.security.market = market_code
         req.c2s.security.code = stock_code
         req.c2s.maxRetNum = num
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_GetTicker, conn_id)
 
@@ -1223,12 +1322,15 @@ class TickerQuery:
 
         stock_code = merge_qot_mkt_stock_str(rsp_pb.s2c.security.market,
                                              rsp_pb.s2c.security.code)
+        stock_name = rsp_pb.s2c.name if rsp_pb.s2c.HasField('name') else "N/A"
         raw_ticker_list = rsp_pb.s2c.tickerList
         ticker_list = [{
             "code": stock_code,
+            "name": stock_name,
             "time": record.time,
             "price": record.price,
-            "volume": record.volume,
+            # 成交量：优先使用高精度字段 hpVolume，如果没有则使用 volume
+            "volume": record.hpVolume if record.HasField('hpVolume') else record.volume,
             "turnover": record.turnover,
             "ticker_direction": TickerDirect.to_string2(record.dir) if record.HasField('dir') else 'N/A',# 初始化枚举类型
             "sequence": record.sequence,
@@ -1246,40 +1348,41 @@ class CurKlineQuery:
         pass
 
     @classmethod
-    def pack_req(cls, code, num, ktype, autype, conn_id):
+    def pack_req(cls, code, num, ktype, autype, conn_id, security_firm=SecurityFirm.NONE):
 
         ret, content = split_stock_str(code)
         if ret == RET_ERROR:
             error_str = content
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
         market_code, stock_code = content
 
         if not KLType.if_has_key(ktype):
             error_str = ERROR_STR_PREFIX + "ktype is %s, which is not valid. (%s)" \
                                            % (ktype, KLType.get_all_keys())
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
         if not AuType.if_has_key(autype):
             error_str = ERROR_STR_PREFIX + "autype is %s, which is not valid. (%s)" \
                                            % (autype, AuType.get_all_keys())
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
         if isinstance(num, int) is False:
             error_str = ERROR_STR_PREFIX + "num is %s of type %s, which type should be %s" \
                                            % (num, str(type(num)), str(int))
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
         if num < 0:
             error_str = ERROR_STR_PREFIX + "num is %s, which is less than 0" % num
-            return RET_ERROR, error_str, None
-        from futu.common.pb.Qot_GetKL_pb2 import Request
+            return RET_ERROR, error_str, None, 0, 0
+        from ..common.pb.Qot_GetKL_pb2 import Request
         req = Request()
         req.c2s.security.market = market_code
         req.c2s.security.code = stock_code
         _, req.c2s.rehabType = AuType.to_number(autype)
         req.c2s.reqNum = num
         _, req.c2s.klType = KLType.to_number(ktype)
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_GetKL, conn_id)
 
@@ -1291,15 +1394,18 @@ class CurKlineQuery:
 
         stock_code = merge_qot_mkt_stock_str(rsp_pb.s2c.security.market,
                                              rsp_pb.s2c.security.code)
+        stock_name = rsp_pb.s2c.name if rsp_pb.s2c.HasField('name') else "N/A"
         raw_kline_list = rsp_pb.s2c.klList
         kline_list = [{
             "code": stock_code,
+            "name": stock_name,
             "time_key": record.time,
             "open": record.openPrice,
             "high": record.highPrice,
             "low": record.lowPrice,
             "close": record.closePrice,
-            "volume": record.volume,
+            # 成交量：优先使用高精度字段 hpVolume，如果没有则使用 volume
+            "volume": record.hpVolume if record.HasField('hpVolume') else record.volume,
             "turnover": record.turnover,
             "pe_ratio": record.pe,
             "turnover_rate": record.turnoverRate,
@@ -1327,16 +1433,19 @@ class CurKlinePush:
 
         stock_code = merge_qot_mkt_stock_str(rsp_pb.s2c.security.market,
                                              rsp_pb.s2c.security.code)
+        stock_name = rsp_pb.s2c.name if rsp_pb.s2c.HasField('name') else "N/A"
         raw_kline_list = rsp_pb.s2c.klList
         kline_list = [{
             "k_type": kl_type,
             "code": stock_code,
+            "name": stock_name,
             "time_key": record.time,
             "open": record.openPrice,
             "high": record.highPrice,
             "low": record.lowPrice,
             "close": record.closePrice,
-            "volume": record.volume,
+            # 成交量：优先使用高精度字段 hpVolume，如果没有则使用 volume
+            "volume": record.hpVolume if record.HasField('hpVolume') else record.volume,
             "turnover": record.turnover,
             "pe_ratio": record.pe,
             "turnover_rate": record.turnoverRate,
@@ -1355,19 +1464,20 @@ class OrderBookQuery:
         pass
 
     @classmethod
-    def pack_req(cls, code, num, conn_id):
+    def pack_req(cls, code, num, conn_id, security_firm=SecurityFirm.NONE):
 
         ret, content = split_stock_str(code)
         if ret == RET_ERROR:
             error_str = content
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
         market_code, stock_code = content
-        from futu.common.pb.Qot_GetOrderBook_pb2 import Request
+        from ..common.pb.Qot_GetOrderBook_pb2 import Request
         req = Request()
         req.c2s.security.market = market_code
         req.c2s.security.code = stock_code
         req.c2s.num = num
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_GetOrderBook, conn_id)
 
@@ -1383,6 +1493,7 @@ class OrderBookQuery:
         order_book = {}
         order_book['code'] = merge_qot_mkt_stock_str(
             rsp_pb.s2c.security.market, rsp_pb.s2c.security.code)
+        order_book['name'] = rsp_pb.s2c.name if rsp_pb.s2c.HasField('name') else 'N/A'
         order_book['svr_recv_time_bid'] = rsp_pb.s2c.svrRecvTimeBid
         order_book['svr_recv_time_ask'] = rsp_pb.s2c.svrRecvTimeAsk
         order_book['Bid'] = []
@@ -1392,13 +1503,17 @@ class OrderBookQuery:
             detail = {}
             for info in record.detailList:
                 detail[info.orderID] = info.volume
-            order_book['Bid'].append((record.price, record.volume,
+            # 成交量：优先使用高精度字段 hpVolume，如果没有则使用 volume
+            volume = record.hpVolume if record.HasField('hpVolume') else record.volume
+            order_book['Bid'].append((record.price, volume,
                                       record.orederCount, detail))
         for record in raw_order_book_ask:
             detail = {}
             for info in record.detailList:
                 detail[info.orderID] = info.volume
-            order_book['Ask'].append((record.price, record.volume,
+            # 成交量：优先使用高精度字段 hpVolume，如果没有则使用 volume
+            volume = record.hpVolume if record.HasField('hpVolume') else record.volume
+            order_book['Ask'].append((record.price, volume,
                                       record.orederCount, detail))
         return RET_OK, "", order_book
 
@@ -1412,17 +1527,17 @@ class SuspensionQuery:
         pass
 
     @classmethod
-    def pack_req(cls, code_list, start, end, conn_id):
+    def pack_req(cls, code_list, start, end, conn_id, security_firm=SecurityFirm.NONE):
 
         list_req_stock = []
         for stock_str in code_list:
             ret, content = split_stock_str(stock_str)
             if ret == RET_ERROR:
-                return RET_ERROR, content, None
+                return RET_ERROR, content, None, 0, 0
             else:
                 list_req_stock.append(content)
 
-        from futu.common.pb.Qot_GetSuspend_pb2 import Request
+        from ..common.pb.Qot_GetSuspend_pb2 import Request
         req = Request()
         if start:
             req.c2s.beginTime = start
@@ -1432,6 +1547,7 @@ class SuspensionQuery:
             stock_inst = req.c2s.securityList.add()
             stock_inst.market = market
             stock_inst.code = code
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_GetSuspend, conn_id)
 
@@ -1465,7 +1581,7 @@ class GlobalStateQuery:
     @classmethod
     def pack_req(cls, user_id, conn_id):
 
-        from futu.common.pb.GetGlobalState_pb2 import Request
+        from ..common.pb.GetGlobalState_pb2 import Request
         req = Request()
         req.c2s.userID = user_id
         return pack_pb_req(req, ProtoId.GetGlobalState, conn_id)
@@ -1512,7 +1628,7 @@ class KeepAlive:
     @classmethod
     def pack_req(cls, conn_id):
 
-        from futu.common.pb.KeepAlive_pb2 import Request
+        from ..common.pb.KeepAlive_pb2 import Request
         req = Request()
         req.c2s.time = int(time.time())
         return pack_pb_req(req, ProtoId.KeepAlive, conn_id)
@@ -1588,10 +1704,6 @@ class SysNotifyPush:
             if rsp_pb.s2c.HasField('apiLevel'):
                 data = {'api_level': rsp_pb.s2c.apiLevel.apiLevel}
 
-        if data is None:
-            logger.warning(
-                "SysNotifyPush data is None: notify_type={}".format(notify_type))
-
         return RET_OK, (notify_type, sub_type, data)
 
 
@@ -1601,17 +1713,18 @@ class StockReferenceList:
         pass
 
     @classmethod
-    def pack_req(cls, code, ref_type, conn_id):
-        from futu.common.pb.Qot_GetReference_pb2 import Request
+    def pack_req(cls, code, ref_type, conn_id, security_firm=SecurityFirm.NONE):
+        from ..common.pb.Qot_GetReference_pb2 import Request
 
         ret, content = split_stock_str(code)
         if ret != RET_OK:
-            return ret, content, None
+            return ret, content, None, 0, 0
 
         req = Request()
         req.c2s.security.market = content[0]
         req.c2s.security.code = content[1]
         _, req.c2s.referenceType = SecurityReferenceType.to_number(ref_type)
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_GetReference, conn_id)
 
@@ -1662,7 +1775,7 @@ class OwnerPlateQuery:
         pass
 
     @classmethod
-    def pack_req(cls, code_list, conn_id):
+    def pack_req(cls, code_list, conn_id, security_firm=SecurityFirm.NONE):
 
         stock_tuple_list = []
         failure_tuple_list = []
@@ -1677,14 +1790,15 @@ class OwnerPlateQuery:
 
         if len(failure_tuple_list) > 0:
             error_str = '\n'.join([x[1] for x in failure_tuple_list])
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
-        from futu.common.pb.Qot_GetOwnerPlate_pb2 import Request
+        from ..common.pb.Qot_GetOwnerPlate_pb2 import Request
         req = Request()
         for market_code, stock_code in stock_tuple_list:
             stock_inst = req.c2s.securityList.add()
             stock_inst.market = market_code
             stock_inst.code = stock_code
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_GetOwnerPlate, conn_id)
 
@@ -1700,6 +1814,7 @@ class OwnerPlateQuery:
             for plate_info in plate_info_list:
                 quote_list = {
                     'code': merge_qot_mkt_stock_str(record.security.market, record.security.code),
+                    'name': record.name if record.HasField('name') else 'N/A',
                     'plate_code': merge_qot_mkt_stock_str(plate_info.plate.market, plate_info.plate.code),
                     'plate_name': str(plate_info.name),
                     'plate_type': Plate.to_string2(plate_info.plateType) if plate_info.HasField('plateType') else 'N/A' # 初始化枚举类型
@@ -1718,22 +1833,22 @@ class HoldingChangeList:
         pass
 
     @classmethod
-    def pack_req(cls, code, holder_type, conn_id, start_date, end_date=None):
+    def pack_req(cls, code, holder_type, conn_id, start_date, end_date=None, security_firm=SecurityFirm.NONE):
 
         ret, content = split_stock_str(code)
         if ret == RET_ERROR:
             error_str = content
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
         market_code, stock_code = content
 
         if start_date is None:
             msg = "The start date is none."
-            return RET_ERROR, msg, None
+            return RET_ERROR, msg, None, 0, 0
         else:
             ret, msg = normalize_date_format(start_date)
             if ret != RET_OK:
-                return ret, msg, None
+                return ret, msg, None, 0, 0
             start_date = msg
 
         if end_date is None:
@@ -1742,10 +1857,10 @@ class HoldingChangeList:
         else:
             ret, msg = normalize_date_format(end_date)
             if ret != RET_OK:
-                return ret, msg, None
+                return ret, msg, None, 0, 0
             end_date = msg
 
-        from futu.common.pb.Qot_GetHoldingChangeList_pb2 import Request
+        from ..common.pb.Qot_GetHoldingChangeList_pb2 import Request
         req = Request()
         req.c2s.security.market = market_code
         req.c2s.security.code = stock_code
@@ -1753,6 +1868,7 @@ class HoldingChangeList:
         req.c2s.beginTime = start_date
         if end_date:
             req.c2s.endTime = end_date
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_GetHoldingChangeList, conn_id)
 
@@ -1777,25 +1893,56 @@ class HoldingChangeList:
         return RET_OK, "", data_list
 
 class OptionDataFilter:
-    def __init__(self):
-        self.implied_volatility_min = None  # 隐含波动率过滤起点 %
-        self.implied_volatility_max = None  # 隐含波动率过滤终点 %
-        self.delta_min = None  # 希腊值 Delta过滤起点
-        self.delta_max = None  # 希腊值 Delta过滤终点
-        self.gamma_min = None  # 希腊值 Gamma过滤起点
-        self.gamma_max = None  # 希腊值 Gamma过滤终点
-        self.vega_min = None # 希腊值 Vega过滤起点
-        self.vega_max = None  # 希腊值 Vega过滤终点
-        self.theta_min = None  # 希腊值 Theta过滤起点
-        self.theta_max = None  # 希腊值 Theta过滤终点
-        self.rho_min = None  # 希腊值 Rho过滤起点
-        self.rho_max = None  # 希腊值 Rho过滤终点
-        self.net_open_interest_min = None  # 净未平仓合约数过滤起点
-        self.net_open_interest_max = None  # 净未平仓合约数过滤终点
-        self.open_interest_min = None  # 未平仓合约数过滤起点
-        self.open_interest_max = None  # 未平仓合约数过滤终点
-        self.vol_min = None  # 成交量过滤起点
-        self.vol_max = None  # 成交量过滤终点
+    def __init__(self,
+                 implied_volatility_min=None, implied_volatility_max=None,
+                 delta_min=None, delta_max=None,
+                 gamma_min=None, gamma_max=None,
+                 vega_min=None, vega_max=None,
+                 theta_min=None, theta_max=None,
+                 rho_min=None, rho_max=None,
+                 net_open_interest_min=None, net_open_interest_max=None,
+                 open_interest_min=None, open_interest_max=None,
+                 vol_min=None, vol_max=None):
+        """
+        初始化 OptionDataFilter 类的实例。
+
+        :param implied_volatility_min: 隐含波动率过滤起点 %
+        :param implied_volatility_max: 隐含波动率过滤终点 %
+        :param delta_min: 希腊值 Delta 过滤起点
+        :param delta_max: 希腊值 Delta 过滤终点
+        :param gamma_min: 希腊值 Gamma 过滤起点
+        :param gamma_max: 希腊值 Gamma 过滤终点
+        :param vega_min: 希腊值 Vega 过滤起点
+        :param vega_max: 希腊值 Vega 过滤终点
+        :param theta_min: 希腊值 Theta 过滤起点
+        :param theta_max: 希腊值 Theta 过滤终点
+        :param rho_min: 希腊值 Rho 过滤起点
+        :param rho_max: 希腊值 Rho 过滤终点
+        :param net_open_interest_min: 净未平仓合约数过滤起点
+        :param net_open_interest_max: 净未平仓合约数过滤终点
+        :param open_interest_min: 未平仓合约数过滤起点
+        :param open_interest_max: 未平仓合约数过滤终点
+        :param vol_min: 成交量过滤起点
+        :param vol_max: 成交量过滤终点
+        """
+        self.implied_volatility_min = implied_volatility_min
+        self.implied_volatility_max = implied_volatility_max
+        self.delta_min = delta_min
+        self.delta_max = delta_max
+        self.gamma_min = gamma_min
+        self.gamma_max = gamma_max
+        self.vega_min = vega_min
+        self.vega_max = vega_max
+        self.theta_min = theta_min
+        self.theta_max = theta_max
+        self.rho_min = rho_min
+        self.rho_max = rho_max
+        self.net_open_interest_min = net_open_interest_min
+        self.net_open_interest_max = net_open_interest_max
+        self.open_interest_min = open_interest_min
+        self.open_interest_max = open_interest_max
+        self.vol_min = vol_min
+        self.vol_max = vol_max
 
 class OptionChain:
     """
@@ -1806,22 +1953,22 @@ class OptionChain:
         pass
 
     @classmethod
-    def pack_req(cls, code, index_option_type, conn_id, start_date, end_date=None, option_type=OptionType.ALL, option_cond_type=OptionCondType.ALL, data_filter = None):
+    def pack_req(cls, code, index_option_type, conn_id, start_date, end_date=None, option_type=OptionType.ALL, option_cond_type=OptionCondType.ALL, data_filter = None, security_firm=SecurityFirm.NONE):
 
         ret, content = split_stock_str(code)
         if ret == RET_ERROR:
             error_str = content
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
         market_code, stock_code = content
 
         if start_date is None:
             msg = "The start date is none."
-            return RET_ERROR, msg, None
+            return RET_ERROR, msg, None, 0, 0
         else:
             ret, msg = normalize_date_format(start_date)
             if ret != RET_OK:
-                return ret, msg, None
+                return ret, msg, None, 0, 0
             start_date = msg
 
         if end_date is None:
@@ -1830,7 +1977,7 @@ class OptionChain:
         else:
             ret, msg = normalize_date_format(end_date)
             if ret != RET_OK:
-                return ret, msg, None
+                return ret, msg, None, 0, 0
             end_date = msg
 
         r, option_cond_type = OptionCondType.to_number(option_cond_type)
@@ -1845,7 +1992,7 @@ class OptionChain:
         if r is False:
             index_option_type = None
 
-        from futu.common.pb.Qot_GetOptionChain_pb2 import Request
+        from ..common.pb.Qot_GetOptionChain_pb2 import Request
         req = Request()
         req.c2s.owner.market = market_code
         req.c2s.owner.code = stock_code
@@ -1903,6 +2050,7 @@ class OptionChain:
                 req.c2s.dataFilter.volMin = data_filter.vol_min
             if data_filter.vol_max is not None:
                 req.c2s.dataFilter.volMax = data_filter.vol_max
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_GetOptionChain, conn_id)
 
@@ -1935,6 +2083,9 @@ class OptionChain:
                         "strike_price": record.optionExData.strikePrice if record.HasField('optionExData') else NoneDataType,
                         "suspension": record.optionExData.suspend if record.HasField('optionExData') else NoneDataType,
                         "index_option_type": IndexOptionType.to_string2(record.optionExData.indexOptionType) if record.HasField('optionExData') else NoneDataType,# 初始化枚举类型
+                        "expiration_cycle": ExpirationCycle.to_string2(record.optionExData.expirationCycle) if record.optionExData.HasField('expirationCycle') else NoneDataType,
+                        "option_standard_type": OptionStandardType.to_string2(record.optionExData.optionStandardType) if record.optionExData.HasField('optionStandardType') else NoneDataType,
+                        "option_settlement_mode": OptionSettlementMode.to_string2(record.optionExData.optionSettlementMode) if record.optionExData.HasField('optionSettlementMode') else NoneDataType,
                     }
                     data_list.append(quote_list)
 
@@ -1949,8 +2100,8 @@ class QuoteWarrant:
         pass
 
     @classmethod
-    def pack_req(cls, req, conn_id):
-        from futu.quote.quote_get_warrant import Request as WarrantRequest
+    def pack_req(cls, req, conn_id, security_firm=SecurityFirm.NONE):
+        from ..quote.quote_get_warrant import Request as WarrantRequest
         if (req is None) or (not isinstance(req, WarrantRequest)):
             req = WarrantRequest()
         ret, context = req.fill_request_pb()
@@ -1961,7 +2112,7 @@ class QuoteWarrant:
 
     @classmethod
     def unpack_rsp(cls, rsp_pb):
-        from futu.quote.quote_get_warrant import Response as WarrantResponse
+        from ..quote.quote_get_warrant import Response as WarrantResponse
         return WarrantResponse.unpack_response_pb(rsp_pb)
 
 
@@ -1974,10 +2125,11 @@ class HistoryKLQuota:
         pass
 
     @classmethod
-    def pack_req(cls, get_detail, conn_id):
-        from futu.common.pb.Qot_RequestHistoryKLQuota_pb2 import Request
+    def pack_req(cls, get_detail, conn_id, security_firm=SecurityFirm.NONE):
+        from ..common.pb.Qot_RequestHistoryKLQuota_pb2 import Request
         req = Request()
         req.c2s.bGetDetail = get_detail
+        set_qot_header(req, security_firm)
         return pack_pb_req(req, ProtoId.Qot_RequestHistoryKLQuota, conn_id)
 
     @classmethod
@@ -1992,8 +2144,9 @@ class HistoryKLQuota:
         for item in details:
             code = merge_qot_mkt_stock_str(
                 int(item.security.market), item.security.code)
+            name = item.name if item.HasField('name') else "N/A"
             request_time = str(item.requestTime)
-            detail_list.append({"code": code, "request_time": request_time})
+            detail_list.append({"code": code, "name": name, "request_time": request_time})
 
         data = {
             "used_quota": used_quota,
@@ -2012,18 +2165,19 @@ class RequestRehab:
         pass
 
     @classmethod
-    def pack_req(cls, stock, conn_id):
+    def pack_req(cls, stock, conn_id, security_firm=SecurityFirm.NONE):
         ret_code, content = split_stock_str(stock)
         if ret_code != RET_OK:
             msg = content
             error_str = ERROR_STR_PREFIX + msg
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
         market, code = content
 
-        from futu.common.pb.Qot_RequestRehab_pb2 import Request
+        from ..common.pb.Qot_RequestRehab_pb2 import Request
         req = Request()
         req.c2s.security.market = market
         req.c2s.security.code = code
+        set_qot_header(req, security_firm)
         return pack_pb_req(req, ProtoId.Qot_RequestRehab, conn_id)
 
     @classmethod
@@ -2041,6 +2195,7 @@ class RequestRehab:
             ADD = 32
             DIVIDED = 64
             SP_DIVIDED = 128
+            SPIN_OFF = 256
 
         rehab_list = list()
         for rehab in rsp_pb.s2c.rehabList:
@@ -2052,6 +2207,10 @@ class RequestRehab:
             stock_rehab_tmp['backward_adj_factorB'] = rehab.bwdFactorB
 
             act_flag = rehab.companyActFlag
+            if act_flag & KLRehabFlag.SPIN_OFF:
+                stock_rehab_tmp['spin_off_ratio'] = rehab.spinOffBase / rehab.spinOffErt
+                stock_rehab_tmp['spin_off_base'] = rehab.spinOffBase
+                stock_rehab_tmp['spin_off_ert'] = rehab.spinOffErt
             if act_flag & KLRehabFlag.SP_DIVIDED:
                 stock_rehab_tmp['special_dividend'] = rehab.spDividend
             if act_flag & KLRehabFlag.DIVIDED:
@@ -2059,22 +2218,33 @@ class RequestRehab:
             if act_flag & KLRehabFlag.ADD:
                 stock_rehab_tmp['stk_spo_ratio'] = rehab.addBase / rehab.addErt
                 stock_rehab_tmp['stk_spo_price'] = rehab.addPrice
+                stock_rehab_tmp['add_base'] = rehab.addBase
+                stock_rehab_tmp['add_ert'] = rehab.ert
             if act_flag & KLRehabFlag.ALLOT:
                 stock_rehab_tmp['allotment_ratio'] = rehab.allotBase / \
                     rehab.allotErt
                 stock_rehab_tmp['allotment_price'] = rehab.allotPrice
+                stock_rehab_tmp['allot_base'] = rehab.allotBase
+                stock_rehab_tmp['allot_ert'] = rehab.allotErt
             if act_flag & KLRehabFlag.TRANSFER:
                 stock_rehab_tmp['per_share_trans_ratio'] = rehab.transferBase / \
                     rehab.transferErt
+                stock_rehab_tmp['transfer_base'] = rehab.transferBase
+                stock_rehab_tmp['transfer_ert'] = rehab.transferErt
             if act_flag & KLRehabFlag.BONUS:
                 stock_rehab_tmp['per_share_div_ratio'] = rehab.bonusBase / \
                     rehab.bonusErt
+                stock_rehab_tmp['bonus_base'] = rehab.bonusBase
+                stock_rehab_tmp['bonus_ert'] = rehab.bonusErt
             if act_flag & KLRehabFlag.JOIN:
-                stock_rehab_tmp['join_ratio'] = rehab.joinBase / rehab.joinErt
+                stock_rehab_tmp['split_ratio'] = rehab.joinBase / rehab.joinErt
+                stock_rehab_tmp['join_base'] = rehab.joinBase
+                stock_rehab_tmp['join_ert'] = rehab.joinErt
             if act_flag & KLRehabFlag.SPLIT:
                 stock_rehab_tmp['split_ratio'] = rehab.splitBase / \
                     rehab.splitErt
-
+                stock_rehab_tmp['split_base'] = rehab.splitBase
+                stock_rehab_tmp['split_ert'] = rehab.splitErt
             rehab_list.append(stock_rehab_tmp)
 
         return RET_OK, "", rehab_list
@@ -2093,7 +2263,7 @@ class GetUserInfo:
 
     @classmethod
     def pack_req(cls, info_field, conn_id):
-        from futu.common.pb.GetUserInfo_pb2 import Request
+        from ..common.pb.GetUserInfo_pb2 import Request
         req = Request()
         if info_field is None:
             req.c2s.flag = 0
@@ -2109,6 +2279,8 @@ class GetUserInfo:
             'nickName') else "N/A"
         avatar_url = rsp_pb.s2c.avatarUrl if rsp_pb.s2c.HasField(
             'avatarUrl') else "N/A"
+        user_attr = rsp_pb.s2c.userAttribution if rsp_pb.s2c.HasField(
+            'userAttribution') else "N/A"
         api_level = rsp_pb.s2c.apiLevel if rsp_pb.s2c.HasField(
             'apiLevel') else "N/A"
         hk_qot_right = rsp_pb.s2c.hkQotRight if rsp_pb.s2c.HasField(
@@ -2150,6 +2322,7 @@ class GetUserInfo:
         data = {
             "nick_name": nick_name,
             "avatar_url": avatar_url,
+            "user_attr": UserAttr.to_string2(user_attr),
             "api_level": api_level,
             "hk_qot_right": QotRight.to_string2(hk_qot_right),
             "hk_option_qot_right": QotRight.to_string2(hk_option_qot_right),
@@ -2185,19 +2358,20 @@ class GetCapitalDistributionQuery:
         pass
 
     @classmethod
-    def pack_req(cls, code, conn_id):
+    def pack_req(cls, code, conn_id, security_firm=SecurityFirm.NONE):
         """check stock_code 股票"""
         ret, content = split_stock_str(code)
         if ret == RET_ERROR:
             error_str = content
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
         market_code, stock_code = content
 
         # 开始组包
-        from futu.common.pb.Qot_GetCapitalDistribution_pb2 import Request
+        from ..common.pb.Qot_GetCapitalDistribution_pb2 import Request
         req = Request()
         req.c2s.security.market = market_code
         req.c2s.security.code = stock_code
+        set_qot_header(req, security_firm)
         return pack_pb_req(req, ProtoId.Qot_GetCapitalDistribution, conn_id)
 
     @classmethod
@@ -2236,22 +2410,22 @@ class GetCapitalFlowQuery:
         pass
 
     @classmethod
-    def pack_req(cls, code, conn_id, start_date=None, end_date=None, period_type=PeriodType.INTRADAY):
+    def pack_req(cls, code, conn_id, start_date=None, end_date=None, period_type=PeriodType.INTRADAY, security_firm=SecurityFirm.NONE):
         # check period type
         if not PeriodType.if_has_key(period_type):
             error_str = ERROR_STR_PREFIX + "period_type is %s, which is not valid. (%s)" \
                 % (period_type, PeriodType.get_all_keys())
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
         """check stock_code 股票"""
         ret, content = split_stock_str(code)
         if ret == RET_ERROR:
             error_str = content
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
         market_code, stock_code = content
 
         # 开始组包
-        from futu.common.pb.Qot_GetCapitalFlow_pb2 import Request
+        from ..common.pb.Qot_GetCapitalFlow_pb2 import Request
         req = Request()
         req.c2s.security.market = market_code
         req.c2s.security.code = stock_code
@@ -2260,7 +2434,8 @@ class GetCapitalFlowQuery:
             req.c2s.beginTime = start_date
         if end_date:
             req.c2s.endTime = end_date
-        
+        set_qot_header(req, security_firm)
+
         return pack_pb_req(req, ProtoId.Qot_GetCapitalFlow, conn_id)
 
     @classmethod
@@ -2303,7 +2478,7 @@ class GetDelayStatisticsQuery:
         """check segment_list 统计分段，默认100ms以下以2ms分段，100ms以上以500，1000，2000，-1分段，-1表示无穷大。"""
 
         # 开始组包
-        from futu.common.pb.GetDelayStatistics_pb2 import Request
+        from ..common.pb.GetDelayStatistics_pb2 import Request
         req = Request()
         for t in type_list:
             r, v = DelayStatisticsType.to_number(t)
@@ -2415,19 +2590,19 @@ class Verification:
 
     @classmethod
     def pack_req(cls, verification_type, verification_op, code, conn_id):
-        from futu.common.pb.Verification_pb2 import Request
+        from ..common.pb.Verification_pb2 import Request
         req = Request()
         ret, data = VerificationType.to_number(verification_type)
         if ret:
             req.c2s.type = data
         else:
-            return RET_ERROR, data, None
+            return RET_ERROR, data, None, 0, 0
 
         ret, data = VerificationOp.to_number(verification_op)
         if ret:
             req.c2s.op = data
         else:
-            return RET_ERROR, data, None
+            return RET_ERROR, data, None, 0, 0
 
         if code is not None and len(code) != 0:
             req.c2s.code = code
@@ -2452,7 +2627,7 @@ class ModifyUserSecurityQuery:
         pass
 
     @classmethod
-    def pack_req(cls, group_name, op, code_list, conn_id):
+    def pack_req(cls, group_name, op, code_list, conn_id, security_firm=SecurityFirm.NONE):
         """check group_name 分组名,有同名的返回首个"""
         """check op ModifyUserSecurityOp,操作类型"""
         """check code_list 新增或删除该分组下的股票"""
@@ -2468,10 +2643,10 @@ class ModifyUserSecurityQuery:
             stock_tuple_list.append((market_code, stock_code))
         if len(failure_tuple_list) > 0:
             error_str = '\n'.join([x[1] for x in failure_tuple_list])
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
         # 开始组包
-        from futu.common.pb.Qot_ModifyUserSecurity_pb2 import Request
+        from ..common.pb.Qot_ModifyUserSecurity_pb2 import Request
         req = Request()
         req.c2s.groupName = group_name
         req.c2s.op = op
@@ -2479,6 +2654,7 @@ class ModifyUserSecurityQuery:
             stock_inst = req.c2s.securityList.add()
             stock_inst.market = market_code
             stock_inst.code = stock_code
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_ModifyUserSecurity, conn_id)
 
@@ -2498,12 +2674,13 @@ class GetUserSecurityQuery:
         pass
 
     @classmethod
-    def pack_req(cls, group_name, conn_id):
+    def pack_req(cls, group_name, conn_id, security_firm=SecurityFirm.NONE):
         """check group_name 分组名,有同名的返回首个"""
         # 开始组包
-        from futu.common.pb.Qot_GetUserSecurity_pb2 import Request
+        from ..common.pb.Qot_GetUserSecurity_pb2 import Request
         req = Request()
         req.c2s.groupName = group_name
+        set_qot_header(req, security_firm)
         return pack_pb_req(req, ProtoId.Qot_GetUserSecurity, conn_id)
 
     @classmethod
@@ -2550,10 +2727,10 @@ class StockFilterQuery:
         pass
 
     @classmethod
-    def pack_req(cls, market, filter_list, plate_code, begin, num, conn_id):
+    def pack_req(cls, market, filter_list, plate_code, begin, num, conn_id, security_firm=SecurityFirm.NONE):
         """check group_name 分组名,有同名的返回首个"""
         # 开始组包
-        from futu.common.pb.Qot_StockFilter_pb2 import Request
+        from ..common.pb.Qot_StockFilter_pb2 import Request
         req = Request()
         req.c2s.begin = begin
         req.c2s.num = num
@@ -2567,7 +2744,7 @@ class StockFilterQuery:
             if ret != RET_OK:
                 msg = str(content)
                 error_str = ERROR_STR_PREFIX + msg
-                return RET_ERROR, error_str, None
+                return RET_ERROR, error_str, None, 0, 0
             market, code = content
             req.c2s.plate.code = code
             req.c2s.plate.market = market
@@ -2596,7 +2773,8 @@ class StockFilterQuery:
                     error_str = ERROR_STR_PREFIX + "the item in filter_list is wrong"
 
         if (ret == RET_ERROR):
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_StockFilter, conn_id)
 
@@ -2626,7 +2804,7 @@ class GetCodeChangeQuery:
         pass
 
     @classmethod
-    def pack_req(cls, code_list, time_filter_list, type_list, conn_id):
+    def pack_req(cls, code_list, time_filter_list, type_list, conn_id, security_firm=SecurityFirm.NONE):
         stock_tuple_list = []
         failure_tuple_list = []
         for stock_str in code_list:
@@ -2639,10 +2817,10 @@ class GetCodeChangeQuery:
             stock_tuple_list.append((market_code, stock_code))
         if len(failure_tuple_list) > 0:
             error_str = '\n'.join([x[1] for x in failure_tuple_list])
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
         # 开始组包
-        from futu.common.pb.Qot_GetCodeChange_pb2 import Request
+        from ..common.pb.Qot_GetCodeChange_pb2 import Request
         req = Request()
         req.c2s.placeHolder = 0
         for market_code, stock_code in stock_tuple_list:
@@ -2659,6 +2837,7 @@ class GetCodeChangeQuery:
             _, time_filter_inst.type = TimeFilterType.to_number(time_filter.type)
             time_filter_inst.beginTime = time_filter.begin_time
             time_filter_inst.endTime = time_filter.end_time
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_GetCodeChange, conn_id)
 
@@ -2699,11 +2878,12 @@ class GetIpoListQuery:
         pass
 
     @classmethod
-    def pack_req(cls, conn_id, market):
+    def pack_req(cls, conn_id, market, security_firm=SecurityFirm.NONE):
         # 开始组包
-        from futu.common.pb.Qot_GetIpoList_pb2 import Request
+        from ..common.pb.Qot_GetIpoList_pb2 import Request
         req = Request()
         _, req.c2s.market = Market.to_number(market)
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_GetIpoList, conn_id)
 
@@ -2744,7 +2924,7 @@ class GetFutureInfoQuery:
         pass
 
     @classmethod
-    def pack_req(cls, code_list, conn_id):
+    def pack_req(cls, code_list, conn_id, security_firm=SecurityFirm.NONE):
         """check code_list 股票列表"""
         stock_tuple_list = []
         failure_tuple_list = []
@@ -2758,15 +2938,16 @@ class GetFutureInfoQuery:
             stock_tuple_list.append((market_code, stock_code))
         if len(failure_tuple_list) > 0:
             error_str = '\n'.join([x[1] for x in failure_tuple_list])
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
         # 开始组包
-        from futu.common.pb.Qot_GetFutureInfo_pb2 import Request
+        from ..common.pb.Qot_GetFutureInfo_pb2 import Request
         req = Request()
         for market_code, stock_code in stock_tuple_list:
             stock_inst = req.c2s.securityList.add()
             stock_inst.market = market_code
             stock_inst.code = stock_code
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_GetFutureInfo, conn_id)
 
@@ -2831,7 +3012,7 @@ class TestCmd:
     @classmethod
     def pack_req(cls, cmd, params):
 
-        from futu.common.pb.TestCmd_pb2 import Request
+        from ..common.pb.TestCmd_pb2 import Request
         req = Request()
         req.c2s.cmd = cmd
         req.c2s.params = params
@@ -2871,6 +3052,7 @@ class UpdatePriceReminder:
         if rsp_pb.HasField('s2c'):
             res['code'] = merge_qot_mkt_stock_str(rsp_pb.s2c.security.market,
                                                   rsp_pb.s2c.security.code)
+            res['name'] = rsp_pb.s2c.name if rsp_pb.s2c.HasField('name') else 'N/A'
             res['price'] = rsp_pb.s2c.price
             res['change_rate'] = rsp_pb.s2c.changeRate
             res['market_status'] = PriceReminderMarketStatus.to_string2(rsp_pb.s2c.marketStatus) if rsp_pb.s2c.HasField('marketStatus') else 'N/A' # 初始化枚举类型
@@ -2898,16 +3080,16 @@ class SetPriceReminderQuery:
         pass
 
     @classmethod
-    def pack_req(cls, code, op, key, reminder_type, reminder_freq, value, note, conn_id):
+    def pack_req(cls, code, op, key, reminder_type, reminder_freq, value, note, conn_id, reminder_session_list, security_firm=SecurityFirm.NONE):
         """check stock_code 股票"""
         ret, content = split_stock_str(code)
         if ret == RET_ERROR:
             error_str = content
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
         market_code, stock_code = content
 
         # 开始组包
-        from futu.common.pb.Qot_SetPriceReminder_pb2 import Request
+        from ..common.pb.Qot_SetPriceReminder_pb2 import Request
         req = Request()
         req.c2s.security.market = market_code
         req.c2s.security.code = stock_code
@@ -2923,6 +3105,10 @@ class SetPriceReminderQuery:
             req.c2s.value = value
         if note is not None:
             req.c2s.note = note
+        for _remind_session in reminder_session_list:
+            _, _rs_enum = PriceReminderMarketStatus.to_number(_remind_session)
+            req.c2s.reminderSessionList.append(_rs_enum)
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_SetPriceReminder, conn_id)
 
@@ -2944,7 +3130,7 @@ class GetPriceReminderQuery:
         pass
 
     @classmethod
-    def pack_req(cls, code, market, conn_id):
+    def pack_req(cls, code, market, conn_id, security_firm=SecurityFirm.NONE):
         """check stock_code 查询股票下的到价提醒项"""
         market_code = 0
         stock_code = ''
@@ -2952,17 +3138,18 @@ class GetPriceReminderQuery:
             ret, content = split_stock_str(code)
             if ret == RET_ERROR:
                 error_str = content
-                return RET_ERROR, error_str, None
+                return RET_ERROR, error_str, None, 0, 0
             market_code, stock_code = content
 
         # 开始组包
-        from futu.common.pb.Qot_GetPriceReminder_pb2 import Request
+        from ..common.pb.Qot_GetPriceReminder_pb2 import Request
         req = Request()
         if code is not None:
             req.c2s.security.market = market_code
             req.c2s.security.code = stock_code
         elif market is not None and market is not Market.NONE:
             _, req.c2s.market = Market.to_number(market)
+        set_qot_header(req, security_firm)
         return pack_pb_req(req, ProtoId.Qot_GetPriceReminder, conn_id)
 
     @classmethod
@@ -2974,10 +3161,12 @@ class GetPriceReminderQuery:
         #  到价提醒 type = Qot_GetPriceReminder.PriceReminder
         for item in rsp_pb.s2c.priceReminderList:
             stock_code = merge_qot_mkt_stock_str(item.security.market, item.security.code)
+            stock_name = item.name if item.HasField('name') else 'N/A'
             #  提醒信息列表 type = Qot_GetPriceReminder.PriceReminderItem
             for sub_item in item.itemList:
                 data = {}
                 data["code"] = stock_code
+                data["name"] = stock_name
                 #  每个提醒的唯一标识 type = int64
                 data["key"] = sub_item.key
                 #  Qot_Common::PriceReminderType 提醒类型 type = int32
@@ -2990,6 +3179,10 @@ class GetPriceReminderQuery:
                 data["enable"] = sub_item.isEnable
                 #  用户设置到价提醒时的标注 type = string
                 data["note"] = sub_item.note
+                #  用户设置到价提醒时的时段信息 type = list
+                data["reminder_session_list"] = []
+                for _rs_enum in sub_item.reminderSessionList:
+                    data["reminder_session_list"].append(PriceReminderMarketStatus.to_string2(_rs_enum))
                 ret_list.append(data)
         return RET_OK, "", ret_list
 
@@ -3002,13 +3195,14 @@ class GetUserSecurityGroupQuery:
         pass
 
     @classmethod
-    def pack_req(cls, group_type, conn_id):
+    def pack_req(cls, group_type, conn_id, security_firm=SecurityFirm.NONE):
         """check group_type GroupType,自选股分组类型。"""
 
         # 开始组包
-        from futu.common.pb.Qot_GetUserSecurityGroup_pb2 import Request
+        from ..common.pb.Qot_GetUserSecurityGroup_pb2 import Request
         req = Request()
         _, req.c2s.groupType = UserSecurityGroupType.to_number(group_type)
+        set_qot_header(req, security_firm)
         return pack_pb_req(req, ProtoId.Qot_GetUserSecurityGroup, conn_id)
 
 
@@ -3039,7 +3233,7 @@ class GetMarketStateQuery:
         pass
 
     @classmethod
-    def pack_req(cls, code_list, conn_id):
+    def pack_req(cls, code_list, conn_id, security_firm=SecurityFirm.NONE):
         """check code_list 股票列表"""
         stock_tuple_list = []
         failure_tuple_list = []
@@ -3053,15 +3247,16 @@ class GetMarketStateQuery:
             stock_tuple_list.append((market_code, stock_code))
         if len(failure_tuple_list) > 0:
             error_str = '\n'.join([x[1] for x in failure_tuple_list])
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
         # 开始组包
-        from futu.common.pb.Qot_GetMarketState_pb2 import Request
+        from ..common.pb.Qot_GetMarketState_pb2 import Request
         req = Request()
         for market_code, stock_code in stock_tuple_list:
             stock_inst = req.c2s.securityList.add()
             stock_inst.market = market_code
             stock_inst.code = stock_code
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_GetMarketState, conn_id)
 
@@ -3093,11 +3288,11 @@ class GetOptionExpirationDate:
         pass
 
     @classmethod
-    def pack_req(cls, code, index_option_type, conn_id):
+    def pack_req(cls, code, index_option_type, conn_id, security_firm=SecurityFirm.NONE):
         ret, content = split_stock_str(code)
         if ret == RET_ERROR:
             error_str = content
-            return RET_ERROR, error_str, None
+            return RET_ERROR, error_str, None, 0, 0
 
         market_code, stock_code = content
 
@@ -3105,12 +3300,13 @@ class GetOptionExpirationDate:
         if r is False:
             index_option_type = None
 
-        from futu.common.pb.Qot_GetOptionExpirationDate_pb2 import Request
+        from ..common.pb.Qot_GetOptionExpirationDate_pb2 import Request
         req = Request()
         req.c2s.owner.market = market_code
         req.c2s.owner.code = stock_code
         if index_option_type is not None:
             req.c2s.indexOptionType = index_option_type
+        set_qot_header(req, security_firm)
 
         return pack_pb_req(req, ProtoId.Qot_GetOptionExpirationDate, conn_id)
 
@@ -3128,3 +3324,90 @@ class GetOptionExpirationDate:
             data["option_expiry_date_distance"] = item.optionExpiryDateDistance
             data["expiration_cycle"] = ExpirationCycle.to_string2(item.cycle) if item.HasField('cycle') else 'N/A'
         return RET_OK, "", ret_list
+
+
+def _skill_wrap_unusual_rsp_unpack(rsp_pb):
+    """解析 SkillWrapAPI 中 *UnusualRsp（与 Qot_RequestHistoryKL Response 一致使用 retType/retMsg）。"""
+    if rsp_pb is None:
+        return RET_ERROR, "empty response", None
+    if rsp_pb.retType != RET_OK:
+        return RET_ERROR, rsp_pb.retMsg, None
+    data = {}
+    if rsp_pb.HasField("errCode"):
+        data["err_code"] = rsp_pb.errCode
+    data["retMsg"] = rsp_pb.retMsg if rsp_pb.HasField("retMsg") else ""
+    data["time_range"] = rsp_pb.time_range if rsp_pb.HasField("time_range") else ""
+    data["content"] = rsp_pb.content if rsp_pb.HasField("content") else ""
+    return RET_OK, "", data
+
+
+class SkillWrapTechnicalUnusualQuery:
+    """技术指标异动。"""
+
+    @classmethod
+    def pack_req(cls, code, time_range, indicator_filters, language_id, conn_id):
+        if code is None:
+            return RET_ERROR, ERROR_STR_PREFIX + "code is required", None, 0, 0
+        from ..common.pb.SkillWrapAPI_pb2 import TechnicalUnusualReq
+        req = TechnicalUnusualReq()
+        req.stock_symbol = code if isinstance(code, str) else str(code)
+        if time_range is not None:
+            req.time_range = int(time_range)
+        if indicator_filters:
+            for s in indicator_filters:
+                req.indicator_filters.append(str(s))
+        if language_id is not None:
+            req.language_id = int(language_id)
+        return pack_pb_req(req, ProtoId.SkillWrap_TechnicalUnusual, conn_id)
+
+    @classmethod
+    def unpack(cls, rsp_pb):
+        return _skill_wrap_unusual_rsp_unpack(rsp_pb)
+
+
+class SkillWrapFinancialUnusualQuery:
+    """财务异动。"""
+
+    @classmethod
+    def pack_req(cls, code, time_range, analysis_dimensions, language_id, conn_id):
+        if code is None:
+            return RET_ERROR, ERROR_STR_PREFIX + "code is required", None, 0, 0
+        from ..common.pb.SkillWrapAPI_pb2 import FinancialUnusualReq
+        req = FinancialUnusualReq()
+        req.stock_symbol = code if isinstance(code, str) else str(code)
+        if time_range is not None:
+            req.time_range = int(time_range)
+        if analysis_dimensions:
+            for s in analysis_dimensions:
+                req.analysis_dimensions.append(str(s))
+        if language_id is not None:
+            req.language_id = int(language_id)
+        return pack_pb_req(req, ProtoId.SkillWrap_FinancialUnusual, conn_id)
+
+    @classmethod
+    def unpack(cls, rsp_pb):
+        return _skill_wrap_unusual_rsp_unpack(rsp_pb)
+
+
+class SkillWrapDerivativeUnusualQuery:
+    """衍生品异动。"""
+
+    @classmethod
+    def pack_req(cls, code, time_range, analysis_dimensions, language_id, conn_id):
+        if code is None:
+            return RET_ERROR, ERROR_STR_PREFIX + "code is required", None, 0, 0
+        from ..common.pb.SkillWrapAPI_pb2 import DerivativeUnusualReq
+        req = DerivativeUnusualReq()
+        req.stock_symbol = code if isinstance(code, str) else str(code)
+        if time_range is not None:
+            req.time_range = int(time_range)
+        if analysis_dimensions:
+            for s in analysis_dimensions:
+                req.analysis_dimensions.append(str(s))
+        if language_id is not None:
+            req.language_id = int(language_id)
+        return pack_pb_req(req, ProtoId.SkillWrap_DerivativeUnusual, conn_id)
+
+    @classmethod
+    def unpack(cls, rsp_pb):
+        return _skill_wrap_unusual_rsp_unpack(rsp_pb)

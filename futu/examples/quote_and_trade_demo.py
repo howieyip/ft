@@ -204,7 +204,7 @@ def trade_hkcc_test():
     A股通交易测试
     :return:
     """
-    trd_ctx = OpenHKCCTradeContext(host='127.0.0.1', port=11111)
+    trd_ctx = OpenSecTradeContext(filter_trdmarket=TrdMarket.HKCC, host='127.0.0.1', port=11111)
     trd_ctx.set_handler(TradeOrderTest())
     trd_ctx.set_handler(TradeDealTest())
     trd_ctx.start()
@@ -240,7 +240,7 @@ def trade_hk_test():
     港股交易测试
     :return:
     '''
-    trd_ctx = OpenHKTradeContext(host='127.0.0.1', port=11111)
+    trd_ctx = OpenSecTradeContext(filter_trdmarket=TrdMarket.HK, host='127.0.0.1', port=11111)
     trd_ctx.set_handler(TradeOrderTest())
     trd_ctx.set_handler(TradeDealTest())
     trd_ctx.start()

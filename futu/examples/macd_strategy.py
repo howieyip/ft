@@ -44,12 +44,7 @@ class MACD(object):
         quote_ctx = ft.OpenQuoteContext(
             host=self.api_svr_ip, port=self.api_svr_port)
 
-        if 'HK.' in self.stock:
-            trade_ctx = ft.OpenHKTradeContext(host=self.api_svr_ip, port=self.api_svr_port)
-        elif 'US.' in self.stock:
-            trade_ctx = ft.OpenUSTradeContext(host=self.api_svr_ip, port=self.api_svr_port)
-        else:
-            raise Exception("不支持的stock: {}".format(self.stock))
+        trade_ctx = ft.OpenSecTradeContext(filter_trdmarket=ft.TrdMarket.NONE, host=self.api_svr_ip, port=self.api_svr_port)
 
         if self.trade_env == ft.TrdEnv.REAL:
             ret_code, ret_data = trade_ctx.unlock_trade(

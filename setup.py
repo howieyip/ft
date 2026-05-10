@@ -34,7 +34,7 @@ with open("README.md", "r", encoding='utf-8') as fh:
 
 install_requires = ["pandas",
                     "simplejson",
-                    "protobuf==3.5.1",
+                    "protobuf>=3.20.0",
                     "PyCryptodome",
                     ]
 
@@ -42,7 +42,7 @@ if is_py2:
     install_requires.append("selectors2")
 
 setup(
-    name='futu-api',
+    name='futu_api',
     version=version,
     description='Futu Quantitative Trading API',
 	long_description=long_desc,

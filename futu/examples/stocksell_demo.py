@@ -74,7 +74,7 @@ if __name__ =="__main__":
     order_type = ft.OrderType.NORMAL  # 订单类型
 
     quote_ctx = ft.OpenQuoteContext(ip, port)
-    trd_ctx = ft.OpenHKTradeContext(ip, port)
+    trd_ctx = ft.OpenSecTradeContext(ft.TrdMarket.HK, ip, port)
 
     quote_ctx.subscribe(code, ft.SubType.ORDER_BOOK)  # 订阅摆盘，这样后面才能调用get_order_book
     ret, data = trd_ctx.unlock_trade(unlock_pwd)

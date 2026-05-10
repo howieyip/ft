@@ -2,9 +2,9 @@
 import os
 import sys
 import traceback
-from futu.common import bytes_utf8, IS_PY2, str_utf8
-from futu.common.constant import *
-from futu.common.ft_logger import logger
+from . import bytes_utf8, IS_PY2, str_utf8
+from .constant import *
+from .ft_logger import logger
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5 as Cipher_pkcs1
 from Crypto import Random
@@ -200,6 +200,14 @@ class SysConfig(object):
     @classmethod
     def get_run_mode(cls):
         return cls.RUN_MODE
+
+    @classmethod
+    def enable_console_log(cls, enable):
+        """
+        设置是否屏蔽控制台log，注意需要在程序启动时设置以避免多线程问题
+        :param enable: bool
+        """
+        logger.enable_console_log(enable)
 
 
 class RsaCrypt(object):

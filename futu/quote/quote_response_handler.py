@@ -1,7 +1,8 @@
 ﻿# -*- coding: utf-8 -*-
+
 import pandas as pd
-from futu.common import RspHandlerBase
-from futu.quote.quote_query import *
+from .quote_query import *
+from ..common import RspHandlerBase
 
 
 class StockQuoteHandlerBase(RspHandlerBase):
@@ -43,7 +44,7 @@ class StockQuoteHandlerBase(RspHandlerBase):
             return ret_code, content
         else:
             col_list = [
-                'code', 'data_date', 'data_time', 'last_price', 'open_price',
+                'code', 'name', 'data_date', 'data_time', 'last_price', 'open_price',
                 'high_price', 'low_price', 'prev_close_price', 'volume',
                 'turnover', 'turnover_rate', 'amplitude', 'suspension',
                 'listing_date', 'price_spread', 'dark_status', 'sec_status', 'strike_price',
@@ -56,6 +57,7 @@ class StockQuoteHandlerBase(RspHandlerBase):
 
             col_list.extend(row[0] for row in pb_field_map_PreAfterMarketData_pre)
             col_list.extend(row[0] for row in pb_field_map_PreAfterMarketData_after)
+            col_list.extend(row[0] for row in pb_field_map_PreAfterMarketData_overnight)
 
             quote_frame_table = pd.DataFrame(content, columns=col_list)
 
@@ -142,8 +144,8 @@ class CurKlineHandlerBase(RspHandlerBase):
             return ret_code, content
         else:
             col_list = [
-                'code', 'time_key', 'open', 'close', 'high', 'low', 'volume',
-                'turnover', 'k_type', 'last_close'
+                'code', 'name', 'time_key', 'open', 'close', 'high', 'low', 'volume',
+                'turnover', 'k_type', 'last_close', 'pe_ratio', 'turnover_rate'
             ]
             kline_frame_table = pd.DataFrame(content, columns=col_list)
 
@@ -190,8 +192,8 @@ class TickerHandlerBase(RspHandlerBase):
         else:
             self.on_recv_log(content)
             col_list = [
-                'code', 'time', 'price', 'volume', 'turnover',
-                "ticker_direction", 'sequence', 'type', 'push_data_type',
+                'code', 'name', 'time', 'price', 'volume', 'turnover',
+                "ticker_direction", 'sequence', 'type', 'push_data_type'
             ]
             ticker_frame_table = pd.DataFrame(content, columns=col_list)
 
@@ -238,7 +240,7 @@ class RTDataHandlerBase(RspHandlerBase):
         else:
 
             col_list = [
-                'code', 'time', 'is_blank', 'opened_mins', 'cur_price',
+                'code', 'name', 'time', 'is_blank', 'opened_mins', 'cur_price',
                 "last_close", 'avg_price', 'turnover', 'volume'
             ]
             rt_data_table = pd.DataFrame(content, columns=col_list)
@@ -290,10 +292,10 @@ class BrokerHandlerBase(RspHandlerBase):
             self.on_recv_log(content)
             stock_code, bid_content, ask_content = content
             bid_list = [
-                'code', 'bid_broker_id', 'bid_broker_name', 'bid_broker_pos', 'order_id', 'order_volume'
+                'code', 'name', 'bid_broker_id', 'bid_broker_name', 'bid_broker_pos', 'order_id', 'order_volume'
             ]
             ask_list = [
-                'code', 'ask_broker_id', 'ask_broker_name', 'ask_broker_pos', 'order_id', 'order_volume'
+                'code', 'name', 'ask_broker_id', 'ask_broker_name', 'ask_broker_pos', 'order_id', 'order_volume'
             ]
             bid_frame_table = pd.DataFrame(bid_content, columns=bid_list)
             ask_frame_table = pd.DataFrame(ask_content, columns=ask_list)
