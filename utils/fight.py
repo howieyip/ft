@@ -329,19 +329,27 @@ def draw_golden_line():
     return golden_line
 
 
+def is_neer_band(kline, band, direction=0, distance=10):
+    if direction == 0:
+        if kline.low - band < distance*1.5:
+            return True
+    elif kline.high - band > -distance*1.5:
+        return True
+    return False
+
+
 def check_position(kline, band, direction=0):
     distance = 10
-    golden_line = draw_golden_line()
-    if golden_line is False:
+    if conf['NEED_LOSS']:
+        golden_line = draw_golden_line()
+        if golden_line is False:
+            return False
+        for k in golden_line:
+            if kline.low - distance < golden_line[k] < kline.high + distance:
+                return is_neer_band(kline, band, direction)
         return False
-    for k in golden_line:
-        if not conf['NEED_LOSS'] or kline.low - distance < golden_line[k] < kline.high + distance:
-            if direction == 0:
-                if kline.low - band < distance*1.5:
-                    return True
-            elif kline.high - band > -distance*1.5:
-                return True
-    return False
+    else:
+        return is_neer_band(kline, band, direction)
 
 
 def check_line(buy_all=False, need_log=True):
