@@ -90,6 +90,7 @@ quote_ctx = None
 trade_ctx = None
 glb = {
     'timer': None,
+    'srv_time': '',
     'recovery_bull': None,
     'recovery_bear': None,
     'rt_data': None,
@@ -945,7 +946,7 @@ class OrderBook(ft.OrderBookHandlerBase):
         if ret != ft.RET_OK:
             log.info('OrderBook push error, ret: %s, data:%s' % (ret, data))
             return ret, data
-        t = data['svr_recv_time_ask']
+        glb['srv_time'] = t = data['svr_recv_time_ask']
         if len(t) < 19: # Some data's receive time is empty string, such as server restart or first push cache data
             # log.info('OrderBook push warning, t: %s, data:%s' % (t, data))
             return ret, data
@@ -1350,6 +1351,70 @@ def _auto_adjust_buy(delta_price):
             modify_order(order, rise_price)
 
 
+def on_recv_data(price, srv_time=None):
+    glb['cur_price'] = price
+    if srv_time is None:
+        srv_time = glb['srv_time']
+    t = srv_time
+    h = int(t[11:13])
+    m = int(t[14:16])
+    s = int(t[17:19])
+    if h < 9 or h == 9 and m < 30 or h >= 16:
+        # log.info(data)
+        if h == 16 and m == 0 and s == 0:
+            end()
+        return False
+
+    if h == 9 and m == 30 and s == 0:
+        log.info('[%s]--------------------start--------------------' % t)
+    elif h >= 13 and not glb['afternoon']:
+        glb['afternoon'] = True
+
+    if glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15:
+        if m >= 30:
+            glb['soon_over'] = True
+        if m >= 55:
+            if not glb['almost_over']:
+                glb['almost_over'] = True
+                # cancel_all()
+                position_list_query(caller='almost_over')
+            if m >= 59:
+                if not glb['to_over']:
+                    glb['to_over'] = True
+                    log.info('[%s]--------------------to_over--------------------' % t)
+                    if conf['NEED_LOSS'] and not glb['over'] and (conf['loss_sell_all_over'] or glb['today_pl_val'] > 0):
+                        if conf['BULL_CODE'] != '' and conf['BEAR_CODE'] != '':
+                            sell_all()
+                        elif conf['BULL_CODE'] != '':
+                            sell_all(stock_type='bull')
+                        elif conf['BEAR_CODE'] != '':
+                            sell_all(stock_type='bear')
+            return False
+
+    if glb['to_over']:
+        return False
+
+    # Query position list every 20 points fluctuation, for profit/loss statistics and stop loss
+    if abs(glb['cur_price'] - glb['last_price']) >= 20:
+        glb['last_price'] = glb['cur_price']
+        position_list_query(need_log=False, caller='fluctuate')
+    # Query position list every minute
+    if s == 29:
+        position_list_query(need_log=False, caller='per_min')
+
+    # Auto buy
+    if conf['AUTO_BUY'] and (not glb['soon_over'] and s >= 56 or not conf['NEED_LOSS'] and s % 30 == 0):
+        auto_buy()
+    # Auto adjust price
+    if (conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']) and s % 3 == 0:
+        delta_price = glb['cur_price'] - glb['last_3s_price']
+        if conf['AUTO_ADJUST_BUY']:
+            auto_adjust_buy(delta_price)
+        if conf['AUTO_ADJUST_SELL']:
+            auto_adjust_sell(delta_price)
+        glb['last_3s_price'] = glb['cur_price']
+
+
 class Ticker(ft.TickerHandlerBase):
     def on_recv_rsp(self, rsp_str):
         # log.info('--------------------Ticker Details--------------------')
@@ -1372,68 +1437,27 @@ class Ticker(ft.TickerHandlerBase):
         # }
         # data = pd.DataFrame(data)
 
-        cur_ticker = data.iloc[-1]
-        # log.info('ticker push, data:\n%s' % cur_ticker)
-        t = cur_ticker.time
-        h = int(t[11:13])
-        m = int(t[14:16])
-        s = int(t[17:19])
-        if h < 9 or h == 9 and m < 30 or h >= 16:
-            # log.info(data)
-            if h == 16 and m == 0 and s == 0:
-                end()
+        cur_data = data.iloc[-1]
+        # log.info('ticker push, data:\n%s' % cur_data)
+        on_recv_data(cur_data.price, cur_data.time)
+
+        return ret, data
+
+
+class CurKline(ft.CurKlineHandlerBase):
+    def on_recv_rsp(self, rsp_str):
+        # log.info('--------------------CurKline Details--------------------')
+        ret, data = super(CurKline, self).on_recv_rsp(rsp_str)
+        # log.info('CurKline push, ret: %s, data:%s' % (ret, data))
+        if ret != ft.RET_OK:
+            log.info('CurKline push error, ret: %s, data:%s' % (ret, data))
             return ret, data
+        #            code         name             time_key     open    close     high      low  volume  turnover  pe_ratio  turnover_rate  last_close
+        # 0   HK.MHImain  小恒指主连(2406)  2024-06-15 02:42:00  17773.0  17772.0  17773.0  17769.0      18  319883.0       0.0            0.0     17772.0
 
-        if h == 9 and m == 30 and s == 0:
-            log.info('[%s]--------------------start--------------------' % t)
-        elif h >= 13 and not glb['afternoon']:
-            glb['afternoon'] = True
-
-        if glb['trade_date'].get('trade_date_type') == 'MORNING' and h == 11 or h == 15:
-            if m >= 30:
-                glb['soon_over'] = True
-            if m >= 55:
-                if not glb['almost_over']:
-                    glb['almost_over'] = True
-                    # cancel_all()
-                    position_list_query(caller='almost_over')
-                if m >= 59:
-                    if not glb['to_over']:
-                        glb['to_over'] = True
-                        log.info('[%s]--------------------to_over--------------------' % t)
-                        if conf['NEED_LOSS'] and not glb['over'] and (conf['loss_sell_all_over'] or glb['today_pl_val'] > 0):
-                            if conf['BULL_CODE'] != '' and conf['BEAR_CODE'] != '':
-                                sell_all()
-                            elif conf['BULL_CODE'] != '':
-                                sell_all(stock_type='bull')
-                            elif conf['BEAR_CODE'] != '':
-                                sell_all(stock_type='bear')
-                return ret, data
-
-        if glb['to_over']:
-            return ret, data
-
-        glb['cur_price'] = cur_ticker.price
-
-        # Query position list every 20 points fluctuation, for profit/loss statistics and stop loss
-        if abs(glb['cur_price'] - glb['last_price']) >= 20:
-            glb['last_price'] = glb['cur_price']
-            position_list_query(need_log=False, caller='fluctuate')
-        # Query position list every minute
-        if s == 29:
-            position_list_query(need_log=False, caller='per_min')
-
-        # Auto buy
-        if conf['AUTO_BUY'] and (not glb['soon_over'] and s >= 56 or not conf['NEED_LOSS'] and s % 30 == 0):
-            auto_buy()
-        # Auto adjust price
-        if (conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']) and s % 3 == 0:
-            delta_price = glb['cur_price'] - glb['last_3s_price']
-            if conf['AUTO_ADJUST_BUY']:
-                auto_adjust_buy(delta_price)
-            if conf['AUTO_ADJUST_SELL']:
-                auto_adjust_sell(delta_price)
-            glb['last_3s_price'] = glb['cur_price']
+        cur_data = data.iloc[-1]
+        # log.info('CurKline push, data:\n%s' % cur_data)
+        on_recv_data(cur_data.close)
 
         return ret, data
 
@@ -1516,9 +1540,9 @@ def start(config=None):
         if ret != ft.RET_OK:
             log.info('unlock_trade error')
             return False
-    data = subscribe([CONST['MHI_CODE']], [ft.SubType.TICKER], subscribe_push=True)
-    if data is False:
-        return False
+    # data = subscribe([CONST['MHI_CODE']], [ft.SubType.TICKER], subscribe_push=True)
+    # if data is False:
+    #     return False
     data = subscribe([CONST['MHI_CODE']], [ft.SubType.K_1M], subscribe_push=False)
     if data is False:
         return False
@@ -1534,7 +1558,8 @@ def start(config=None):
     order_list_query()
 
     quote_ctx.set_handler(SysNotify())
-    quote_ctx.set_handler(Ticker())
+    # quote_ctx.set_handler(Ticker())
+    quote_ctx.set_handler(CurKline())
     if conf['TRY_FOLLOW_RECOVERY']:
         quote_ctx.set_handler(RTData())
     trade_ctx.set_handler(TradeOrder())
