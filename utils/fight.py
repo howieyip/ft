@@ -1368,7 +1368,8 @@ def on_recv_data(srv_time=None, cur_price=None):
                         elif conf['BEAR_CODE'] != '':
                             sell_all(stock_type='bear')
             return False
-    if glb['to_over']:
+
+    if glb['to_over'] or s % 3 != 0:
         return False
 
     if cur_price is None:
@@ -1382,11 +1383,11 @@ def on_recv_data(srv_time=None, cur_price=None):
         glb['last_price'] = glb['cur_price']
         position_list_query(need_log=False, caller='fluctuate')
     # Query position list every minute
-    if s == 29:
+    if s == 30:
         position_list_query(need_log=False, caller='per_min')
 
     # Auto buy
-    if conf['AUTO_BUY'] and (not glb['soon_over'] and s >= 56 or not conf['NEED_LOSS'] and s % 30 == 0):
+    if conf['AUTO_BUY'] and (not glb['soon_over'] and s >= 54 or not conf['NEED_LOSS'] and s % 30 == 0):
         auto_buy()
     # Auto adjust price
     if (conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']) and s % 3 == 0:
