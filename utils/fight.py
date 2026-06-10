@@ -243,7 +243,7 @@ def get_cur_kline(num=80, begin=None):
     # 1   HK.MHImain  小恒指主连(2406)  2024-06-15 02:43:00  17775.0  17776.0  17776.0  17775.0       8  142205.0       0.0            0.0     17772.0
     # 18  HK.MHImain  小恒指主连(2406)  2024-06-15 03:00:00  17796.0  17796.0  17796.0  17793.0      30  533842.0       0.0            0.0     17795.0
     # 19  HK.MHImain  小恒指主连(2406)  2024-06-17 09:16:00  17796.0  17796.0  17796.0  17796.0       0       0.0       0.0            0.0     17796.0
-    glb['klines'] = klines
+    # glb['klines'] = klines
     if begin is not None:
         klines = klines[(klines.time_key.str[11:19] > begin) & (klines.time_key.str[11:19] < '16:00:00')]
         klines = klines[-num:].reset_index(drop=True)
@@ -938,29 +938,6 @@ def _check_profit_loss(code, bid_price, ask_price, caller='', need_log=True):
             profit_order(order_list)
 
 
-class OrderBook(ft.OrderBookHandlerBase):
-    def on_recv_rsp(self, rsp_str):
-        ret, data = super(OrderBook, self).on_recv_rsp(rsp_str)
-        # log.info('OrderBook push ret: %s, data:%s' % (ret, data))
-        # ret: 0, data:{'code': 'HK.50756', 'svr_recv_time_bid': '2025-05-02 15:35:44.961', 'svr_recv_time_ask': '2025-05-02 15:35:44.961', 'Bid': [(0.38, 4940000, 1, {}), (0.375, 0, 0, {}), (0.37, 0, 0, {})], 'Ask': [(0.385, 5000000, 1, {}), (0.39, 0, 0, {}), (0.395, 0, 0, {})]}
-        if ret != ft.RET_OK:
-            log.info('OrderBook push error, ret: %s, data:%s' % (ret, data))
-            return ret, data
-        glb['srv_time'] = t = data['svr_recv_time_ask']
-        if len(t) < 19: # Some data's receive time is empty string, such as server restart or first push cache data
-            # log.info('OrderBook push warning, t: %s, data:%s' % (t, data))
-            return ret, data
-        s = int(t[17:19])
-        if s % 3 == 0 and data['Bid'][0] and data['Ask'][0]:
-            if data['code'] not in glb['order_book']:
-                glb['order_book'][data['code']] = data
-            if conf['NEED_LOSS']:
-                check_profit_loss(data['code'], data['Bid'][0][0], data['Ask'][0][0], caller='order_book', need_log=s%9==0)
-            glb['order_book'][data['code']] = data
-
-        return ret, data
-
-
 def get_order_price(price, index):
     if conf['NEED_LOSS']:
         order_price =  round(price + (math.pow(index, 2) + 3 * index) / 2 * 0.001, 3)
@@ -1351,14 +1328,15 @@ def _auto_adjust_buy(delta_price):
             modify_order(order, rise_price)
 
 
-def on_recv_data(price, srv_time=None):
-    glb['cur_price'] = price
+def on_recv_data(srv_time=None, cur_price=None):
     if srv_time is None:
         srv_time = glb['srv_time']
-    t = srv_time
-    h = int(t[11:13])
-    m = int(t[14:16])
-    s = int(t[17:19])
+    if len(srv_time) < 19:
+        log.info('on_recv_data warning, srv_time: %s' % srv_time)
+        return False
+    h = int(srv_time[11:13])
+    m = int(srv_time[14:16])
+    s = int(srv_time[17:19])
     if h < 9 or h == 9 and m < 30 or h >= 16:
         # log.info(data)
         if h == 16 and m == 0 and s == 0:
@@ -1366,7 +1344,7 @@ def on_recv_data(price, srv_time=None):
         return False
 
     if h == 9 and m == 30 and s == 0:
-        log.info('[%s]--------------------start--------------------' % t)
+        log.info('[%s]--------------------start--------------------' % srv_time)
     elif h >= 13 and not glb['afternoon']:
         glb['afternoon'] = True
 
@@ -1381,7 +1359,7 @@ def on_recv_data(price, srv_time=None):
             if m >= 59:
                 if not glb['to_over']:
                     glb['to_over'] = True
-                    log.info('[%s]--------------------to_over--------------------' % t)
+                    log.info('[%s]--------------------to_over--------------------' % srv_time)
                     if conf['NEED_LOSS'] and not glb['over'] and (conf['loss_sell_all_over'] or glb['today_pl_val'] > 0):
                         if conf['BULL_CODE'] != '' and conf['BEAR_CODE'] != '':
                             sell_all()
@@ -1390,10 +1368,15 @@ def on_recv_data(price, srv_time=None):
                         elif conf['BEAR_CODE'] != '':
                             sell_all(stock_type='bear')
             return False
-
     if glb['to_over']:
         return False
 
+    if cur_price is None:
+        klines = get_cur_kline(1)
+        if klines is False or len(klines) == 0:
+            return False
+        cur_price = klines.iloc[-1].close
+    glb['cur_price'] = cur_price
     # Query position list every 20 points fluctuation, for profit/loss statistics and stop loss
     if abs(glb['cur_price'] - glb['last_price']) >= 20:
         glb['last_price'] = glb['cur_price']
@@ -1415,10 +1398,36 @@ def on_recv_data(price, srv_time=None):
         glb['last_3s_price'] = glb['cur_price']
 
 
+class OrderBook(ft.OrderBookHandlerBase):
+    def on_recv_rsp(self, rsp_str):
+        # log.info('--------------------OrderBook Push--------------------')
+        ret, data = super(OrderBook, self).on_recv_rsp(rsp_str)
+        # log.info('OrderBook push ret: %s, data:%s' % (ret, data))
+        # ret: 0, data:{'code': 'HK.50756', 'svr_recv_time_bid': '2025-05-02 15:35:44.961', 'svr_recv_time_ask': '2025-05-02 15:35:44.961', 'Bid': [(0.38, 4940000, 1, {}), (0.375, 0, 0, {}), (0.37, 0, 0, {})], 'Ask': [(0.385, 5000000, 1, {}), (0.39, 0, 0, {}), (0.395, 0, 0, {})]}
+        if ret != ft.RET_OK:
+            log.info('OrderBook push error, ret: %s, data:%s' % (ret, data))
+            return ret, data
+        glb['srv_time'] = srv_time = data['svr_recv_time_ask']
+        if len(srv_time) < 19: # Some data's receive time is empty string, such as server restart or first push cache data
+            # log.info('OrderBook push warning, srv_time: %s, data:%s' % (srv_time, data))
+            return ret, data
+        on_recv_data(srv_time)
+        s = int(srv_time[17:19])
+        if s % 3 == 0 and data['Bid'][0] and data['Ask'][0]:
+            if data['code'] not in glb['order_book']:
+                glb['order_book'][data['code']] = data
+            if conf['NEED_LOSS']:
+                check_profit_loss(data['code'], data['Bid'][0][0], data['Ask'][0][0], caller='order_book', need_log=s%9==0)
+            glb['order_book'][data['code']] = data
+
+        return ret, data
+
+
 class Ticker(ft.TickerHandlerBase):
     def on_recv_rsp(self, rsp_str):
-        # log.info('--------------------Ticker Details--------------------')
+        # log.info('--------------------Ticker Push--------------------')
         ret, data = super(Ticker, self).on_recv_rsp(rsp_str)
+        # log.info('Ticker push, ret: %s, data:%s' % (ret, data))
         if ret != ft.RET_OK:
             log.info('Ticker push error, ret: %s, data:%s' % (ret, data))
             return ret, data
@@ -1439,14 +1448,14 @@ class Ticker(ft.TickerHandlerBase):
 
         cur_data = data.iloc[-1]
         # log.info('ticker push, data:\n%s' % cur_data)
-        on_recv_data(cur_data.price, cur_data.time)
+        on_recv_data(cur_data.time, cur_data.price)
 
         return ret, data
 
 
 class CurKline(ft.CurKlineHandlerBase):
     def on_recv_rsp(self, rsp_str):
-        # log.info('--------------------CurKline Details--------------------')
+        # log.info('--------------------CurKline Push--------------------')
         ret, data = super(CurKline, self).on_recv_rsp(rsp_str)
         # log.info('CurKline push, ret: %s, data:%s' % (ret, data))
         if ret != ft.RET_OK:
@@ -1457,7 +1466,7 @@ class CurKline(ft.CurKlineHandlerBase):
 
         cur_data = data.iloc[-1]
         # log.info('CurKline push, data:\n%s' % cur_data)
-        on_recv_data(cur_data.close)
+        on_recv_data(cur_price=cur_data.close)
 
         return ret, data
 
@@ -1559,14 +1568,18 @@ def start(config=None):
 
     quote_ctx.set_handler(SysNotify())
     # quote_ctx.set_handler(Ticker())
-    quote_ctx.set_handler(CurKline())
+    # quote_ctx.set_handler(CurKline())
+
     if conf['TRY_FOLLOW_RECOVERY']:
         quote_ctx.set_handler(RTData())
     trade_ctx.set_handler(TradeOrder())
-    if conf['NEED_LOSS'] or conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']:
-        quote_ctx.set_handler(OrderBook())
+
+    # if conf['NEED_LOSS'] or conf['AUTO_ADJUST_BUY'] or conf['AUTO_ADJUST_SELL']:
+    quote_ctx.set_handler(OrderBook())
+
     if conf['BULL_CODE'] != 'auto':
         subscribe([conf['BULL_CODE']], [ft.SubType.ORDER_BOOK])
+
     ret, data = quote_ctx.query_subscription()
     log.info('query_subscription, ret: %s, data:%s' % (ret, data))
     if ret != ft.RET_OK:
