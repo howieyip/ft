@@ -425,10 +425,10 @@ def get_order_book(code):
     return order_book
 
 
-def get_diff_volume(last_price, cur_price, is_ceil=False):
+def get_diff_volume(last_price, cur_price, is_round=False):
     order_diff_times = round(abs(last_price - cur_price) / conf['EVERY_ORDER_DIFF'], 3)
-    if is_ceil:
-        order_diff_times = math.ceil(order_diff_times)
+    if is_round:
+        order_diff_times = round(order_diff_times)
     else:
         order_diff_times = math.floor(order_diff_times)
     per_volume = conf['FAR_ORDER_LIST'][0][1]
