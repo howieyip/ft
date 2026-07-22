@@ -18,7 +18,7 @@ start({
     # 'EVERY_ORDER_DIFF': 0.002,
     # 'NEED_LOSS': True,
     'BULL_CODE': 'HK.69345',
-    'ADD_ORDER_DIFF': 0.04,
+    'ADD_ORDER_DIFF': 0.02,
     'EVERY_ORDER_DIFF': 0.02,
     'FAR_ORDER_LIST': [[20e3, 20e3]],
 })
