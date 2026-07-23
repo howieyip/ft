@@ -1383,7 +1383,7 @@ def on_recv_data(srv_time=None, cur_price=None):
         glb['last_price'] = glb['cur_price']
         position_list_query(need_log=False, caller='fluctuate')
     # Query position list every minute
-    if s == 30:
+    if 24 <= s <= 36:
         position_list_query(need_log=False, caller='per_min')
 
     # Auto buy
