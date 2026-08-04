@@ -958,9 +958,11 @@ def get_order_price(price, index):
 
 def auto_sell(code, volume, price, cancel=False):
     if not conf['AUTO_SELL'] or glb['to_over'] or glb['auto_sell_flag']:
+        log.info('auto_sell warning, code: %s, to_over: %s, auto_sell_flag: %s' % (code, glb['to_over'], glb['auto_sell_flag']))
         return False
     last_price = find_last_price(code)
     if last_price is None or price < last_price:
+        log.info('auto_sell warning, code: %s, price: %s, last_price: %s' % (code, price, last_price))
         return False
     glb['auto_sell_flag'] = True
     first_order_diff = conf['EVERY_ORDER_DIFF']
