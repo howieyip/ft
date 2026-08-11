@@ -114,10 +114,8 @@ glb = {
     'last_filled_order': {},
     'last_buy_filled_order': {},
     'last_sell_filled_order': {},
-    'submitted_buy_bull_flag': False,
-    'submitted_buy_bear_flag': False,
-    'submitted_buy_last_bull': None,
-    'submitted_buy_last_bear': None,
+    'submitted_buy_last_bull': {},
+    'submitted_buy_last_bear': {},
     'submitted_sell_last_bull': None,
     'submitted_sell_last_bear': None,
     'submitted_sell_orders': {},
@@ -407,11 +405,11 @@ def check_line(buy_all=False, need_log=True):
     if need_log:
         log.info('check_line: %s' % check_result)
     # Cancel order if conditions not met
-    if glb['submitted_buy_last_bull'] is not None and (check_result == 'not_near_bands' or 'bear' in check_result):
-        cancel_all(glb['submitted_buy_last_bull'].code, trd_side=ft.TrdSide.BUY)
+    if conf['BULL_CODE'] in glb['submitted_buy_last_bull'] and (check_result == 'not_near_bands' or 'bear' in check_result):
+        cancel_all(conf['BULL_CODE'], trd_side=ft.TrdSide.BUY)
         log.info('cancel_all bull, check_result: %s' % check_result)
-    elif glb['submitted_buy_last_bear'] is not None and (check_result == 'not_near_bands' or 'bull' in check_result):
-        cancel_all(glb['submitted_buy_last_bear'].code, trd_side=ft.TrdSide.BUY)
+    elif conf['BEAR_CODE'] in glb['submitted_buy_last_bear'] and (check_result == 'not_near_bands' or 'bull' in check_result):
+        cancel_all(conf['BEAR_CODE'], trd_side=ft.TrdSide.BUY)
         log.info('cancel_all bear, check_result: %s' % check_result)
     return check_result
 
@@ -651,24 +649,20 @@ def unsubscribe(code_list, subtype_list):
 
 def set_submitted_buy(code, stock_name, order=None):
     if stock_name.find('牛') > -1:
-        glb['submitted_buy_bull_flag'] = True
-        glb['submitted_buy_last_bull'] = order
+        glb['submitted_buy_last_bull'][code] = order
         log.info('set_submitted_buy bull:%s' % code)
     elif stock_name.find('熊') > -1:
-        glb['submitted_buy_bear_flag'] = True
-        glb['submitted_buy_last_bear'] = order
+        glb['submitted_buy_last_bear'][code] = order
         log.info('set_submitted_buy bear: %s' % code)
     subscribe([code], [ft.SubType.ORDER_BOOK])
 
 
 def reset_submitted_buy(code, stock_name):
     if stock_name.find('牛') > -1:
-        glb['submitted_buy_bull_flag'] = False
-        glb['submitted_buy_last_bull'] = None
+        glb['submitted_buy_last_bull'].pop(code, None)
         log.info('reset_submitted_buy bull: %s' % code)
     elif stock_name.find('熊') > -1:
-        glb['submitted_buy_bear_flag'] = False
-        glb['submitted_buy_last_bear'] = None
+        glb['submitted_buy_last_bear'].pop(code, None)
         log.info('reset_submitted_buy bear: %s' % code)
 
 
@@ -1215,9 +1209,9 @@ def to_buy(stock_type, code='', volume=None, type='Bid', force=False, cur_price_
 
 def _auto_buy():
     check_result = check_line()
-    if 'bull' in check_result and conf['BULL_CODE'] != '' and not glb['submitted_buy_bull_flag'] and (conf['ALLOW_ADD'] or len(glb['today_hold_bull_list']) == 0):
+    if 'bull' in check_result and conf['BULL_CODE'] != '' and conf['BULL_CODE'] not in glb['submitted_buy_last_bull'] and (conf['ALLOW_ADD'] or len(glb['today_hold_bull_list']) == 0):
         to_buy('bull')
-    elif 'bear' in check_result and conf['BEAR_CODE'] != '' and not glb['submitted_buy_bear_flag'] and (conf['ALLOW_ADD'] or len(glb['today_hold_bear_list']) == 0):
+    elif 'bear' in check_result and conf['BEAR_CODE'] != '' and conf['BEAR_CODE'] not in glb['submitted_buy_last_bear'] and (conf['ALLOW_ADD'] or len(glb['today_hold_bear_list']) == 0):
         to_buy('bear')
 
 
@@ -1294,9 +1288,9 @@ def _auto_adjust_sell(delta_price):
         modify_order(order, fall_price)
 
 def _auto_adjust_buy(delta_price):
-    order = glb['submitted_buy_last_bull']
+    order = glb['submitted_buy_last_bull'].get(conf['BULL_CODE'], None)
     if order is None:
-        order = glb['submitted_buy_last_bear']
+        order = glb['submitted_buy_last_bear'].get(conf['BEAR_CODE'], None)
     if order is None or order.code not in glb['order_book'] or order.code not in glb['auto_buy_code_list'] or order.price >= 0.25:
         return False
     order_book = glb['order_book'][order.code]
