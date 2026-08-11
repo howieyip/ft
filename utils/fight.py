@@ -847,7 +847,7 @@ def _position_list_query(stock_type='', need_log=True, caller='', code=''):
             glb['loss'] = {}
         if glb['almost_over']:
             end()
-    glb['past_hold_code_list'] = conf['exclude_code_list']
+    glb['past_hold_code_list'] = [] + conf['exclude_code_list']
     for index, row in hsi_data.iterrows():
         if row.code not in glb['today_hold_code_list'] and row.qty > 0:
             add_unique_element(glb['past_hold_code_list'], row.code)
@@ -1025,6 +1025,7 @@ class TradeOrder(ft.TradeOrderHandlerBase):
             return ret, data
         log.info('TradeOrder trd_side: %s, order_status: %s' % (order.trd_side, order.order_status))
         if order.code in glb['past_hold_code_list'] or conf['LONG_BULL_ISSUER'] in order.stock_name:
+            log.info('TradeOrder code: %s, past_hold_code_list: %s' % (order.code, glb['past_hold_code_list']))
             return ret, data
         if order.order_status == ft.OrderStatus.FILLED_ALL or order.order_status == ft.OrderStatus.CANCELLED_PART:
             glb['last_filled_order'][order.code] = {'updated_time': order.updated_time, 'price': order.price, 'trd_side': order.trd_side}
@@ -1039,6 +1040,7 @@ class TradeOrder(ft.TradeOrderHandlerBase):
             elif order.trd_side == ft.TrdSide.SELL:
                 glb['last_sell_filled_order'][order.code] = {'updated_time': order.updated_time, 'price': order.price, 'trd_side': order.trd_side}
                 reset_submitted_sell(order)
+                time.sleep(2)
                 position_list_query(caller=order.order_status + '-' + order.trd_side)
         elif order.order_status == ft.OrderStatus.FILLED_PART:
             if order.trd_side == ft.TrdSide.BUY:
