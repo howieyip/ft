@@ -363,7 +363,7 @@ def check_line(buy_all=False, need_log=True):
     last3_kline = klines.iloc[-3]
     is_neer_lower = check_position(last_kline, line['lower']) or check_position(last2_kline, line['lower2']) or check_position(last3_kline, line['lower3'])
     if not conf['NEED_LOSS']:
-        if is_neer_lower:
+        if last_kline.close > line['long']:
             check_result = 'long_far_bull'
         else:
             check_result = 'not_near_lower'
