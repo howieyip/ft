@@ -361,54 +361,52 @@ def check_line(buy_all=False, need_log=True):
     last_kline = klines.iloc[-1]
     last2_kline = klines.iloc[-2]
     last3_kline = klines.iloc[-3]
-    is_neer_lower = check_position(last_kline, line['lower']) or check_position(last2_kline, line['lower2']) or check_position(last3_kline, line['lower3'])
     if not conf['NEED_LOSS']:
         if last_kline.close > line['long']:
             check_result = 'long_far_bull'
         else:
-            check_result = 'not_near_lower'
-        if need_log:
-            log.info('check_line: %s' % check_result)
-        return check_result
-    is_neer_upper = check_position(last_kline, line['upper'], 1) or check_position(last2_kline, line['upper2'], 1) or check_position(last3_kline, line['upper3'], 1)
-    delta_price = last_kline.close - last_kline.last_close
-    profit = 5
-    kline_len = 10
-    if line['upper'] - line['lower'] < 25:
-        check_result = 'bands_narrow'
-    elif is_neer_lower and line['mid'] - last_kline.close > profit:
-        if delta_price > 0 or last2_kline.close - last2_kline.last_close >= kline_len:
-            if last_kline.close >= last3_kline.close and last3_kline.close < last3_kline.open and (last3_kline.open - last2_kline.close) / (last3_kline.open - last3_kline.close) <= 0.4 and last3_kline.high - last3_kline.low >= kline_len:
-                check_result = 'long_swallow1_bull'
-            elif last_kline.close >= last3_kline.open and last_kline.high >= last3_kline.high and last2_kline.close < last2_kline.open and last3_kline.close < last3_kline.open and last2_kline.high - last2_kline.low + last3_kline.high - last3_kline.low >= kline_len*2:
-                check_result = 'long_swallow2_bull'
-            elif last2_kline.close > last2_kline.low and abs(last2_kline.close - last2_kline.open) / (last2_kline.close - last2_kline.low) < 1/3 and (last2_kline.high - last2_kline.close) / (last2_kline.close - last2_kline.low) < 1/3 and last2_kline.high - last2_kline.low >= kline_len*2:
-                check_result = 'long_pinba_bull'
-            else:
-                check_result = 'wait_long_signal'
-        else:
-            check_result = 'wait_long_trend'
-    elif buy_all and is_neer_upper and last_kline.close - line['mid'] > profit:
-        if delta_price < 0 or last2_kline.close - last2_kline.last_close <= -kline_len:
-            if last_kline.close <= last3_kline.close and last3_kline.close > last3_kline.open and (last2_kline.close - last3_kline.open) / (last3_kline.close - last3_kline.open) <= 0.4 and last3_kline.high - last3_kline.low >= kline_len:
-                check_result = 'short_swallow1_bear'
-            elif last_kline.close <= last3_kline.open and last_kline.low <= last3_kline.low and last2_kline.close > last2_kline.open and last3_kline.close > last3_kline.open and last2_kline.high - last2_kline.low + last3_kline.high - last3_kline.low >= kline_len*2:
-                check_result = 'short_swallow2_bear'
-            elif last2_kline.high > last2_kline.close and abs(last2_kline.close - last2_kline.open) / (last2_kline.high - last2_kline.close) < 1/3 and (last2_kline.close - last2_kline.low) / (last2_kline.high - last2_kline.close) < 1/3 and last2_kline.high - last2_kline.low >= kline_len*2:
-                check_result = 'short_pinba_bear'
-            else:
-                check_result = 'wait_short_signal'
-        else:
-            check_result = 'wait_short_trend'
+            check_result = 'not_long'
     else:
-        check_result = 'not_near_bands'
+        is_neer_lower = check_position(last_kline, line['lower']) or check_position(last2_kline, line['lower2']) or check_position(last3_kline, line['lower3'])
+        is_neer_upper = check_position(last_kline, line['upper'], 1) or check_position(last2_kline, line['upper2'], 1) or check_position(last3_kline, line['upper3'], 1)
+        delta_price = last_kline.close - last_kline.last_close
+        profit = 5
+        kline_len = 10
+        if line['upper'] - line['lower'] < 25:
+            check_result = 'bands_narrow'
+        elif is_neer_lower and line['mid'] - last_kline.close > profit:
+            if delta_price > 0 or last2_kline.close - last2_kline.last_close >= kline_len:
+                if last_kline.close >= last3_kline.close and last3_kline.close < last3_kline.open and (last3_kline.open - last2_kline.close) / (last3_kline.open - last3_kline.close) <= 0.4 and last3_kline.high - last3_kline.low >= kline_len:
+                    check_result = 'long_swallow1_bull'
+                elif last_kline.close >= last3_kline.open and last_kline.high >= last3_kline.high and last2_kline.close < last2_kline.open and last3_kline.close < last3_kline.open and last2_kline.high - last2_kline.low + last3_kline.high - last3_kline.low >= kline_len*2:
+                    check_result = 'long_swallow2_bull'
+                elif last2_kline.close > last2_kline.low and abs(last2_kline.close - last2_kline.open) / (last2_kline.close - last2_kline.low) < 1/3 and (last2_kline.high - last2_kline.close) / (last2_kline.close - last2_kline.low) < 1/3 and last2_kline.high - last2_kline.low >= kline_len*2:
+                    check_result = 'long_pinba_bull'
+                else:
+                    check_result = 'wait_long_signal'
+            else:
+                check_result = 'wait_long_trend'
+        elif buy_all and is_neer_upper and last_kline.close - line['mid'] > profit:
+            if delta_price < 0 or last2_kline.close - last2_kline.last_close <= -kline_len:
+                if last_kline.close <= last3_kline.close and last3_kline.close > last3_kline.open and (last2_kline.close - last3_kline.open) / (last3_kline.close - last3_kline.open) <= 0.4 and last3_kline.high - last3_kline.low >= kline_len:
+                    check_result = 'short_swallow1_bear'
+                elif last_kline.close <= last3_kline.open and last_kline.low <= last3_kline.low and last2_kline.close > last2_kline.open and last3_kline.close > last3_kline.open and last2_kline.high - last2_kline.low + last3_kline.high - last3_kline.low >= kline_len*2:
+                    check_result = 'short_swallow2_bear'
+                elif last2_kline.high > last2_kline.close and abs(last2_kline.close - last2_kline.open) / (last2_kline.high - last2_kline.close) < 1/3 and (last2_kline.close - last2_kline.low) / (last2_kline.high - last2_kline.close) < 1/3 and last2_kline.high - last2_kline.low >= kline_len*2:
+                    check_result = 'short_pinba_bear'
+                else:
+                    check_result = 'wait_short_signal'
+            else:
+                check_result = 'wait_short_trend'
+        else:
+            check_result = 'not_near_bands'
     if need_log:
         log.info('check_line: %s' % check_result)
     # Cancel order if conditions not met
-    if conf['BULL_CODE'] in glb['submitted_buy_last_bull'] and (check_result == 'not_near_bands' or 'bear' in check_result):
+    if conf['BULL_CODE'] in glb['submitted_buy_last_bull'] and ('not' in check_result or 'bear' in check_result):
         cancel_all(conf['BULL_CODE'], trd_side=ft.TrdSide.BUY)
         log.info('cancel_all bull, check_result: %s' % check_result)
-    elif conf['BEAR_CODE'] in glb['submitted_buy_last_bear'] and (check_result == 'not_near_bands' or 'bull' in check_result):
+    elif conf['BEAR_CODE'] in glb['submitted_buy_last_bear'] and ('not' in check_result or 'bull' in check_result):
         cancel_all(conf['BEAR_CODE'], trd_side=ft.TrdSide.BUY)
         log.info('cancel_all bear, check_result: %s' % check_result)
     return check_result
