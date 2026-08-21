@@ -35,7 +35,7 @@ conf = {
     'CUR_PRICE_MIN': 0.1,
     'CUR_PRICE_MAX': 0.2,
 
-    'AUTO_ADJUST_BUY': True,                        # Whether to auto-adjust the price of pending buy orders
+    'AUTO_ADJUST_BUY': False,                        # Whether to auto-adjust the price of pending buy orders
     'AUTO_ADJUST_SELL': False,                       # Whether to auto-adjust the price of pending sell orders
 
     'ALLOW_ADD': True,                              # Whether to allow adding positions, if yes, the following ADD_ORDER_DIFF is effective
